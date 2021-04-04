@@ -1,0 +1,12 @@
+[submodule "extern/GLFW"]
+	path = extern/GLFW
+	url = https://github.com/glfw/glfw
+[submodule "extern/GLEW"]
+	path = extern/GLEW
+	url = https://github.com/Perlmint/glew-cmake
+[submodule "extern/GLM"]
+	path = extern/GLM
+	url = https://github.com/g-truc/glm
+[submodule "extern/SOIL2"]
+	path = extern/SOIL2
+	url = https://github.com/Jacob-Tate/soil2-cmake
