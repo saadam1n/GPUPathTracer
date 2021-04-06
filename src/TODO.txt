@@ -2,6 +2,7 @@ This is the todo list
 
 - DONE: Create a CPU side controlled camera with adjustable perspectivity 
 - Allow that camera to move and look around
+- Fix OpenGL abstraction issues
 - Replace the ray-sphere intersection with a ray-triangle intersection
 - Send the triangles to the shader using a SSBO or texture
 - Dynamically load the triangles with ASSIMP
