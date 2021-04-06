@@ -4,6 +4,27 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 uniform layout(rgba16f) writeonly image2D ColorOutput;
 
+struct CameraT {
+    vec3 Corner[2][2];
+};
+
+uniform CameraT Camera;
+
+vec3 ComputeRayDirection(vec2 UV){
+    vec3 Direction;
+
+    vec3 Y[2];
+
+    Y[0] = mix(Camera.Corner[0][0], Camera.Corner[0][1], UV.x);
+    Y[1] = mix(Camera.Corner[1][0], Camera.Corner[1][1], UV.x);
+
+    Direction = mix(Y[0], Y[1], UV.y);
+
+    Direction = normalize(Direction);
+
+    return Direction;
+}
+
 void swap(inout float Arg0, inout float Arg1){
     float Temp = Arg0;
     Arg0 = Arg1;
@@ -49,16 +70,17 @@ bool RaySphereIntersect(vec3 orig, vec3 dir, float radius, out float t0, out flo
 
 
 vec3 ComputeColor(in vec2 PixelCoordinates){
+    vec2 ScreenCoordinates = PixelCoordinates / vec2(gl_WorkGroupSize.xy * gl_NumWorkGroups.xy);
+
 	vec3 Color = vec3(0.0f);
 
-	vec2 CameraExtent = vec2(16.0f, 9.0f) / 30.0f;
-	vec3 RayDirection = normalize(vec3(mix(CameraExtent, -CameraExtent, vec2(gl_GlobalInvocationID.xy) / vec2(gl_WorkGroupSize.xy * gl_NumWorkGroups.xy)), -1.0f));
+	vec3 RayDirection = ComputeRayDirection(ScreenCoordinates);
 
 	Color = RayDirection;
 
     float temp[2];
 
-    if(RaySphereIntersect(vec3(0.0f, 0.0f, -10.0f), RayDirection, 2.0f, temp[0], temp[1])) {
+    if(RaySphereIntersect(vec3(0.0f, 0.0f, -10.0f), RayDirection, 1.0f, temp[0], temp[1])) {
         Color = vec3(1.0f);
     }
 
@@ -67,6 +89,9 @@ vec3 ComputeColor(in vec2 PixelCoordinates){
 
 void main(){
 	uvec2 PixelCoordinates = gl_GlobalInvocationID.xy;
+    ivec2 StoreLocation = ivec2(PixelCoordinates);
 
-	imageStore(ColorOutput, ivec2(PixelCoordinates), vec4(ComputeColor(PixelCoordinates), 0.0f));
+    vec3 Color = ComputeColor(PixelCoordinates);
+
+	imageStore(ColorOutput, StoreLocation, vec4(Color, 0.0f));
 }

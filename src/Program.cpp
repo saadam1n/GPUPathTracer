@@ -4,6 +4,7 @@
 #include "VertexArray.h"
 #include "Shader.h"
 #include "Texture.h"
+#include "Camera.h"
 
 float QuadVertices[] = {
 	-1.0f,  1.0f,
@@ -45,11 +46,15 @@ int main() {
 	ShaderCompute RayTraceShader;
 	RayTraceShader.CompileFile("res/shaders/kernel/mega/BasicRayTracer.comp");
 
+	Camera Camera;
+	Camera.UpdateImagePlaneParameters((float)Width / (float)Height, glm::radians(45.0f));
+
 	while (!Window.ShouldClose()) {
 		Renderer.Begin();
 
 		RayTraceShader.CreateBinding();
 		RayTraceShader.LoadImage2D("ColorOutput", RenderTargetColor);
+		RayTraceShader.LoadCamera ("Camera", Camera);
 
 		glDispatchCompute(Width / 8, Height / 8, 1);
 

@@ -2,6 +2,9 @@
 
 #include "OpenGL.h"
 #include "Texture.h"
+#include "Camera.h"
+
+#include <string>
 
 class Shader {
 public:
@@ -12,11 +15,25 @@ public:
 
 	void Free(void);
 
-	void LoadTexture2D(const char* Name, Texture2D& Value);
-	void LoadImage2D  (const char* Name, Texture2D& Value);
+	void LoadTexture2D (const char* Name, Texture2D& Value      );
+	void LoadImage2D   (const char* Name, Texture2D& Value      );
+
+	void LoadVector3F32(const char* Name, const glm::vec3& Value);
+
+	void LoadCamera    (const char* Name, const Camera& Value   );
 protected:
-	GLint GetUniformLocation(const char* Name);
-	uint32_t ActivateNextFreeTextureUnit(const char* Name);
+	GLint    GetUniformLocation         (const char* Name       );
+	uint32_t ActivateNextFreeTextureUnit(const char* Name       );
+
+	GLint    GetUniformLocation         (const std::string& Name);
+	uint32_t ActivateNextFreeTextureUnit(const std::string& Name);
+
+	void LoadVector3F32(GLint Location, const glm::vec3& Value);
+
+	// String cat
+	std::string GetStructureMemberName(const char* Structure, const char* Member);
+
+	GLint       GetStructureMemberLocation(const char* Structure, const char* Member);
 
 	GLuint ProgramHandle;
 

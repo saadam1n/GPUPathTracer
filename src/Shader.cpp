@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <sstream>
+#include <glm/gtc/type_ptr.hpp>
 
 GLuint CompileShader(const char* ShaderPath, GLenum Type) {
 	GLuint ShaderHandle = glCreateShader(Type);
@@ -72,6 +74,18 @@ uint32_t Shader::ActivateNextFreeTextureUnit(const char* Name) {
 	return NextFreeTextureUnit++;
 }
 
+GLint    Shader::GetUniformLocation(const std::string& Name) {
+	return GetUniformLocation(Name.c_str());
+}
+
+uint32_t Shader::ActivateNextFreeTextureUnit(const std::string& Name) {
+	return ActivateNextFreeTextureUnit(Name.c_str());
+}
+
+GLint       Shader::GetStructureMemberLocation(const char* Structure, const char* Member) {
+	return GetUniformLocation(GetStructureMemberName(Structure, Member));
+}
+
 void Shader::LoadTexture2D(const char* Name, Texture2D& Value) {
 	ActivateNextFreeTextureUnit(Name);
 
@@ -82,6 +96,30 @@ void Shader::LoadImage2D(const char* Name, Texture2D& Value) {
 	uint32_t TextureUnit = ActivateNextFreeTextureUnit(Name);
 
 	Value.CreateImageBinding(TextureUnit);
+}
+
+void Shader::LoadVector3F32(const char* Name, const glm::vec3& Value) {
+	LoadVector3F32(GetUniformLocation(Name), Value);
+}
+
+void Shader::LoadVector3F32(GLint Location, const glm::vec3& Value) {
+	glUniform3fv(Location, 1, glm::value_ptr(Value));
+}
+
+void Shader::LoadCamera(const char* Name, const Camera& Value) {
+	LoadVector3F32(GetStructureMemberLocation(Name, "Corner[0][0]"), Value.GetImagePlane().Corner[0][0]);
+	LoadVector3F32(GetStructureMemberLocation(Name, "Corner[0][1]"), Value.GetImagePlane().Corner[0][1]);
+	LoadVector3F32(GetStructureMemberLocation(Name, "Corner[1][0]"), Value.GetImagePlane().Corner[1][0]);
+	LoadVector3F32(GetStructureMemberLocation(Name, "Corner[1][1]"), Value.GetImagePlane().Corner[1][1]);
+}
+
+std::string Shader::GetStructureMemberName(const char* Structure, const char* Member) {
+	// I wish there was a easy way to reserve memory but STL sucks
+	std::stringstream StringBuilder;
+
+	StringBuilder << Structure << '.' << Member;
+
+	return StringBuilder.str();
 }
 
 void ShaderRasterization::CompileFiles(const char* VertexShaderPath, const char* FragmentShaderPath) {

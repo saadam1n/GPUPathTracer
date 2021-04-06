@@ -1,0 +1,10 @@
+This is the todo list
+
+- DONE: Create a CPU side controlled camera with adjustable perspectivity 
+- Allow that camera to move and look around
+- Replace the ray-sphere intersection with a ray-triangle intersection
+- Send the triangles to the shader using a SSBO or texture
+- Dynamically load the triangles with ASSIMP
+- Basic acceleration structures and bound volumes
+- Wavefront ray tracing
+- Monte carlo path tracing
