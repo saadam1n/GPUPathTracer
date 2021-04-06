@@ -4,13 +4,16 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 uniform layout(rgba16f) writeonly image2D ColorOutput;
 
-struct CameraT {
+struct CameraParameters {
     vec3 Corner[2][2];
+
+    vec3 Position;
 };
 
-uniform CameraT Camera;
+uniform CameraParameters Camera;
 
 vec3 ComputeRayDirection(vec2 UV){
+
     vec3 Direction;
 
     vec3 Y[2];
@@ -24,6 +27,120 @@ vec3 ComputeRayDirection(vec2 UV){
 
     return Direction;
 }
+
+vec3 ComputeIncomingRadiance(const vec3 Direction) {
+	float UpDot = dot(Direction, vec3(0.0f, 1.0f, 0.0f));
+	// Sky by builderboy
+	const vec3 Coefficients = vec3(0.0625, 0.125, 0.25);
+	vec3 Color = Coefficients / (UpDot * UpDot + Coefficients);
+	return Color;
+}
+
+struct Vertex {
+    vec3 Position;
+    vec3 Normal;
+    vec2 TextureCoordinate;
+};
+
+struct Triangle {
+    Vertex[3] Vertices;
+};
+
+struct Ray {
+    vec3 Origin;
+    vec3 Direction;
+};
+
+struct VertexInterpolationInfo{
+    float U, V;
+};
+
+struct TriangleHitInfo {
+    Triangle IntersectedTriangle;
+    VertexInterpolationInfo InterpolationInfo;
+};
+
+struct HitInfo {
+    float Depth;
+    TriangleHitInfo TriangleHitInfo;
+};
+
+bool IntersectTriangle(in Triangle Triangle, in Ray Ray, inout HitInfo Hit) {
+    // this is mostly a copy paste from scratchapixel's code that has been refitted to work with GLM and my own code
+
+    TriangleHitInfo TmpTriangleHitInfo;
+    TmpTriangleHitInfo.IntersectedTriangle = Triangle;
+
+    vec3 V01 = Triangle.Vertices[1].Position - Triangle.Vertices[0].Position;
+    vec3 V02 = Triangle.Vertices[2].Position - Triangle.Vertices[0].Position;
+
+    vec3 Pvec = cross(Ray.Direction, V02);
+
+    float det = dot(V01, Pvec);
+
+    const float Epsilon = 1e-6f;
+    if (abs(det) < Epsilon) {
+        return false;
+    }
+
+    float invDet = 1.0f / det;
+
+    vec3 Tvec = Ray.Origin - Triangle.Vertices[0].Position;
+    TmpTriangleHitInfo.InterpolationInfo.U = dot(Tvec, Pvec) * invDet;
+    if (TmpTriangleHitInfo.InterpolationInfo.U < 0 || TmpTriangleHitInfo.InterpolationInfo.U > 1) return false;
+
+    vec3 Qvec = cross(Tvec, V01);
+    TmpTriangleHitInfo.InterpolationInfo.V = dot(Ray.Direction, Qvec) * invDet;
+    if (TmpTriangleHitInfo.InterpolationInfo.V < 0 || TmpTriangleHitInfo.InterpolationInfo.U + TmpTriangleHitInfo.InterpolationInfo.V  > 1) return false;
+
+    float t = dot(V02, Qvec) * invDet;
+
+    if (t < Hit.Depth) {
+        Hit.Depth = t;
+        Hit.TriangleHitInfo = TmpTriangleHitInfo;
+        return true;
+    } else {
+        return false;
+    }
+}
+
+vec3 ComputeColor(in vec2 PixelCoordinates){
+    vec2 ScreenCoordinates = PixelCoordinates / vec2(gl_WorkGroupSize.xy * gl_NumWorkGroups.xy);
+
+	vec3 Color = vec3(0.0f);
+
+    Ray PrimaryRay;
+
+    PrimaryRay.Origin = Camera.Position;
+    PrimaryRay.Direction = ComputeRayDirection(ScreenCoordinates);
+
+    Triangle TestTriangle;
+
+    TestTriangle.Vertices[0].Position = vec3(-1.0f, -1.0f, -10.0f);
+    TestTriangle.Vertices[1].Position = vec3( 1.0f, -1.0f, -10.0f);
+    TestTriangle.Vertices[2].Position = vec3( 0.0f,  1.0f, -10.0f);
+
+    HitInfo Temp;
+
+    if(IntersectTriangle(TestTriangle, PrimaryRay, Temp)) {
+        Color = vec3(0.5f);
+    } else {
+        Color = ComputeIncomingRadiance(PrimaryRay.Direction);
+    }
+
+	return Color;
+}
+
+void main(){
+	uvec2 PixelCoordinates = gl_GlobalInvocationID.xy;
+    ivec2 StoreLocation = ivec2(PixelCoordinates);
+
+    vec3 Color = ComputeColor(PixelCoordinates);
+
+	imageStore(ColorOutput, StoreLocation, vec4(Color, 0.0f));
+}
+
+/*
 
 void swap(inout float Arg0, inout float Arg1){
     float Temp = Arg0;
@@ -68,30 +185,4 @@ bool RaySphereIntersect(vec3 orig, vec3 dir, float radius, out float t0, out flo
     return true; 
 } 
 
-
-vec3 ComputeColor(in vec2 PixelCoordinates){
-    vec2 ScreenCoordinates = PixelCoordinates / vec2(gl_WorkGroupSize.xy * gl_NumWorkGroups.xy);
-
-	vec3 Color = vec3(0.0f);
-
-	vec3 RayDirection = ComputeRayDirection(ScreenCoordinates);
-
-	Color = RayDirection;
-
-    float temp[2];
-
-    if(RaySphereIntersect(vec3(0.0f, 0.0f, -10.0f), RayDirection, 1.0f, temp[0], temp[1])) {
-        Color = vec3(1.0f);
-    }
-
-	return Color;
-}
-
-void main(){
-	uvec2 PixelCoordinates = gl_GlobalInvocationID.xy;
-    ivec2 StoreLocation = ivec2(PixelCoordinates);
-
-    vec3 Color = ComputeColor(PixelCoordinates);
-
-	imageStore(ColorOutput, StoreLocation, vec4(Color, 0.0f));
-}
+/*/

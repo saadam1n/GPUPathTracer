@@ -29,3 +29,12 @@ void Window::Update(void) {
 	glfwSwapBuffers(WindowHandle);
 	glfwPollEvents();
 }
+
+void Window::SetInputCallback(GLFWcursorposfun MouseCallback) {
+	glfwSetInputMode(WindowHandle, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	glfwSetCursorPosCallback(WindowHandle, MouseCallback);
+}
+
+bool Window::GetKey(uint32_t KeyCode) {
+	return glfwGetKey(WindowHandle, KeyCode);
+}

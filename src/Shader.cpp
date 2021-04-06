@@ -63,7 +63,7 @@ void Shader::Free(void) {
 GLint Shader::GetUniformLocation(const char* Name) {
 	GLint Location = glGetUniformLocation(ProgramHandle, Name);
 
-	assert(Location != -1);
+	//assert(Location != -1);
 
 	return Location;
 }
@@ -111,6 +111,8 @@ void Shader::LoadCamera(const char* Name, const Camera& Value) {
 	LoadVector3F32(GetStructureMemberLocation(Name, "Corner[0][1]"), Value.GetImagePlane().Corner[0][1]);
 	LoadVector3F32(GetStructureMemberLocation(Name, "Corner[1][0]"), Value.GetImagePlane().Corner[1][0]);
 	LoadVector3F32(GetStructureMemberLocation(Name, "Corner[1][1]"), Value.GetImagePlane().Corner[1][1]);
+
+	LoadVector3F32(GetStructureMemberLocation(Name, "Position"    ), Value.GetPosition()               );
 }
 
 std::string Shader::GetStructureMemberName(const char* Structure, const char* Member) {

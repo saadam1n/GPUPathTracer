@@ -12,6 +12,10 @@ public:
 	bool ShouldClose(void);
 	void Update(void);
 
+	void SetInputCallback(GLFWcursorposfun MouseCallback);
+
+	bool GetKey(uint32_t KeyCode);
+
 private:
 	GLFWwindow* WindowHandle;
 
