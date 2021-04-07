@@ -17,12 +17,21 @@ float QuadVertices[] = {
 	 1.0f,  1.0f
 };
 
+// 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+
+// An array of 3 vectors which represents 3 vertices
+static const GLfloat g_vertex_buffer_data[] = {
+   -1.0f, -1.0f, -10.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+    1.0f, -1.0f, -10.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+    0.0f,  1.0f, -10.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+};
+
 uint32_t Width = 1280;
 uint32_t Height = 720;
 
 // Camera params 
 
-constexpr float CameraSpeed       = 1.000f;
+constexpr float CameraSpeed       = 5.000f;
 constexpr float CameraSensitivity = 0.001f;
 glm::vec2 LastCursorPosition;
 
@@ -75,6 +84,18 @@ int main() {
 	LastCursorPosition = glm::vec2(Width, Height) / 2.0f;
 	Window.SetInputCallback(MouseCallback);
 
+	Buffer VertexBuffer;
+	Buffer IndexBuffer;
+
+	VertexBuffer.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
+	VertexBuffer.UploadData(sizeof(g_vertex_buffer_data), g_vertex_buffer_data);
+
+	unsigned int IndexData[] = {
+		0, 1, 2, 0
+	};
+	IndexBuffer.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
+	IndexBuffer.UploadData(sizeof(IndexData), IndexData);
+
 	Timer FrameTimer;
 
 	while (!Window.ShouldClose()) {
@@ -93,6 +114,8 @@ int main() {
 		RayTraceShader.CreateBinding();
 		RayTraceShader.LoadImage2D("ColorOutput", RenderTargetColor);
 		RayTraceShader.LoadCamera ("Camera", Camera);
+		RayTraceShader.LoadShaderStorageBuffer("VertexBuffer", VertexBuffer);
+		RayTraceShader.LoadShaderStorageBuffer("IndexBuffer" , IndexBuffer );
 
 		glDispatchCompute(Width / 8, Height / 8, 1);
 

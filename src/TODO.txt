@@ -3,8 +3,8 @@ This is the todo list
 Things I need to do:
 - DONE: Create a CPU side controlled camera with adjustable perspectivity 
 - DONE: Allow that camera to move and look around
-- Replace the ray-sphere intersection with a ray-triangle intersection
-- Send the triangles to the shader using a SSBO or texture
+- DONE: Replace the ray-sphere intersection with a ray-triangle intersection
+- DONE: Send the triangles to the shader using a SSBO or texture
 - Dynamically load the triangles with ASSIMP
 - Basic acceleration structures and bounding volumes
 - Wavefront ray tracing

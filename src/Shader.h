@@ -3,6 +3,7 @@
 #include "OpenGL.h"
 #include "Texture.h"
 #include "Camera.h"
+#include "Buffer.h"
 
 #include <string>
 
@@ -15,12 +16,14 @@ public:
 
 	void Free(void);
 
-	void LoadTexture2D (const char* Name, Texture2D& Value      );
-	void LoadImage2D   (const char* Name, Texture2D& Value      );
+	void LoadTexture2D          (const char* Name, Texture2D& Value      );
+	void LoadImage2D            (const char* Name, Texture2D& Value      );
 
-	void LoadVector3F32(const char* Name, const glm::vec3& Value);
+	void LoadVector3F32         (const char* Name, const glm::vec3& Value);
 
-	void LoadCamera    (const char* Name, const Camera& Value   );
+	void LoadCamera             (const char* Name, const Camera& Value   );
+
+	void LoadShaderStorageBuffer(const char* Name, Buffer& Value         );
 protected:
 	GLint    GetUniformLocation         (const char* Name       );
 	uint32_t ActivateNextFreeTextureUnit(const char* Name       );
@@ -35,9 +38,13 @@ protected:
 
 	GLint       GetStructureMemberLocation(const char* Structure, const char* Member);
 
+	void CreateProgramHandle(void);
+	void LinkProgram(void);
+
 	GLuint ProgramHandle;
 
 	uint32_t NextFreeTextureUnit;
+	uint32_t NextFreeBlockBinding;
 };
 
 class ShaderRasterization : public Shader {

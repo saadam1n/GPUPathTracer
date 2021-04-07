@@ -1,7 +1,7 @@
 #include "Camera.h"
 #include <glm/gtc/matrix_transform.hpp>
 
-Camera::Camera(void) : Direction(0.0f, 0.0f, -1.0f), Position(0.0f), Rotation(glm::radians(-90.0f), 0.0f, 0.0f), ViewMatrix(1.0f) {}
+Camera::Camera(void) : Direction(0.0f, 0.0f, -1.0f), Position(0.0f), Rotation(glm::radians(90.0f), 0.0f, 0.0f), ViewMatrix(1.0f) {}
 
 void Camera::GenerateImagePlane(void) {
 	glm::vec2 FOV  = glm::vec2(AspectRatio * FieldOfView, FieldOfView);
@@ -82,7 +82,6 @@ void Camera::GenerateViewTransform(void) {
 	ViewMatrix = glm::mat3(glm::lookAt(glm::vec3(0.0f), Direction, glm::vec3(0.0f, -1.0f, 0.0f)));
 
 	Direction = -Direction;
-
 }
 
 void Camera::Move(float Distance) {

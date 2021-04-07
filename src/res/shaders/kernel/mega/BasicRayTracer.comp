@@ -28,9 +28,9 @@ vec3 ComputeRayDirection(vec2 UV){
     return Direction;
 }
 
+// Sky by builderboy
 vec3 ComputeIncomingRadiance(const vec3 Direction) {
 	float UpDot = dot(Direction, vec3(0.0f, 1.0f, 0.0f));
-	// Sky by builderboy
 	const vec3 Coefficients = vec3(0.0625, 0.125, 0.25);
 	vec3 Color = Coefficients / (UpDot * UpDot + Coefficients);
 	return Color;
@@ -42,6 +42,27 @@ struct Vertex {
     vec2 TextureCoordinate;
 };
 
+// Workaround for vec4 alignment
+struct PackedVertex {
+    // Position xyz, normal x
+    vec4 PN;
+    // Normal yz, tex coord xy
+    vec4 NT;
+};
+
+Vertex UnpackVertex(PackedVertex PV) {
+    Vertex UnpackedVertex;
+
+    UnpackedVertex.Position = PV.PN.xyz;
+
+    UnpackedVertex.Normal.x  = PV.PN.w;
+    UnpackedVertex.Normal.yz = PV.NT.xy;
+
+    UnpackedVertex.TextureCoordinate = PV.NT.zw;
+
+    return UnpackedVertex;
+}
+
 struct Triangle {
     Vertex[3] Vertices;
 };
@@ -51,7 +72,7 @@ struct Ray {
     vec3 Direction;
 };
 
-struct VertexInterpolationInfo{
+struct VertexInterpolationInfo {
     float U, V;
 };
 
@@ -65,14 +86,26 @@ struct HitInfo {
     TriangleHitInfo TriangleHitInfo;
 };
 
+struct TriangleIndexData {
+    uint Indices[3];
+};
+
+layout(std430) readonly buffer VertexBuffer {
+    PackedVertex BufferVertices[];
+};
+
+layout(std430) readonly buffer IndexBuffer {
+    TriangleIndexData BufferElements[];
+};
+
 bool IntersectTriangle(in Triangle Triangle, in Ray Ray, inout HitInfo Hit) {
-    // this is mostly a copy paste from scratchapixel's code that has been refitted to work with GLM and my own code
+    // this is mostly a copy paste from scratchapixel's code that has been refitted to work with GLSL
 
     TriangleHitInfo TmpTriangleHitInfo;
     TmpTriangleHitInfo.IntersectedTriangle = Triangle;
 
-    vec3 V01 = Triangle.Vertices[1].Position - Triangle.Vertices[0].Position;
-    vec3 V02 = Triangle.Vertices[2].Position - Triangle.Vertices[0].Position;
+    vec3 V01 = Triangle.Vertices[1].Position.xyz - Triangle.Vertices[0].Position.xyz;
+    vec3 V02 = Triangle.Vertices[2].Position.xyz - Triangle.Vertices[0].Position.xyz;
 
     vec3 Pvec = cross(Ray.Direction, V02);
 
@@ -114,15 +147,39 @@ vec3 ComputeColor(in vec2 PixelCoordinates){
     PrimaryRay.Origin = Camera.Position;
     PrimaryRay.Direction = ComputeRayDirection(ScreenCoordinates);
 
+    HitInfo IntersectionInfo;
+
+    IntersectionInfo.Depth = 100000.0f;
+
+    bool HitResult = false;
+
+    for(uint TriangleIndex = 0; TriangleIndex < BufferElements.length(); TriangleIndex++) {
+    //break;
+        // Assemble the triangle
+
+        TriangleIndexData CurrentIndexData = BufferElements[TriangleIndex];
+
+        Triangle CurrentTriangle;
+
+        CurrentTriangle.Vertices[0] = UnpackVertex(BufferVertices[CurrentIndexData.Indices[0]]);
+        CurrentTriangle.Vertices[1] = UnpackVertex(BufferVertices[CurrentIndexData.Indices[1]]);
+        CurrentTriangle.Vertices[2] = UnpackVertex(BufferVertices[CurrentIndexData.Indices[2]]);
+
+        HitResult = HitResult || IntersectTriangle(CurrentTriangle, PrimaryRay, IntersectionInfo);
+    }
+
+    #if 0
     Triangle TestTriangle;
 
-    TestTriangle.Vertices[0].Position = vec3(-1.0f, -1.0f, -10.0f);
-    TestTriangle.Vertices[1].Position = vec3( 1.0f, -1.0f, -10.0f);
-    TestTriangle.Vertices[2].Position = vec3( 0.0f,  1.0f, -10.0f);
+    TestTriangle.Vertices[0].Position.xyz = vec3(-1.0f + 5.0f, -1.0f + 5.0f, -10.0f);
+    TestTriangle.Vertices[1].Position.xyz = vec3( 1.0f + 5.0f, -1.0f + 5.0f, -10.0f);
+    TestTriangle.Vertices[2].Position.xyz = vec3( 0.0f + 5.0f,  1.0f + 5.0f, -10.0f);
 
-    HitInfo Temp;
+    HitResult = HitResult || IntersectTriangle(TestTriangle, PrimaryRay, IntersectionInfo);
+    #endif
 
-    if(IntersectTriangle(TestTriangle, PrimaryRay, Temp)) {
+    if(HitResult) {
+        //Color = vec3(IntersectionInfo.Depth / 1.0f);
         Color = vec3(0.5f);
     } else {
         Color = ComputeIncomingRadiance(PrimaryRay.Direction);
@@ -139,50 +196,3 @@ void main(){
 
 	imageStore(ColorOutput, StoreLocation, vec4(Color, 0.0f));
 }
-
-/*
-
-void swap(inout float Arg0, inout float Arg1){
-    float Temp = Arg0;
-    Arg0 = Arg1;
-    Arg1 = Temp;
-    return;
-}
-
-// https://www.scratchapixel.com/code.php?id=52&origin=/lessons/procedural-generation-virtual-worlds/simulating-sky
-bool SolveQuadratic(float a, float b, float c, out float x1, out float x2) 
-{ 
-    if (b == 0) { 
-        // Handle special case where the the two vector ray.dir and V are perpendicular
-        // with V = ray.orig - sphere.centre
-        if (a == 0) return false; 
-        x1 = 0; x2 = sqrt(-c / a); 
-        return true; 
-    } 
-    float discr = b * b - 4 * a * c; 
- 
-    if (discr < 0) return false; 
- 
-    float q = (b < 0.f) ? -0.5f * (b - sqrt(discr)) : -0.5f * (b + sqrt(discr)); 
-    x1 = q / a; 
-    x2 = c / q; 
- 
-    return true; 
-} 
-
-// https://www.scratchapixel.com/code.php?id=52&origin=/lessons/procedural-generation-virtual-worlds/simulating-sky
-bool RaySphereIntersect(vec3 orig, vec3 dir, float radius, out float t0, out float t1) 
-{ 
-    // They ray dir is normalized so A = 1 
-    float A = dir.x * dir.x + dir.y * dir.y + dir.z * dir.z; 
-    float B = 2 * (dir.x * orig.x + dir.y * orig.y + dir.z * orig.z); 
-    float C = orig.x * orig.x + orig.y * orig.y + orig.z * orig.z - radius * radius; 
- 
-    if (!SolveQuadratic(A, B, C, t0, t1)) return false; 
- 
-    if (t0 > t1) swap(t0, t1); 
- 
-    return true; 
-} 
-
-/*/
