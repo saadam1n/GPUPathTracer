@@ -4,6 +4,7 @@
 #include "Texture.h"
 #include "Camera.h"
 #include "Buffer.h"
+#include "Mesh.h"
 
 #include <string>
 
@@ -24,6 +25,8 @@ public:
 	void LoadCamera             (const char* Name, const Camera& Value   );
 
 	void LoadShaderStorageBuffer(const char* Name, Buffer& Value         );
+
+	void LoadMesh               (const char* VBuf, const char* IBuf, Mesh& Mesh); 
 protected:
 	GLint    GetUniformLocation         (const char* Name       );
 	uint32_t ActivateNextFreeTextureUnit(const char* Name       );

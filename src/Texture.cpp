@@ -1,6 +1,8 @@
 #include "Texture.h"
-#include <SOIL2.h>
+//#include <SOIL2.h>
 #include <stdio.h>
+
+#include <stdlib.h>
 
 Texture2D::Texture2D(void) : Texture2DHandle(UINT32_MAX) {
 
@@ -31,12 +33,15 @@ void Texture2D::Free(void) {
 }
 
 void Texture2D::LoadTexture(const char* Path) {
+	// This function is unimplemented until I can figure out a way to load textures
+	abort();
+
 	int Width = 0;
 	int Height = 0;
 	int Channels = 0;
 	unsigned char* TextureData = nullptr;
 
-	TextureData = SOIL_load_image(Path, &Width, &Height, &Channels, SOIL_LOAD_AUTO);
+	//TextureData = SOIL_load_image(Path, &Width, &Height, &Channels, SOIL_LOAD_AUTO);
 
 	GLenum Formats[4] = {
 		GL_RED,
@@ -49,7 +54,7 @@ void Texture2D::LoadTexture(const char* Path) {
 
 	LoadData(GL_RGB, Format, GL_UNSIGNED_BYTE, Width, Height, TextureData);
 
-	SOIL_free_image_data(TextureData);
+	//SOIL_free_image_data(TextureData);
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);

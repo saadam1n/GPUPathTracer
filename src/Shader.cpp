@@ -60,6 +60,11 @@ void Shader::LoadShaderStorageBuffer(const char* Name, Buffer& Value) {
 	Value.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, BlockBinding);
 }
 
+void Shader::LoadMesh(const char* VBuf, const char* IBuf, Mesh& Mesh) {
+	LoadShaderStorageBuffer(VBuf, Mesh.VertexBuffer);
+	LoadShaderStorageBuffer(IBuf, Mesh.ElementBuffer);
+}
+
 /*
 End of loading code
 ===============================================

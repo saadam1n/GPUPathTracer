@@ -112,7 +112,7 @@ bool IntersectTriangle(in Triangle Triangle, in Ray Ray, inout HitInfo Hit) {
     float det = dot(V01, Pvec);
 
     const float Epsilon = 1e-6f;
-    if (abs(det) < Epsilon) {
+    if ((det) < Epsilon) {
         return false;
     }
 
@@ -135,6 +135,40 @@ bool IntersectTriangle(in Triangle Triangle, in Ray Ray, inout HitInfo Hit) {
     } else {
         return false;
     }
+}
+
+Vertex GetInterpolatedVertex(in HitInfo Intersection) {
+    Vertex InterpolatedVertex;
+
+    // I should precompute 1 - U - V
+
+    InterpolatedVertex.Position =
+
+    	Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[1].Position * Intersection.TriangleHitInfo.InterpolationInfo.U +
+		Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[2].Position  * Intersection.TriangleHitInfo.InterpolationInfo.V +
+		Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[0].Position  * (1.0f - Intersection.TriangleHitInfo.InterpolationInfo.U - Intersection.TriangleHitInfo.InterpolationInfo.V)
+
+	;
+
+    InterpolatedVertex.Normal =
+
+    	Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[1].Normal  * Intersection.TriangleHitInfo.InterpolationInfo.U +
+		Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[2].Normal  * Intersection.TriangleHitInfo.InterpolationInfo.V +
+		Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[0].Normal  * (1.0f - Intersection.TriangleHitInfo.InterpolationInfo.U - Intersection.TriangleHitInfo.InterpolationInfo.V)
+
+	;
+
+    InterpolatedVertex.TextureCoordinate =
+
+    	Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[1].TextureCoordinate  * Intersection.TriangleHitInfo.InterpolationInfo.U +
+		Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[2].TextureCoordinate  * Intersection.TriangleHitInfo.InterpolationInfo.V +
+		Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[0].TextureCoordinate  * (1.0f - Intersection.TriangleHitInfo.InterpolationInfo.U - Intersection.TriangleHitInfo.InterpolationInfo.V)
+
+	;
+
+    InterpolatedVertex.Normal = normalize(InterpolatedVertex.Normal);
+
+    return InterpolatedVertex;
 }
 
 vec3 ComputeColor(in vec2 PixelCoordinates){
@@ -179,8 +213,11 @@ vec3 ComputeColor(in vec2 PixelCoordinates){
     #endif
 
     if(HitResult) {
-        //Color = vec3(IntersectionInfo.Depth / 1.0f);
-        Color = vec3(0.5f);
+        Color = vec3(0.0f);
+
+        Vertex InterpolatedVertex = GetInterpolatedVertex(IntersectionInfo);
+
+        Color = InterpolatedVertex.Normal * 0.5f + 0.5f;
     } else {
         Color = ComputeIncomingRadiance(PrimaryRay.Direction);
     }

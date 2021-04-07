@@ -6,6 +6,7 @@
 #include "Texture.h"
 #include "Camera.h"
 #include "TimeUtil.h"
+#include "Mesh.h"
 
 float QuadVertices[] = {
 	-1.0f,  1.0f,
@@ -15,15 +16,6 @@ float QuadVertices[] = {
 	-1.0f,  1.0f,
 	 1.0f, -1.0f,
 	 1.0f,  1.0f
-};
-
-// 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-
-// An array of 3 vectors which represents 3 vertices
-static const GLfloat g_vertex_buffer_data[] = {
-   -1.0f, -1.0f, -10.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-    1.0f, -1.0f, -10.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-    0.0f,  1.0f, -10.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
 };
 
 uint32_t Width = 1280;
@@ -43,8 +35,8 @@ void MouseCallback(GLFWwindow* Window, double X, double Y) {
 
 	glm::vec2 DeltaPosition = CurrentCursorPosition - LastCursorPosition;
 
-	//DeltaPosition.y = -DeltaPosition.y;
-	DeltaPosition.x = -DeltaPosition.x;
+	DeltaPosition.y = -DeltaPosition.y;
+	//DeltaPosition.x = -DeltaPosition.x;
 
 	DeltaPosition *= CameraSensitivity;
 
@@ -84,17 +76,9 @@ int main() {
 	LastCursorPosition = glm::vec2(Width, Height) / 2.0f;
 	Window.SetInputCallback(MouseCallback);
 
-	Buffer VertexBuffer;
-	Buffer IndexBuffer;
+	Mesh Object;
 
-	VertexBuffer.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
-	VertexBuffer.UploadData(sizeof(g_vertex_buffer_data), g_vertex_buffer_data);
-
-	unsigned int IndexData[] = {
-		0, 1, 2, 0
-	};
-	IndexBuffer.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
-	IndexBuffer.UploadData(sizeof(IndexData), IndexData);
+	Object.LoadMesh("res/objects/Cube.obj");
 
 	Timer FrameTimer;
 
@@ -114,8 +98,7 @@ int main() {
 		RayTraceShader.CreateBinding();
 		RayTraceShader.LoadImage2D("ColorOutput", RenderTargetColor);
 		RayTraceShader.LoadCamera ("Camera", Camera);
-		RayTraceShader.LoadShaderStorageBuffer("VertexBuffer", VertexBuffer);
-		RayTraceShader.LoadShaderStorageBuffer("IndexBuffer" , IndexBuffer );
+		RayTraceShader.LoadMesh("VertexBuffer", "IndexBuffer", Object);
 
 		glDispatchCompute(Width / 8, Height / 8, 1);
 

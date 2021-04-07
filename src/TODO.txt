@@ -5,10 +5,13 @@ Things I need to do:
 - DONE: Allow that camera to move and look around
 - DONE: Replace the ray-sphere intersection with a ray-triangle intersection
 - DONE: Send the triangles to the shader using a SSBO or texture
-- Dynamically load the triangles with ASSIMP
+- DONE: Dynamically load the triangles with ASSIMP
 - Basic acceleration structures and bounding volumes
 - Wavefront ray tracing
 - Monte carlo path tracing
+
+Issues that I need to fix:
+- Ray triangle intersection and hidden surface removal is broken, maybe I should move to watertight intersection
 
 Things I should do but don't need to:
 - Fix OpenGL abstraction issues

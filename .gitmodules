@@ -10,3 +10,6 @@
 [submodule "extern/SOIL2"]
 	path = extern/SOIL2
 	url = https://github.com/Jacob-Tate/soil2-cmake
+[submodule "extern/ASSIMP"]
+	path = extern/ASSIMP
+	url = https://github.com/assimp/assimp

@@ -79,7 +79,7 @@ void Camera::GenerateViewTransform(void) {
 
 	Direction = glm::normalize(Direction);
 
-	ViewMatrix = glm::mat3(glm::lookAt(glm::vec3(0.0f), Direction, glm::vec3(0.0f, -1.0f, 0.0f)));
+	ViewMatrix = glm::mat3(glm::lookAt(glm::vec3(0.0f), Direction, glm::vec3(0.0f, 1.0f, 0.0f)));
 
 	Direction = -Direction;
 }
