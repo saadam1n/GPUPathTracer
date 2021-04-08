@@ -78,7 +78,7 @@ int main() {
 
 	Mesh Object;
 
-	Object.LoadMesh("res/objects/Cube.obj");
+	Object.LoadMesh("res/objects/Suzanne.obj");
 
 	Timer FrameTimer;
 

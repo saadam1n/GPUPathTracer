@@ -12,7 +12,7 @@ struct CameraParameters {
 
 uniform CameraParameters Camera;
 
-vec3 ComputeRayDirection(vec2 UV){
+vec3 ComputeRayDirection(in vec2 UV){
 
     vec3 Direction;
 
@@ -29,8 +29,8 @@ vec3 ComputeRayDirection(vec2 UV){
 }
 
 // Sky by builderboy
-vec3 ComputeIncomingRadiance(const vec3 Direction) {
-	float UpDot = dot(Direction, vec3(0.0f, 1.0f, 0.0f));
+vec3 ComputeIncomingRadiance(in vec3 Direction) {
+	float UpDot = Direction.y;
 	const vec3 Coefficients = vec3(0.0625, 0.125, 0.25);
 	vec3 Color = Coefficients / (UpDot * UpDot + Coefficients);
 	return Color;
@@ -50,7 +50,7 @@ struct PackedVertex {
     vec4 NT;
 };
 
-Vertex UnpackVertex(PackedVertex PV) {
+Vertex UnpackVertex(in PackedVertex PV) {
     Vertex UnpackedVertex;
 
     UnpackedVertex.Position = PV.PN.xyz;
@@ -101,8 +101,8 @@ layout(std430) readonly buffer IndexBuffer {
 bool IntersectTriangle(in Triangle Triangle, in Ray Ray, inout HitInfo Hit) {
     // this is mostly a copy paste from scratchapixel's code that has been refitted to work with GLSL
 
-    TriangleHitInfo TmpTriangleHitInfo;
-    TmpTriangleHitInfo.IntersectedTriangle = Triangle;
+    TriangleHitInfo TentativeTriangleHitInfo;
+    TentativeTriangleHitInfo.IntersectedTriangle = Triangle;
 
     vec3 V01 = Triangle.Vertices[1].Position.xyz - Triangle.Vertices[0].Position.xyz;
     vec3 V02 = Triangle.Vertices[2].Position.xyz - Triangle.Vertices[0].Position.xyz;
@@ -112,25 +112,25 @@ bool IntersectTriangle(in Triangle Triangle, in Ray Ray, inout HitInfo Hit) {
     float det = dot(V01, Pvec);
 
     const float Epsilon = 1e-6f;
-    if ((det) < Epsilon) {
+    if (abs(det) < Epsilon) {
         return false;
     }
 
     float invDet = 1.0f / det;
 
     vec3 Tvec = Ray.Origin - Triangle.Vertices[0].Position;
-    TmpTriangleHitInfo.InterpolationInfo.U = dot(Tvec, Pvec) * invDet;
-    if (TmpTriangleHitInfo.InterpolationInfo.U < 0 || TmpTriangleHitInfo.InterpolationInfo.U > 1) return false;
+    TentativeTriangleHitInfo.InterpolationInfo.U = dot(Tvec, Pvec) * invDet;
+    if (TentativeTriangleHitInfo.InterpolationInfo.U < 0 || TentativeTriangleHitInfo.InterpolationInfo.U > 1) return false;
 
     vec3 Qvec = cross(Tvec, V01);
-    TmpTriangleHitInfo.InterpolationInfo.V = dot(Ray.Direction, Qvec) * invDet;
-    if (TmpTriangleHitInfo.InterpolationInfo.V < 0 || TmpTriangleHitInfo.InterpolationInfo.U + TmpTriangleHitInfo.InterpolationInfo.V  > 1) return false;
+    TentativeTriangleHitInfo.InterpolationInfo.V = dot(Ray.Direction, Qvec) * invDet;
+    if (TentativeTriangleHitInfo.InterpolationInfo.V < 0 || TentativeTriangleHitInfo.InterpolationInfo.U + TentativeTriangleHitInfo.InterpolationInfo.V  > 1) return false;
 
     float t = dot(V02, Qvec) * invDet;
 
-    if (t < Hit.Depth) {
+    if (t < Hit.Depth && t > 0.0f) {
         Hit.Depth = t;
-        Hit.TriangleHitInfo = TmpTriangleHitInfo;
+        Hit.TriangleHitInfo = TentativeTriangleHitInfo;
         return true;
     } else {
         return false;
@@ -140,11 +140,11 @@ bool IntersectTriangle(in Triangle Triangle, in Ray Ray, inout HitInfo Hit) {
 Vertex GetInterpolatedVertex(in HitInfo Intersection) {
     Vertex InterpolatedVertex;
 
-    // I should precompute 1 - U - V
+    // I should probably precompute 1 - U - V
 
     InterpolatedVertex.Position =
 
-    	Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[1].Position * Intersection.TriangleHitInfo.InterpolationInfo.U +
+    	Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[1].Position  * Intersection.TriangleHitInfo.InterpolationInfo.U +
 		Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[2].Position  * Intersection.TriangleHitInfo.InterpolationInfo.V +
 		Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[0].Position  * (1.0f - Intersection.TriangleHitInfo.InterpolationInfo.U - Intersection.TriangleHitInfo.InterpolationInfo.V)
 
@@ -173,22 +173,21 @@ Vertex GetInterpolatedVertex(in HitInfo Intersection) {
 
 vec3 ComputeColor(in vec2 PixelCoordinates){
     vec2 ScreenCoordinates = PixelCoordinates / vec2(gl_WorkGroupSize.xy * gl_NumWorkGroups.xy);
-
-	vec3 Color = vec3(0.0f);
+    vec3 Color = vec3(0.0f);
 
     Ray PrimaryRay;
 
-    PrimaryRay.Origin = Camera.Position;
+    PrimaryRay.Origin    = Camera.Position;
     PrimaryRay.Direction = ComputeRayDirection(ScreenCoordinates);
 
     HitInfo IntersectionInfo;
 
-    IntersectionInfo.Depth = 100000.0f;
+    IntersectionInfo.Depth = 1.0e20f;
+    //IntersectionInfo.Depth = 2.0f;
 
     bool HitResult = false;
 
     for(uint TriangleIndex = 0; TriangleIndex < BufferElements.length(); TriangleIndex++) {
-    //break;
         // Assemble the triangle
 
         TriangleIndexData CurrentIndexData = BufferElements[TriangleIndex];
@@ -199,25 +198,19 @@ vec3 ComputeColor(in vec2 PixelCoordinates){
         CurrentTriangle.Vertices[1] = UnpackVertex(BufferVertices[CurrentIndexData.Indices[1]]);
         CurrentTriangle.Vertices[2] = UnpackVertex(BufferVertices[CurrentIndexData.Indices[2]]);
 
-        HitResult = HitResult || IntersectTriangle(CurrentTriangle, PrimaryRay, IntersectionInfo);
+        bool TriangleHit = IntersectTriangle(CurrentTriangle, PrimaryRay, IntersectionInfo);
+
+        HitResult = HitResult || TriangleHit;
     }
 
-    #if 0
-    Triangle TestTriangle;
-
-    TestTriangle.Vertices[0].Position.xyz = vec3(-1.0f + 5.0f, -1.0f + 5.0f, -10.0f);
-    TestTriangle.Vertices[1].Position.xyz = vec3( 1.0f + 5.0f, -1.0f + 5.0f, -10.0f);
-    TestTriangle.Vertices[2].Position.xyz = vec3( 0.0f + 5.0f,  1.0f + 5.0f, -10.0f);
-
-    HitResult = HitResult || IntersectTriangle(TestTriangle, PrimaryRay, IntersectionInfo);
-    #endif
-
     if(HitResult) {
-        Color = vec3(0.0f);
 
         Vertex InterpolatedVertex = GetInterpolatedVertex(IntersectionInfo);
 
+        if(false)
         Color = InterpolatedVertex.Normal * 0.5f + 0.5f;
+        else
+        Color = vec3(IntersectionInfo.Depth / 10.0f);
     } else {
         Color = ComputeIncomingRadiance(PrimaryRay.Direction);
     }

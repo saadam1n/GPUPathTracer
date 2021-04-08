@@ -10,6 +10,8 @@ void Camera::GenerateImagePlane(void) {
 
 	glm::vec2 ScreenDirection = glm::vec2(Sine.x * Cosine.y, Sine.y);
 
+	//ScreenDirection = -ScreenDirection;
+
 	float DirectionLength = glm::length(glm::vec2(ScreenDirection.x, ScreenDirection.y)) - 1.0f;
 
 	ImagePlane.Corner[1][1].x = ScreenDirection.x;
@@ -80,8 +82,6 @@ void Camera::GenerateViewTransform(void) {
 	Direction = glm::normalize(Direction);
 
 	ViewMatrix = glm::mat3(glm::lookAt(glm::vec3(0.0f), Direction, glm::vec3(0.0f, 1.0f, 0.0f)));
-
-	Direction = -Direction;
 }
 
 void Camera::Move(float Distance) {
