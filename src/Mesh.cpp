@@ -65,3 +65,8 @@ void Mesh::LoadMesh(const char* File) {
     ElementBuffer.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
     ElementBuffer.UploadData(GetVectorSizeBytes(Indices), Indices.data());
 }
+
+void Mesh::LoadTexture(const char* Path) {
+    Material.Albedo.CreateBinding();
+    Material.Albedo.LoadTexture(Path);
+}

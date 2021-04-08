@@ -9,7 +9,7 @@ Things I need to do:
 - DONE: Bounding volumes
 - Bounding volume hierarchies 
 - Texturing
-- Wavefront ray tracing
+- DONE: Wavefront ray tracing
 - Scene loading
 - Scene management system
 - Monte carlo path tracing
@@ -24,6 +24,7 @@ Issues that I need to fix:
 Things I should do but don't need to:
 - Fix OpenGL abstraction issues
 - Add GLSL include directory functionality 
+- Fix memory leaks and OpenGL resource "leaks" after the program exits
 
 Things maybe I should do:
 - Move to watertight triangle intersection

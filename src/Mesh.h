@@ -2,6 +2,7 @@
 
 #include "VertexArray.h"
 #include "Buffer.h"
+#include "Texture.h"
 
 #include <glm/glm.hpp>
 
@@ -14,6 +15,7 @@ struct AABB {
 class Mesh {
 public:
 	void LoadMesh(const char* Path);
+	void LoadTexture(const char* Path);
 private:
 	/*
 	For now, I will follow a simple layout where each mesh has it's own VAO. 
@@ -31,6 +33,10 @@ private:
 	Buffer ElementBuffer;
 
 	AABB BoundingBox;
+
+	struct {
+		Texture2D Albedo;
+	} Material;
 
 	friend class Shader;
 };

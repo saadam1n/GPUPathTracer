@@ -258,6 +258,14 @@ Vertex GetInterpolatedVertex(in HitInfo Intersection) {
     return InterpolatedVertex;
 }
 
+
+struct MaterialSamplers {
+    sampler2D Albedo;
+};
+
+uniform MaterialSamplers Material;
+
+
 vec3 ComputeColor(in vec2 PixelCoordinates){
     vec2 ScreenCoordinates = PixelCoordinates / vec2(gl_WorkGroupSize.xy * gl_NumWorkGroups.xy);
     vec3 Color = vec3(0.0f);
@@ -294,10 +302,13 @@ vec3 ComputeColor(in vec2 PixelCoordinates){
     if(HitResult) {
         Vertex InterpolatedVertex = GetInterpolatedVertex(IntersectionInfo);
 
-        Color = InterpolatedVertex.Normal * 0.5f + 0.5f;
+        Color = texture(Material.Albedo, InterpolatedVertex.TextureCoordinate).rgb;
     } else {
         Color = ComputeIncomingRadiance(PrimaryRay.Direction);
     }
+
+    // TODO: More accurate sRGB conversion
+    Color = pow(Color, vec3(1.0f / 2.2f));
 
 	return Color;
 }

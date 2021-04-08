@@ -76,9 +76,15 @@ int main() {
 	LastCursorPosition = glm::vec2(Width, Height) / 2.0f;
 	Window.SetInputCallback(MouseCallback);
 
+	Camera.SetPosition(glm::vec3(0.0f, 0.15f, 0.5f));
+
 	Mesh Object;
 
-	Object.LoadMesh("res/objects/Bunny.obj");
+	// Don't get too close to the bunny, otherwise the compute shader will hang for long enough for the driver to request program termination 
+	// Average frame time on my GTX 980 is ~700-800 milliseconds while the camera stays at the initial position
+	// I'll implement BVHs to improve performance later
+	Object.LoadMesh("res/objects/BunnyHighRes.obj");
+	Object.LoadTexture("res/textures/GraphicDesignIsMyPassion.png");
 
 	Timer FrameTimer;
 
@@ -98,7 +104,7 @@ int main() {
 		RayTraceShader.CreateBinding();
 		RayTraceShader.LoadImage2D("ColorOutput", RenderTargetColor);
 		RayTraceShader.LoadCamera ("Camera", Camera);
-		RayTraceShader.LoadMesh("VertexBuffer", "IndexBuffer", "BoundingBox", Object);
+		RayTraceShader.LoadMesh("VertexBuffer", "IndexBuffer", "BoundingBox", "Material", Object);
 
 		glDispatchCompute(Width / 8, Height / 8, 1);
 

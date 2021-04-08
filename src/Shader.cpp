@@ -22,7 +22,11 @@ void Shader::Free(void) {
 }
 
 void Shader::LoadTexture2D(const char* Name, Texture2D& Value) {
-	ActivateNextFreeTextureUnit(Name);
+	LoadTexture2D(GetUniformLocation(Name), Value);
+}
+
+void Shader::LoadTexture2D(GLint Location, Texture2D& Value) {
+	ActivateNextFreeTextureUnit(Location);
 
 	Value.CreateBinding();
 }
@@ -60,13 +64,15 @@ void Shader::LoadShaderStorageBuffer(const char* Name, Buffer& Value) {
 	Value.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, BlockBinding);
 }
 
-void Shader::LoadMesh(const char* VBuf, const char* IBuf, const char* BBox, Mesh& Mesh) {
+void Shader::LoadMesh(const char* VBuf, const char* IBuf, const char* BBox, const char* Mtrl, Mesh& Mesh) {
 	LoadShaderStorageBuffer(VBuf, Mesh.VertexBuffer );
 	LoadShaderStorageBuffer(IBuf, Mesh.ElementBuffer);
 
 	LoadVector3F32(GetStructureMemberLocation(BBox, "Position"), Mesh.BoundingBox.Position);
 	LoadVector3F32(GetStructureMemberLocation(BBox, "Max")     , Mesh.BoundingBox.Max     );
 	LoadVector3F32(GetStructureMemberLocation(BBox, "Min")     , Mesh.BoundingBox.Min     );
+
+	LoadTexture2D(GetStructureMemberLocation(Mtrl, "Albedo"), Mesh.Material.Albedo);
 }
 
 /*
@@ -93,8 +99,12 @@ GLint Shader::GetUniformLocation(const char* Name) {
 }
 
 uint32_t Shader::ActivateNextFreeTextureUnit(const char* Name) {
+	return ActivateNextFreeTextureUnit(GetUniformLocation(Name));
+}
+
+uint32_t Shader::ActivateNextFreeTextureUnit(const int Location) {
 	glActiveTexture(GL_TEXTURE0 + NextFreeTextureUnit);
-	glUniform1i(GetUniformLocation(Name), NextFreeTextureUnit);
+	glUniform1i(Location, NextFreeTextureUnit);
 	return NextFreeTextureUnit++;
 }
 

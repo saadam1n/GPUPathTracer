@@ -26,7 +26,7 @@ public:
 
 	void LoadShaderStorageBuffer(const char* Name, Buffer& Value         );
 
-	void LoadMesh               (const char* VBuf, const char* IBuf, const char* BBox, Mesh& Mesh);
+	void LoadMesh               (const char* VBuf, const char* IBuf, const char* BBox, const char* Mtrl, Mesh& Mesh);
 protected:
 	GLint    GetUniformLocation         (const char* Name       );
 	uint32_t ActivateNextFreeTextureUnit(const char* Name       );
@@ -34,7 +34,10 @@ protected:
 	GLint    GetUniformLocation         (const std::string& Name);
 	uint32_t ActivateNextFreeTextureUnit(const std::string& Name);
 
+	uint32_t ActivateNextFreeTextureUnit(const int Location);
+
 	void LoadVector3F32(GLint Location, const glm::vec3& Value);
+	void LoadTexture2D(GLint Location, Texture2D& Value);
 
 	// String cat
 	std::string GetStructureMemberName(const char* Structure, const char* Member);

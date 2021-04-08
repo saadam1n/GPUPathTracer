@@ -22,3 +22,6 @@ set_target_properties("assimp_cmd" PROPERTIES FOLDER "extern/assimp")
 set_target_properties("unit" PROPERTIES FOLDER "extern/assimp")
 set_target_properties("zlibstatic" PROPERTIES FOLDER "extern/assimp")
 set_target_properties("UpdateAssimpLibsDebugSymbolsAndDLLs" PROPERTIES FOLDER "extern/assimp")
+
+# Fix stb_image errors when linking to assimp
+# target_compile_definitions("assimp" PRIVATE "STBI_INCLUDE_STB_IMAGE_H")
