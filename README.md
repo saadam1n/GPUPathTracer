@@ -4,4 +4,6 @@ A small program that I am writing in C++ and OpenGL to approximate the light tra
 
 ## Images
 
-![Hello triangle](images/FirstTriangle.png)
+![Hello triangle](images/1FirstTriangle.png)
+
+![Stanford bunny](images/2StanfordBunny.png)
