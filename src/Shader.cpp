@@ -60,9 +60,13 @@ void Shader::LoadShaderStorageBuffer(const char* Name, Buffer& Value) {
 	Value.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, BlockBinding);
 }
 
-void Shader::LoadMesh(const char* VBuf, const char* IBuf, Mesh& Mesh) {
-	LoadShaderStorageBuffer(VBuf, Mesh.VertexBuffer);
+void Shader::LoadMesh(const char* VBuf, const char* IBuf, const char* BBox, Mesh& Mesh) {
+	LoadShaderStorageBuffer(VBuf, Mesh.VertexBuffer );
 	LoadShaderStorageBuffer(IBuf, Mesh.ElementBuffer);
+
+	LoadVector3F32(GetStructureMemberLocation(BBox, "Position"), Mesh.BoundingBox.Position);
+	LoadVector3F32(GetStructureMemberLocation(BBox, "Max")     , Mesh.BoundingBox.Max     );
+	LoadVector3F32(GetStructureMemberLocation(BBox, "Min")     , Mesh.BoundingBox.Min     );
 }
 
 /*
@@ -83,7 +87,7 @@ std::string Shader::GetStructureMemberName(const char* Structure, const char* Me
 GLint Shader::GetUniformLocation(const char* Name) {
 	GLint Location = glGetUniformLocation(ProgramHandle, Name);
 
-	//assert(Location != -1);
+	assert(Location != -1);
 
 	return Location;
 }

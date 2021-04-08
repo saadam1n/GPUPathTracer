@@ -3,6 +3,14 @@
 #include "VertexArray.h"
 #include "Buffer.h"
 
+#include <glm/glm.hpp>
+
+struct AABB {
+	glm::vec3 Position;
+	glm::vec3 Min;
+	glm::vec3 Max;
+};
+
 class Mesh {
 public:
 	void LoadMesh(const char* Path);
@@ -21,6 +29,8 @@ private:
 
 	Buffer VertexBuffer;
 	Buffer ElementBuffer;
+
+	AABB BoundingBox;
 
 	friend class Shader;
 };

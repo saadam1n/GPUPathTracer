@@ -17,6 +17,10 @@ size_t GetVectorSizeBytes(const std::vector<T>& Vector) {
 }
 
 void Mesh::LoadMesh(const char* File) {
+    BoundingBox.Position = glm::vec3(0.0f); // Position will be updated by transformation matrix
+    BoundingBox.Max = glm::vec3(-FLT_MAX);
+    BoundingBox.Min = glm::vec3( FLT_MAX);
+
     Assimp::Importer Importer;
 
     const aiScene* Scene = Importer.ReadFile(File, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenNormals);
@@ -37,6 +41,9 @@ void Mesh::LoadMesh(const char* File) {
                 CurrentVertex.TextureCoordinates = glm::vec2(Mesh->mTextureCoords[0][VertexIndex].x, Mesh->mTextureCoords[0][VertexIndex].y);
 
             Vertices.push_back(CurrentVertex);
+
+            BoundingBox.Max = glm::max(BoundingBox.Max, CurrentVertex.Position);
+            BoundingBox.Min = glm::min(BoundingBox.Min, CurrentVertex.Position);
         }
         for (uint32_t FaceIndex = 0; FaceIndex < Mesh->mNumFaces; FaceIndex++) {
             const aiFace& Face = Mesh->mFaces[FaceIndex];

@@ -23,7 +23,7 @@ uint32_t Height = 720;
 
 // Camera params 
 
-constexpr float CameraSpeed       = 5.000f;
+constexpr float CameraSpeed       = 2.000f;
 constexpr float CameraSensitivity = 0.001f;
 glm::vec2 LastCursorPosition;
 
@@ -78,7 +78,7 @@ int main() {
 
 	Mesh Object;
 
-	Object.LoadMesh("res/objects/Suzanne.obj");
+	Object.LoadMesh("res/objects/Bunny.obj");
 
 	Timer FrameTimer;
 
@@ -98,7 +98,7 @@ int main() {
 		RayTraceShader.CreateBinding();
 		RayTraceShader.LoadImage2D("ColorOutput", RenderTargetColor);
 		RayTraceShader.LoadCamera ("Camera", Camera);
-		RayTraceShader.LoadMesh("VertexBuffer", "IndexBuffer", Object);
+		RayTraceShader.LoadMesh("VertexBuffer", "IndexBuffer", "BoundingBox", Object);
 
 		glDispatchCompute(Width / 8, Height / 8, 1);
 

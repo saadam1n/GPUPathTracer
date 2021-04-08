@@ -26,7 +26,7 @@ public:
 
 	void LoadShaderStorageBuffer(const char* Name, Buffer& Value         );
 
-	void LoadMesh               (const char* VBuf, const char* IBuf, Mesh& Mesh); 
+	void LoadMesh               (const char* VBuf, const char* IBuf, const char* BBox, Mesh& Mesh);
 protected:
 	GLint    GetUniformLocation         (const char* Name       );
 	uint32_t ActivateNextFreeTextureUnit(const char* Name       );
