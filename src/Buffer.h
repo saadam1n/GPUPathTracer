@@ -3,7 +3,7 @@
 #include "OpenGL.h"
 
 enum BufferTarget {
-	BUFFER_TARGET_VERTEX = GL_ARRAY_BUFFER,
+	BUFFER_TARGET_ARRAY = GL_ARRAY_BUFFER,
 	BUFFER_TARGET_SHADER_STORAGE = GL_SHADER_STORAGE_BUFFER
 };
 
@@ -20,6 +20,8 @@ public:
 
 	void CreateBlockBinding(BufferTarget Target, uint32_t Binding);
 private:
+	friend class TextureBuffer;
+
 	GLuint BufferHandle;
 
 	BufferTarget CurrentTarget;

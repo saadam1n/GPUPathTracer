@@ -3,14 +3,11 @@
 #include "VertexArray.h"
 #include "Buffer.h"
 #include "Texture.h"
+#include "BVH.h"
 
 #include <glm/glm.hpp>
 
-struct AABB {
-	glm::vec3 Position;
-	glm::vec3 Min;
-	glm::vec3 Max;
-};
+#include "AABB.h"
 
 class Mesh {
 public:
@@ -32,10 +29,17 @@ private:
 	Buffer VertexBuffer;
 	Buffer ElementBuffer;
 
-	AABB BoundingBox;
+	struct {
+		TextureBuffer Vertices;
+		TextureBuffer Indices;
+	} BufferTexture;
+
+	BoundingVolumeHierarchy BVH;
+
+	//AABB BoundingBox;
 
 	struct {
-		Texture2D Albedo;
+		Texture2D Diffuse;
 	} Material;
 
 	friend class Shader;

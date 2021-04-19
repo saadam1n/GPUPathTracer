@@ -17,9 +17,8 @@ size_t GetVectorSizeBytes(const std::vector<T>& Vector) {
 }
 
 void Mesh::LoadMesh(const char* File) {
-    BoundingBox.Position = glm::vec3(0.0f); // Position will be updated by transformation matrix
-    BoundingBox.Max = glm::vec3(-FLT_MAX);
-    BoundingBox.Min = glm::vec3( FLT_MAX);
+    //BoundingBox.Max = glm::vec3(-FLT_MAX);
+    //BoundingBox.Min = glm::vec3( FLT_MAX);
 
     Assimp::Importer Importer;
 
@@ -42,8 +41,8 @@ void Mesh::LoadMesh(const char* File) {
 
             Vertices.push_back(CurrentVertex);
 
-            BoundingBox.Max = glm::max(BoundingBox.Max, CurrentVertex.Position);
-            BoundingBox.Min = glm::min(BoundingBox.Min, CurrentVertex.Position);
+            //BoundingBox.Max = glm::max(BoundingBox.Max, CurrentVertex.Position);
+            //BoundingBox.Min = glm::min(BoundingBox.Min, CurrentVertex.Position);
         }
         for (uint32_t FaceIndex = 0; FaceIndex < Mesh->mNumFaces; FaceIndex++) {
             const aiFace& Face = Mesh->mFaces[FaceIndex];
@@ -59,14 +58,22 @@ void Mesh::LoadMesh(const char* File) {
 
     Importer.FreeScene();
 
-    VertexBuffer.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
+    VertexBuffer.CreateBinding(BUFFER_TARGET_ARRAY);
     VertexBuffer.UploadData(GetVectorSizeBytes(Vertices), Vertices.data());
 
-    ElementBuffer.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
+    ElementBuffer.CreateBinding(BUFFER_TARGET_ARRAY);
     ElementBuffer.UploadData(GetVectorSizeBytes(Indices), Indices.data());
+
+    BufferTexture.Vertices.CreateBinding();
+    BufferTexture.Vertices.SelectBuffer(&VertexBuffer, GL_RGBA32F);
+
+    BufferTexture.Indices.CreateBinding();
+    BufferTexture.Indices.SelectBuffer(&ElementBuffer, GL_RGB32UI);
+
+    BVH.ConstructAccelerationStructure(Vertices, Indices);
 }
 
 void Mesh::LoadTexture(const char* Path) {
-    Material.Albedo.CreateBinding();
-    Material.Albedo.LoadTexture(Path);
+    Material.Diffuse.CreateBinding();
+    Material.Diffuse.LoadTexture(Path);
 }

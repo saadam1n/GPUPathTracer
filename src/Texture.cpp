@@ -1,19 +1,28 @@
 #include "Texture.h"
+#include "Buffer.h"
 #include <SOIL2.h>
 #include <stdio.h>
 
 #include <stdlib.h>
 
-Texture2D::Texture2D(void) : Texture2DHandle(UINT32_MAX) {
+Texture::Texture(void) : TextureHandle(UINT32_MAX) {
 
 }
 
-void Texture2D::CreateBinding(void) {
-	if (Texture2DHandle == UINT32_MAX) {
-		glGenTextures(1, &Texture2DHandle);
+void Texture::EnsureGeneratedHandle(void) {
+	if (TextureHandle == UINT32_MAX) {
+		glGenTextures(1, &TextureHandle);
 	}
+}
 
-	glBindTexture(GL_TEXTURE_2D, Texture2DHandle);
+void Texture::Free(void) {
+	glDeleteTextures(1, &TextureHandle);
+}
+
+void Texture2D::CreateBinding(void) {
+	EnsureGeneratedHandle();
+
+	glBindTexture(GL_TEXTURE_2D, TextureHandle);
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -22,14 +31,11 @@ void Texture2D::CreateBinding(void) {
 }
 
 void Texture2D::CreateImageBinding(uint32_t Unit) {
-	glBindImageTexture(Unit, Texture2DHandle, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
+	glBindImageTexture(Unit, TextureHandle, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
 }
 
 void Texture2D::FreeBinding(void) {
 	glBindTexture(GL_TEXTURE_2D, 0);
-}
-void Texture2D::Free(void) {
-	glDeleteTextures(1, &Texture2DHandle);
 }
 
 void Texture2D::LoadTexture(const char* Path) {
@@ -61,4 +67,29 @@ void Texture2D::LoadTexture(const char* Path) {
 
 void Texture2D::LoadData(GLenum DestinationFormat, GLenum SourceFormat, GLenum SourceType, uint32_t X, uint32_t Y, void* Data) {
 	glTexImage2D(GL_TEXTURE_2D, 0, DestinationFormat, X, Y, 0, SourceFormat, SourceType, Data);
+}
+
+void TextureBuffer::CreateBinding(void) {
+	EnsureGeneratedHandle();
+
+	glBindTexture(GL_TEXTURE_BUFFER, TextureHandle);
+}
+
+void TextureBuffer::FreeBinding(void) {
+	glBindTexture(GL_TEXTURE_BUFFER, 0);
+}
+
+void TextureBuffer::SelectBuffer(Buffer* Buf, GLenum Format, uint32_t DataOffset, uint32_t DataBytes) {
+	ReferencedBuffer = Buf;
+
+	Offset = DataOffset;
+	Bytes = DataBytes;
+
+	glTexBufferRange(GL_TEXTURE_BUFFER, Format, ReferencedBuffer->BufferHandle, Offset, Bytes);
+}
+
+void TextureBuffer::SelectBuffer(Buffer* Buf, GLenum Format) {
+	ReferencedBuffer = Buf;
+
+	glTexBuffer(GL_TEXTURE_BUFFER, Format, ReferencedBuffer->BufferHandle);
 }

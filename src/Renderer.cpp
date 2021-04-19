@@ -89,6 +89,8 @@ void DebugMessageCallback(GLenum source, GLenum type, GLuint id,
         break;
 
     case GL_DEBUG_SEVERITY_NOTIFICATION:
+        // Sorry, but I don't care and I also don't want you cluterring my log
+        return;
         _severity = "NOTIFICATION";
         break;
 
