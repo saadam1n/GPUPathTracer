@@ -404,4 +404,4 @@ _deps
 *.cmake
 x64
 
-!src/res/objects
+!src/res/*.obj
