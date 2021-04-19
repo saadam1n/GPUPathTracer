@@ -403,3 +403,5 @@ _deps
 *.dir
 *.cmake
 x64
+
+!src/res/objects
