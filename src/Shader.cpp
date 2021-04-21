@@ -254,7 +254,7 @@ void PrintCompileLog(GLuint ShaderHandle, const std::string& ShaderSouceCC, std:
 	std::string LastFile;
 
 	for (std::string Line; std::getline(CompileLog, Line);) {
-		uint32_t NumberSize = Line.find_first_of(')'); // or NumberOffset, NumberIndex? idk
+		uint32_t NumberSize = (uint32_t)Line.find_first_of(')'); // or NumberOffset, NumberIndex? idk
 
 		FileLineNumber CorrectedLineNumber = LineNumbers.find(std::stoi(Line.substr(2, NumberSize)))->second;
 

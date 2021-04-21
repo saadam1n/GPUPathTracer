@@ -50,5 +50,5 @@ private:
 	// We need to know the field of view to determine how large (or more specifically, the area of the image plane) the image plane is. I, like GLM's convention, use the Y FOV instead of X. 
 	float FieldOfView;
 	// The image plane we want to integrate the measurement equation over
-	ImagePlane ImagePlane;
+	ImagePlane FilmPlane;
 };

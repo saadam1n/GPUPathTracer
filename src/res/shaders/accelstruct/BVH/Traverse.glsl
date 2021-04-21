@@ -5,9 +5,7 @@
 #include "../../geometry/Object.glsl"
 
 struct BVHStackItem {
-	BVHNodeGeneric Node;
-
-	uint Depth;
+	int Children[2];
 };
 
 // BVH_Stack_Item BVH_Stack[64];
@@ -69,6 +67,17 @@ BVHNodeGeneric GetChildNode(in BVHSamplers BVH, in BVHNodeRecursive ParentNode, 
 	return Child;
 }
 
+BVHNodeGeneric GetRecursiveNodeAsGeneric(in BVHNodeRecursive R){
+	BVHNodeGeneric G;
+
+	G.Node = R.Node;
+
+	G.Data[0] = R.ChildrenNodes[0];
+	G.Data[1] = R.ChildrenNodes[1];
+
+	return G;
+}
+
 // AABB intersection test by madmann
 vec2 IntersectNode(in BVHNodeGeneric Node, in Ray InverseRay, in HitInfo Intersection) {
 	vec3 t_node_min = Node.Node.BoundingBox.Min * InverseRay.Direction + InverseRay.Origin;
@@ -96,7 +105,7 @@ void IntersectLeaf(in MeshSamplers M, in BVHSamplers BVH, in BVHNodeGeneric Gene
 	int IterStart = Leaf.Leaf.Index;
 	int IterEnd = IterStart + Leaf.Leaf.IndexCount;
 
-	for(int Iter = IterStart; Iter < IterEnd; Iter++){
+	for(int Iter = IterStart - 10; Iter < IterEnd + 10; Iter++){
 		uint Index = texelFetch(BVH.Leaves, Iter).r;
 
 		bool TriRes = IntersectTriangle(FetchTriangle(M, Index), Ray, Intersection);
@@ -108,26 +117,45 @@ void IntersectLeaf(in MeshSamplers M, in BVHSamplers BVH, in BVHNodeGeneric Gene
 
 #define BVH_STACK_SIZE 64
 
+uint GetStackIndex(in BVHNodeRecursive BNR){
+	return BNR.ChildrenNodes[0];
+}
+
+uint GetStackIndex(in BVHNodeGeneric BNG){
+	// A bit inefficent since I cast isntead of using the values directly but whatever...
+	BVHNodeRecursive BNR = GetNodeGenericAsRecursive(BNG);
+	return GetStackIndex(BNR);
+}
+
 bool TraverseBVH(in MeshSamplers M, in BVHSamplers BVH, in Ray IntersectionRay, inout HitInfo Intersection) {
+	int HeatMap = 0;
+
 	Ray InverseRay;
 
 	InverseRay.Direction = 1.0f / IntersectionRay.Direction;
 	InverseRay.Origin    = -IntersectionRay.Origin * InverseRay.Direction;
 
+	BVHNodeRecursive RootNode = GetRootNode(BVH);
+
+	uint CurrentNode = GetStackIndex(RootNode);
+
+	if(!ValidateIntersection(IntersectNode(GetRecursiveNodeAsGeneric(RootNode), InverseRay, Intersection))){
+		imageStore(ColorOutput, ivec2(gl_GlobalInvocationID.xy), vec4(vec3(0.0f), 1.0f));
+		return false;
+	} else{
+		HeatMap++;
+	}
+
 	bool Result = false;
 
-	BVHNodeRecursive Stack[BVH_STACK_SIZE];
+	uint Stack[BVH_STACK_SIZE];
 	int StackIndex = -1;
-
-	BVHNodeRecursive CurrentNode = GetRootNode(BVH);
-
-	//int HeatMap = 0;
 
 	while (true) {
 		BVHNodeGeneric Children[2];
 
-		Children[0] = GetChildNode(BVH, CurrentNode, 0);
-		Children[1] = GetChildNode(BVH, CurrentNode, 1);
+		Children[0] = GetNode(BVH, CurrentNode    );
+		Children[1] = GetNode(BVH, CurrentNode + 1);
 
 		vec2 ChildrenIntersectionDistances[2];
 
@@ -139,8 +167,8 @@ bool TraverseBVH(in MeshSamplers M, in BVHSamplers BVH, in Ray IntersectionRay, 
 		ChildrenIntersectionSuccess[0] = ValidateIntersection(ChildrenIntersectionDistances[0]);
 		ChildrenIntersectionSuccess[1] = ValidateIntersection(ChildrenIntersectionDistances[1]);
 
-		//HeatMap += int(ChildrenIntersectionSuccess[0]);
-		//HeatMap += int(ChildrenIntersectionSuccess[1]);
+		HeatMap += int(ChildrenIntersectionSuccess[0]);
+		HeatMap += int(ChildrenIntersectionSuccess[1]);
 
 		// Rename variable
 		// #define ChildrenIntersectionSuccess PushStack
@@ -172,15 +200,15 @@ bool TraverseBVH(in MeshSamplers M, in BVHSamplers BVH, in Ray IntersectionRay, 
 					break;
 				}
 
-				Stack[++StackIndex] = GetNodeGenericAsRecursive(Children[1]);
+				Stack[++StackIndex] = GetStackIndex(Children[1]);
 
-				CurrentNode = GetNodeGenericAsRecursive(Children[0]);
+				CurrentNode = GetStackIndex(Children[0]);
 			} else if(ChildrenIntersectionSuccess[0]) {
 				// Child 0 was only intersected
-				CurrentNode = GetNodeGenericAsRecursive(Children[0]);
+				CurrentNode = GetStackIndex(Children[0]);
 			} else {
 				// Child 1 was only intersected
-				CurrentNode = GetNodeGenericAsRecursive(Children[1]);
+				CurrentNode = GetStackIndex(Children[1]);
 			}
 		} else {
 			//TRAVERSE_STACK();
@@ -193,7 +221,7 @@ bool TraverseBVH(in MeshSamplers M, in BVHSamplers BVH, in Ray IntersectionRay, 
 
 	}
 
-	//imageStore(ColorOutput, ivec2(gl_GlobalInvocationID.xy), vec4(vec3(HeatMap) / 192.0f, 1.0f));
+	imageStore(ColorOutput, ivec2(gl_GlobalInvocationID.xy), vec4(vec3(HeatMap) / 128.0f, 1.0f));
 
 	return Result;
 }

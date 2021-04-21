@@ -7,14 +7,15 @@ Things I need to do:
 - DONE: Send the triangles to the shader using a SSBO or texture
 - DONE: Dynamically load the triangles with ASSIMP
 - DONE: Bounding volumes
-- Bounding volume hierarchies 
+- DONE: Bounding volume hierarchies 
 - DONE: Texturing
+- Better BVH building and traversal
 - Wavefront ray tracing
 - Scene loading
 - Scene management system
 - Monte carlo path tracing
 - Post processing
-- Physically based rendering
+- PARTIALLY DONE: Physically based rendering
 - Importance sampling
 - Multiple importance samping
 

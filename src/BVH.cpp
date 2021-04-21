@@ -11,6 +11,8 @@ Then we serealize it
 #include <list>
 #include <queue>
 #include <thread>
+#include <stdio.h>
+#include <iostream>
 
 using BVH = BoundingVolumeHierarchy;
 
@@ -260,7 +262,7 @@ void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<V
 	NodeUnserialized* RootNode = new NodeUnserialized;
 
 	RootNode->BoundingBox = CreateBoundingBox(CentroidList, Vertices, Indices);
-	RootNode->Centroids = CentroidList;
+	RootNode->Centroids   =                   CentroidList;
 
 	ConstructionNode CRN;
 
@@ -278,7 +280,7 @@ void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<V
 		if (CurrentNode.DataPtr->Centroids.size() < LeafHint || (uint32_t)CurrentNode.Depth > DepthHint) {
 			CurrentNode.DataPtr->Type = NodeType::LEAF;
 
-			CurrentNode.DataPtr->Leaf.Offset = (int32_t)LeafContentBuffer.size()     ;
+			CurrentNode.DataPtr->Leaf.Offset = (int32_t)LeafContentBuffer.size()             ;
 			CurrentNode.DataPtr->Leaf.Size   = (int32_t)CurrentNode.DataPtr->Centroids.size();
 
 			for (const TriangleCentroid& Tri : CurrentNode.DataPtr->Centroids) {
@@ -368,6 +370,12 @@ void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<V
 	
 	//DebugPrintBVH(ProcessedNodes, LeafContentBuffer);
 
+	//std::cout << LeafContentBuffer.size() << ' ' << Indices.size() << '\n';
+
+	//for (const int32_t Value : LeafContentBuffer) {
+	//	std::cout << Value << '\n';
+	//}
+
 	StructureBuffers.Nodes.CreateBinding(BUFFER_TARGET_ARRAY);
 	StructureBuffers.Nodes.UploadData(ProcessedNodes.size() * sizeof(NodeSerialized), ProcessedNodes.data());
 
@@ -378,7 +386,7 @@ void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<V
 	StructureBuffers.Leaves.UploadData(LeafContentBuffer.size() * sizeof(int32_t), LeafContentBuffer.data());
 
 	Samplers.Leaves.CreateBinding();
-	Samplers.Leaves.SelectBuffer(&StructureBuffers.Leaves, GL_RGB32I);
+	Samplers.Leaves.SelectBuffer(&StructureBuffers.Leaves, GL_R32I);
 }
 
 void NodeSerialized::MakeLeaf(void) {
@@ -426,20 +434,12 @@ Split BoundingVolumeHierarchy::FindBestSplit(const std::vector<TriangleCentroid>
 
 	Split BestSplit;
 
-	for (auto Iter = SortedCentroids.begin(); Iter != SortedCentroids.end() - 1; Iter++) {
-		auto NextIter = Iter + 1;
-
-		float Midpoint = (Iter->Position[Axis] + NextIter->Position[Axis]) * 0.5f;
-
+	// Splitting algorithm created by madmann
+	for (size_t CentroidIdx = 1; CentroidIdx < SortedCentroids.size(); CentroidIdx++) {
 		Split CurrentSplit;
 
-		for (const TriangleCentroid& Centroid : Centroids) {
-			if (Centroid.Position[Axis] < Midpoint) {
-				CurrentSplit.Centroids[0].push_back(Centroid);
-			} else {
-				CurrentSplit.Centroids[1].push_back(Centroid);
-			}
-		}
+		std::copy_n(SortedCentroids.begin(),  CentroidIdx,                        std::back_inserter(CurrentSplit.Centroids[0]));
+		std::copy  (SortedCentroids.begin() + CentroidIdx, SortedCentroids.end(), std::back_inserter(CurrentSplit.Centroids[1]));
 
 		CurrentSplit.Box[0] = CreateBoundingBox(CurrentSplit.Centroids[0], Vertices, Indices);
 		CurrentSplit.Box[1] = CreateBoundingBox(CurrentSplit.Centroids[1], Vertices, Indices);

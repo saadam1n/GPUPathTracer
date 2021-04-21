@@ -14,18 +14,18 @@ void Camera::GenerateImagePlane(void) {
 
 	float DirectionLength = glm::length(glm::vec2(ScreenDirection.x, ScreenDirection.y)) - 1.0f;
 
-	ImagePlane.Corner[1][1].x = ScreenDirection.x;
-	ImagePlane.Corner[1][1].y = ScreenDirection.y;
-	ImagePlane.Corner[1][1].z = DirectionLength;
+	FilmPlane.Corner[1][1].x = ScreenDirection.x;
+	FilmPlane.Corner[1][1].y = ScreenDirection.y;
+	FilmPlane.Corner[1][1].z = DirectionLength;
 
-	ImagePlane.Corner[0][0]   = -ImagePlane.Corner[1][1];
-	ImagePlane.Corner[0][0].z =  ImagePlane.Corner[1][1].z;
+	FilmPlane.Corner[0][0]   = -FilmPlane.Corner[1][1];
+	FilmPlane.Corner[0][0].z = FilmPlane.Corner[1][1].z;
 
-	ImagePlane.Corner[1][0]   =  ImagePlane.Corner[1][1];
-	ImagePlane.Corner[1][0].x = -ImagePlane.Corner[1][0].x;
+	FilmPlane.Corner[1][0]   = FilmPlane.Corner[1][1];
+	FilmPlane.Corner[1][0].x = -FilmPlane.Corner[1][0].x;
 
-	ImagePlane.Corner[0][1]   =  ImagePlane.Corner[1][1];
-	ImagePlane.Corner[0][1].y = -ImagePlane.Corner[0][1].y;
+	FilmPlane.Corner[0][1]   = FilmPlane.Corner[1][1];
+	FilmPlane.Corner[0][1].y = -FilmPlane.Corner[0][1].y;
 
 	// Short for corner access
     //#define CNR_ACS [0][1]
@@ -53,11 +53,11 @@ void Camera::GenerateImagePlane(void) {
 		DirectionSet[Y][X] = Direction;
 	};
 
-	GenerateDirection(ImagePlane.Corner, 0, 0);
-	GenerateDirection(ImagePlane.Corner, 0, 1);
-	GenerateDirection(ImagePlane.Corner, 1, 0);
-	GenerateDirection(ImagePlane.Corner, 1, 1);
-
+	GenerateDirection(FilmPlane.Corner, 0, 0);
+	GenerateDirection(FilmPlane.Corner, 0, 1);
+	GenerateDirection(FilmPlane.Corner, 1, 0);
+	GenerateDirection(FilmPlane.Corner, 1, 1);
+	
 	//printf("(%f, %f, %f)\n", ImagePlane.Corner CNR_ACS.x, ImagePlane.Corner CNR_ACS.y, ImagePlane.Corner CNR_ACS.z);
 }
 
@@ -117,5 +117,5 @@ glm::vec3 Camera::GetDirection(void) const {
 }
 
 const ImagePlane& Camera::GetImagePlane(void) const {
-	return ImagePlane;
+	return FilmPlane;
 }

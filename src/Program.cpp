@@ -84,7 +84,7 @@ int main() {
 	// Average frame time on my GTX 980 is ~700-800 milliseconds while the camera stays at the initial position
 	// I'll implement BVHs to improve performance later
 	Object.LoadMesh   ("res/objects/Suzanne.obj"); // BunnyHighRes
-	Object.LoadTexture("res/textures/Metal.png");
+	Object.LoadTexture("res/textures/Metal.png" );
 
 	Timer FrameTimer;
 
