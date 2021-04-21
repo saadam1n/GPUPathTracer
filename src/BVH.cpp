@@ -428,6 +428,18 @@ std::vector<TriangleCentroid> BoundingVolumeHierarchy::SortAxis(const std::vecto
 	return Sorted;
 }
 
+Split BoundingVolumeHierarchy::CreateSplit(const std::vector<TriangleCentroid>& SortedCentroids, const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices, int32_t Axis, size_t CentroidIdx) {
+	Split CurrentSplit;
+
+	std::copy_n(SortedCentroids.begin(), CentroidIdx, std::back_inserter(CurrentSplit.Centroids[0]));
+	std::copy(SortedCentroids.begin() + CentroidIdx, SortedCentroids.end(), std::back_inserter(CurrentSplit.Centroids[1]));
+
+	CurrentSplit.Box[0] = CreateBoundingBox(CurrentSplit.Centroids[0], Vertices, Indices);
+	CurrentSplit.Box[1] = CreateBoundingBox(CurrentSplit.Centroids[1], Vertices, Indices);
+
+	return CurrentSplit;
+}
+
 Split BoundingVolumeHierarchy::FindBestSplit(const std::vector<TriangleCentroid>& Centroids, const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices, uint32_t Axis) {
 	// Ensure sorted, later I will presort once at the beginning. I also could do all split calculations in the same loop
 	std::vector<TriangleCentroid> SortedCentroids = SortAxis(Centroids, Axis);
@@ -436,21 +448,41 @@ Split BoundingVolumeHierarchy::FindBestSplit(const std::vector<TriangleCentroid>
 
 	// Splitting algorithm created by madmann
 	for (size_t CentroidIdx = 1; CentroidIdx < SortedCentroids.size(); CentroidIdx++) {
-		Split CurrentSplit;
-
-		std::copy_n(SortedCentroids.begin(),  CentroidIdx,                        std::back_inserter(CurrentSplit.Centroids[0]));
-		std::copy  (SortedCentroids.begin() + CentroidIdx, SortedCentroids.end(), std::back_inserter(CurrentSplit.Centroids[1]));
-
-		CurrentSplit.Box[0] = CreateBoundingBox(CurrentSplit.Centroids[0], Vertices, Indices);
-		CurrentSplit.Box[1] = CreateBoundingBox(CurrentSplit.Centroids[1], Vertices, Indices);
+		Split CurrentSplit = CreateSplit(SortedCentroids, Vertices, Indices, Axis, CentroidIdx);
 
 		if (CurrentSplit.ComputeSAH() < BestSplit.SAH) {
 			BestSplit = CurrentSplit;
 		}
 	}
 
+	BestSplit.Axis = Axis;
+
 	return BestSplit;
 }
+
+/*
+void BoundingVolumeHierarchy::RefineSplit(Split& BestSplit, const std::vector<TriangleCentroid>& Centroids, const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices) {
+	// We know that the centroid list is sorted so we can take the end of one and the beginning of another to find the midpoint
+	float SplitPoint = BestSplit.Centroids[0].at(BestSplit.Centroids->size()).Position[BestSplit.Axis] + BestSplit.Centroids[1][0].Position[BestSplit.Axis];
+	SplitPoint *= 0.5f;
+
+	// We calculate the split derivatives/gradient and head off in that direction for a finite number of refinements
+
+	// How far we step gets progressively smaller
+	float RefinementSize = 0.5f;
+
+	constexpr uint32_t MaxRefinements = 4;
+	for (uint32_t RefinementCount = 0; RefinementCount < MaxRefinements; RefinementCount++) {
+		// first index is if we move back, the second one is if we move forwards
+		Split RefinedSplits[2];
+
+
+
+		// Multiply by 0.5 so it is binary refinement
+		RefinementSize *= 0.5f;
+	}
+}
+*/
 
 // There's probably a more fast way to do this
 Split BoundingVolumeHierarchy::ChooseBestSplit(const Split& X, const Split& Y, const Split& Z) {

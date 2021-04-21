@@ -60,7 +60,7 @@ struct NodeUnserialized {
 struct Split {
 	Split(void);
 	// Axis of the split. 0-X, 1-Y, 2-Z
-	uint8_t Axis;
+	int32_t Axis;
 	// List of centroids. 0 is behind of the split, 1 is infornt of it
 	std::vector<TriangleCentroid> Centroids[2];
 	// Boxes formed by the split
@@ -73,7 +73,7 @@ struct Split {
 
 class BoundingVolumeHierarchy {
 public:
-	void ConstructAccelerationStructure(const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices, uint32_t DepthHint = 8, uint32_t LeafHint = 6);
+	void ConstructAccelerationStructure(const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices, uint32_t DepthHint, uint32_t LeafHint);
 private:
 	friend class Shader;
 
@@ -96,9 +96,13 @@ private:
 	AABB CreateBoundingBox(const std::vector<TriangleCentroid>& Centroids, const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices);
 
 	std::vector<TriangleCentroid> SortAxis(const std::vector<TriangleCentroid>& Centroids, uint32_t Axis);
+	
+	Split CreateSplit(const std::vector<TriangleCentroid>& SortedCentroids, const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices, int32_t Axis, size_t CentroidIdx);
 
 	Split FindBestSplit(const std::vector<TriangleCentroid>& Centroids, const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices, uint32_t Axis);
 	Split ChooseBestSplit(const Split& X, const Split& Y, const Split& Z);
+
+	//void RefineSplit(Split& BestSplit, const std::vector<TriangleCentroid>& Centroids, const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices);
 
 	void DebugPrintBVH(const std::vector<NodeSerialized>& Nodes, const std::vector<int32_t>& LeafContents);
 };

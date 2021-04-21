@@ -108,8 +108,7 @@ bool IntersectTriangle(in Triangle Triangle, in Ray Ray, inout HitInfo Hit) {
         Hit.Depth = t;
         Hit.TriangleHitInfo = TentativeTriangleHitInfo;
         return true;
-    }
-    else {
+    } else {
         return false;
     }
 }

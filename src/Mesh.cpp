@@ -70,7 +70,7 @@ void Mesh::LoadMesh(const char* File) {
     BufferTexture.Indices.CreateBinding();
     BufferTexture.Indices.SelectBuffer(&ElementBuffer, GL_RGB32UI);
 
-    BVH.ConstructAccelerationStructure(Vertices, Indices);
+    BVH.ConstructAccelerationStructure(Vertices, Indices, 10, 4);
 }
 
 void Mesh::LoadTexture(const char* Path) {

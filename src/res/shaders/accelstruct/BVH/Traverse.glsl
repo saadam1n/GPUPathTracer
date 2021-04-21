@@ -105,7 +105,7 @@ void IntersectLeaf(in MeshSamplers M, in BVHSamplers BVH, in BVHNodeGeneric Gene
 	int IterStart = Leaf.Leaf.Index;
 	int IterEnd = IterStart + Leaf.Leaf.IndexCount;
 
-	for(int Iter = IterStart - 10; Iter < IterEnd + 10; Iter++){
+	for(int Iter = IterStart; Iter < IterEnd; Iter++){
 		uint Index = texelFetch(BVH.Leaves, Iter).r;
 
 		bool TriRes = IntersectTriangle(FetchTriangle(M, Index), Ray, Intersection);
@@ -115,6 +115,7 @@ void IntersectLeaf(in MeshSamplers M, in BVHSamplers BVH, in BVHNodeGeneric Gene
 	//return Result;
 }
 
+// Go with 48 for lower memory usage. I would consider 32 to be the minimum for generally all meshes
 #define BVH_STACK_SIZE 64
 
 uint GetStackIndex(in BVHNodeRecursive BNR){
@@ -128,7 +129,7 @@ uint GetStackIndex(in BVHNodeGeneric BNG){
 }
 
 bool TraverseBVH(in MeshSamplers M, in BVHSamplers BVH, in Ray IntersectionRay, inout HitInfo Intersection) {
-	int HeatMap = 0;
+	//int HeatMap = 0;
 
 	Ray InverseRay;
 
@@ -140,11 +141,12 @@ bool TraverseBVH(in MeshSamplers M, in BVHSamplers BVH, in Ray IntersectionRay, 
 	uint CurrentNode = GetStackIndex(RootNode);
 
 	if(!ValidateIntersection(IntersectNode(GetRecursiveNodeAsGeneric(RootNode), InverseRay, Intersection))){
-		imageStore(ColorOutput, ivec2(gl_GlobalInvocationID.xy), vec4(vec3(0.0f), 1.0f));
+		//imageStore(ColorOutput, ivec2(gl_GlobalInvocationID.xy), vec4(vec3(0.0f), 1.0f));
 		return false;
-	} else{
-		HeatMap++;
-	}
+	} 
+	//else{
+		//HeatMap++;
+	//}
 
 	bool Result = false;
 
@@ -167,8 +169,8 @@ bool TraverseBVH(in MeshSamplers M, in BVHSamplers BVH, in Ray IntersectionRay, 
 		ChildrenIntersectionSuccess[0] = ValidateIntersection(ChildrenIntersectionDistances[0]);
 		ChildrenIntersectionSuccess[1] = ValidateIntersection(ChildrenIntersectionDistances[1]);
 
-		HeatMap += int(ChildrenIntersectionSuccess[0]);
-		HeatMap += int(ChildrenIntersectionSuccess[1]);
+		//HeatMap += int(ChildrenIntersectionSuccess[0]);
+		//HeatMap += int(ChildrenIntersectionSuccess[1]);
 
 		// Rename variable
 		// #define ChildrenIntersectionSuccess PushStack
@@ -196,9 +198,11 @@ bool TraverseBVH(in MeshSamplers M, in BVHSamplers BVH, in Ray IntersectionRay, 
 				}
 
 				// Debug safety feature
+				#if 0
 				if(StackIndex == BVH_STACK_SIZE){
 					break;
 				}
+				#endif
 
 				Stack[++StackIndex] = GetStackIndex(Children[1]);
 
@@ -221,7 +225,7 @@ bool TraverseBVH(in MeshSamplers M, in BVHSamplers BVH, in Ray IntersectionRay, 
 
 	}
 
-	imageStore(ColorOutput, ivec2(gl_GlobalInvocationID.xy), vec4(vec3(HeatMap) / 128.0f, 1.0f));
+	//imageStore(ColorOutput, ivec2(gl_GlobalInvocationID.xy), vec4(vec3(HeatMap) / 128.0f, 1.0f));
 
 	return Result;
 }
