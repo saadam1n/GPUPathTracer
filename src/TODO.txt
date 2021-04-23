@@ -24,7 +24,7 @@ Issues that I need to fix:
 
 Things I should do but don't need to:
 - Fix OpenGL abstraction issues
-- Add GLSL include directory functionality 
+- DONE: Add GLSL include directory functionality 
 - Fix memory leaks and OpenGL resource "leaks" after the program exits
 
 Things maybe I should do:

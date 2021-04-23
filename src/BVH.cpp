@@ -6,6 +6,7 @@ Then we serealize it
 */
 
 #include "BVH.h"
+#include "TimeUtil.h"
 #include <stack>
 #include <algorithm>
 #include <list>
@@ -13,6 +14,7 @@ Then we serealize it
 #include <thread>
 #include <stdio.h>
 #include <iostream>
+#include <future>
 
 using BVH = BoundingVolumeHierarchy;
 
@@ -43,10 +45,20 @@ Fourth, process each node as in step 2
 */
 
 void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices, uint32_t DepthHint, uint32_t LeafHint) {
+	std::cout << "Start of BVH construction" << std::endl;
+
+	Timer ConstructionTimer;
+
 	// First things first. We need to build a list of triangles
+
+	ConstructionTimer.Begin();
 
 	std::vector<TriangleCentroid> CentroidList;
 	CentroidList.reserve(Indices.size());
+
+	std::vector<AABB> TriangleBoundingBoxes;
+
+	TriangleBoundingBoxes.reserve(Indices.size());
 
 	for (uint32_t TriIdx = 0; TriIdx < Indices.size(); TriIdx++) {
 		TriangleIndexData TriIdxInfo = Indices[TriIdx];
@@ -66,9 +78,19 @@ void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<V
 		Centroid.Position /= 3.0f;
 
 		CentroidList.push_back(Centroid);
+
+		AABB Box;
+
+		Box.Extend(CurrentTriangle.Vertices[0].Position);
+		Box.Extend(CurrentTriangle.Vertices[1].Position);
+		Box.Extend(CurrentTriangle.Vertices[2].Position);
+
+		TriangleBoundingBoxes.push_back(Box);
 	}
 
-
+	ConstructionTimer.End();
+	ConstructionTimer.DebugTime();
+	ConstructionTimer.Begin();
 
 	// TODO: pre-sorting
 	// std::vector<TriangleCentroid> SortedCentroidList[3];
@@ -261,7 +283,7 @@ void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<V
 
 	NodeUnserialized* RootNode = new NodeUnserialized;
 
-	RootNode->BoundingBox = CreateBoundingBox(CentroidList, Vertices, Indices);
+	RootNode->BoundingBox = CreateBoundingBox(CentroidList, TriangleBoundingBoxes);
 	RootNode->Centroids   =                   CentroidList;
 
 	ConstructionNode CRN;
@@ -290,9 +312,9 @@ void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<V
 			// Next try to find the best split on all 3 axes
 			Split TentativeSplits[3];
 
-			TentativeSplits[0] = FindBestSplit(CurrentNode.DataPtr->Centroids, Vertices, Indices, 0);
-			TentativeSplits[1] = FindBestSplit(CurrentNode.DataPtr->Centroids, Vertices, Indices, 1);
-			TentativeSplits[2] = FindBestSplit(CurrentNode.DataPtr->Centroids, Vertices, Indices, 2);
+			TentativeSplits[0] = FindBestSplit(CurrentNode.DataPtr->Centroids, TriangleBoundingBoxes, 0);
+			TentativeSplits[1] = FindBestSplit(CurrentNode.DataPtr->Centroids, TriangleBoundingBoxes, 1);
+			TentativeSplits[2] = FindBestSplit(CurrentNode.DataPtr->Centroids, TriangleBoundingBoxes, 2);
 			// Find/selelct the best split from all axes 
 			Split BestSplit = ChooseBestSplit(TentativeSplits[0], TentativeSplits[1], TentativeSplits[2]);
 			// Construct children nodes
@@ -320,6 +342,10 @@ void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<V
 			ConstructionNodeStack.push(Children[1]);
 		}
 	}
+
+	ConstructionTimer.End();
+	ConstructionTimer.DebugTime();
+	ConstructionTimer.Begin();
 
 	std::queue<NodeUnserialized*> IndexBuildingQueue;
 	IndexBuildingQueue.push(RootNode);
@@ -367,10 +393,14 @@ void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<V
 
 		delete CurrentNode;
 	}
+
+	ConstructionTimer.End();
+	ConstructionTimer.DebugTime();
+	ConstructionTimer.Begin();
 	
 	//DebugPrintBVH(ProcessedNodes, LeafContentBuffer);
 
-	//std::cout << LeafContentBuffer.size() << ' ' << Indices.size() << '\n';
+	std::cout << LeafContentBuffer.size() << ' ' << Indices.size() << '\n';
 
 	//for (const int32_t Value : LeafContentBuffer) {
 	//	std::cout << Value << '\n';
@@ -387,6 +417,12 @@ void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<V
 
 	Samplers.Leaves.CreateBinding();
 	Samplers.Leaves.SelectBuffer(&StructureBuffers.Leaves, GL_R32I);
+
+	ConstructionTimer.End();
+	ConstructionTimer.DebugTime();
+
+	std::cout << "End of BVH construction" << std::endl;
+	//exit(0);
 }
 
 void NodeSerialized::MakeLeaf(void) {
@@ -400,16 +436,12 @@ NodeType NodeSerialized::GetType(void) {
 	return Leaf.Size < 0 ? NodeType::LEAF : NodeType::NODE;
 }
 
-AABB BoundingVolumeHierarchy::CreateBoundingBox(const std::vector<TriangleCentroid>& Centroids, const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices) {
+AABB BoundingVolumeHierarchy::CreateBoundingBox(const std::vector<TriangleCentroid>& Centroids, const std::vector<AABB>& TriangleBoundingBoxes) {
 	// Loop through all centroids and get their triangle to create box
 	AABB Box;
 
 	for (const TriangleCentroid& Centroid : Centroids) {
-		Triangle CurrentTriangle = AssembleTriangle(Vertices.data(), Indices[Centroid.Index]);
-
-		Box.Extend(CurrentTriangle.Vertices[0].Position);
-		Box.Extend(CurrentTriangle.Vertices[1].Position);
-		Box.Extend(CurrentTriangle.Vertices[2].Position);
+		Box.Extend(TriangleBoundingBoxes[Centroid.Index]);
 	}
 
 	return Box;
@@ -428,36 +460,77 @@ std::vector<TriangleCentroid> BoundingVolumeHierarchy::SortAxis(const std::vecto
 	return Sorted;
 }
 
-Split BoundingVolumeHierarchy::CreateSplit(const std::vector<TriangleCentroid>& SortedCentroids, const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices, int32_t Axis, size_t CentroidIdx) {
+Split BoundingVolumeHierarchy::CreateSplit(const std::vector<TriangleCentroid>& SortedCentroids, const std::vector<AABB>& TriangleBoundingBoxes, size_t CentroidIdx) {
 	Split CurrentSplit;
 
-	std::copy_n(SortedCentroids.begin(), CentroidIdx, std::back_inserter(CurrentSplit.Centroids[0]));
-	std::copy(SortedCentroids.begin() + CentroidIdx, SortedCentroids.end(), std::back_inserter(CurrentSplit.Centroids[1]));
+	CurrentSplit.Centroids[0].reserve(                         CentroidIdx);
+	CurrentSplit.Centroids[1].reserve(SortedCentroids.size() - CentroidIdx);
 
-	CurrentSplit.Box[0] = CreateBoundingBox(CurrentSplit.Centroids[0], Vertices, Indices);
-	CurrentSplit.Box[1] = CreateBoundingBox(CurrentSplit.Centroids[1], Vertices, Indices);
+	std::copy_n(
+		SortedCentroids.begin(),
+		CentroidIdx,
+		std::back_inserter(CurrentSplit.Centroids[0])
+	);
+
+	std::copy(
+		SortedCentroids.begin() + CentroidIdx,
+		SortedCentroids.end(),
+		std::back_inserter(CurrentSplit.Centroids[1])
+	);
+
+	CurrentSplit.Box[0] = CreateBoundingBox(CurrentSplit.Centroids[0], TriangleBoundingBoxes);
+	CurrentSplit.Box[1] = CreateBoundingBox(CurrentSplit.Centroids[1], TriangleBoundingBoxes);
 
 	return CurrentSplit;
 }
 
-Split BoundingVolumeHierarchy::FindBestSplit(const std::vector<TriangleCentroid>& Centroids, const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices, uint32_t Axis) {
-	// Ensure sorted, later I will presort once at the beginning. I also could do all split calculations in the same loop
+Split BoundingVolumeHierarchy::FindBestSplit(const std::vector<TriangleCentroid>& Centroids, const std::vector<AABB>& TriangleBoundingBoxes, uint32_t Axis) {
 	std::vector<TriangleCentroid> SortedCentroids = SortAxis(Centroids, Axis);
 
 	Split BestSplit;
+	BestSplit.Axis = Axis;
 
-	// Splitting algorithm created by madmann
-	for (size_t CentroidIdx = 1; CentroidIdx < SortedCentroids.size(); CentroidIdx++) {
-		Split CurrentSplit = CreateSplit(SortedCentroids, Vertices, Indices, Axis, CentroidIdx);
+#if 1
+	Split CurrentSplit;
+	CurrentSplit.Axis = Axis;
 
+	CurrentSplit.Centroids[0] = SortedCentroids;
+	CurrentSplit.Centroids[1].reserve(CurrentSplit.Centroids[0].size());
+
+	CurrentSplit.Box[0] = CreateBoundingBox(CurrentSplit.Centroids[0], TriangleBoundingBoxes);
+	CurrentSplit.Box[1] = AABB(glm::vec3(-10000.0f), glm::vec3(10000.0f));
+
+	size_t TransferableCentroids = CurrentSplit.Centroids[0].size();
+
+	for (size_t CentroidIndex = 0; CentroidIndex < TransferableCentroids; CentroidIndex++) {
+		// Transfer the centroid
+		TriangleCentroid LastCentroid = CurrentSplit.Centroids[0].back();
+		CurrentSplit.Centroids[0].pop_back();
+		CurrentSplit.Centroids[1].push_back(LastCentroid);
+
+		// Create bounding boxes and everything. 
+		CurrentSplit.Box[0] = CreateBoundingBox(CurrentSplit.Centroids[0], TriangleBoundingBoxes); // This might benfit from a check of whether the centroid had an effect on the bounding box
+		CurrentSplit.Box[1] = CreateBoundingBox(CurrentSplit.Centroids[1], TriangleBoundingBoxes); // For some reason Extend() doesn't work here
+
+		// Compute SAH and update if it's better than the current best split
 		if (CurrentSplit.ComputeSAH() < BestSplit.SAH) {
 			BestSplit = CurrentSplit;
 		}
 	}
+#else
+	// Splitting algorithm created by madmann
+	for (size_t CentroidIdx = 1; CentroidIdx < SortedCentroids.size(); CentroidIdx++) {
+		Split CurrentSplit = CreateSplit(SortedCentroids, TriangleBoundingBoxes, CentroidIdx);
 
-	BestSplit.Axis = Axis;
+		float CurrentSplitScore = CurrentSplit.ComputeSAH();
 
-	return BestSplit;
+		if (CurrentSplitScore < BestSplit.SAH) {
+			BestSplit = CurrentSplit;
+		}
+	}
+#endif
+
+	return BestSplit;	
 }
 
 /*
@@ -486,10 +559,21 @@ void BoundingVolumeHierarchy::RefineSplit(Split& BestSplit, const std::vector<Tr
 
 // There's probably a more fast way to do this
 Split BoundingVolumeHierarchy::ChooseBestSplit(const Split& X, const Split& Y, const Split& Z) {
+	/*
 	if (X.SAH > Y.SAH && X.SAH > Z.SAH) {
 		return X;
 	} else if (Y.SAH > X.SAH&& Y.SAH > Z.SAH) {
 		return Y;
+	} else {
+		return Z;
+	}
+	*/
+	if (Z.SAH > X.SAH && Z.SAH > Y.SAH) {
+		if (Y.SAH < X.SAH) {
+			return Y;
+		} else {
+			return X;
+		}
 	} else {
 		return Z;
 	}
@@ -564,3 +648,94 @@ void BoundingVolumeHierarchy::DebugPrintBVH(const std::vector<NodeSerialized>& N
 		);
 	}
 }
+
+/*
+
+Proposed split algorithm: The transfer split
+
+We carry a single centroid from one side to another 
+
+Technical details:
+
+First initialize one side of the split (in our case 0) with all the centroids 
+Compute SAH and update the best split with it if it is the best SAH
+Then transfer a single centroid to the other side (in our case 1)
+Extend 1's bounds and recalculate 0's bounds
+I'm not sure if storing the bound values beforehand helps but its's probably
+going to make memory consumption really bad
+
+That advantage of the split compared to the other one is that we don't 
+start again each time, which means copying complexity goes from
+
+N^2-N (derived from N(N-1)
+
+to
+
+N-1
+
+#define EARLY_SPLIT_TERMINATION
+
+#ifdef EARLY_SPLIT_TERMINATION
+	float LastSplitScore = 1.0e20f;
+#endif
+
+	// Splitting algorithm created by madmann
+	for (size_t CentroidIdx = 1; CentroidIdx < SortedCentroids.size(); CentroidIdx++) {
+		Split CurrentSplit = CreateSplit(SortedCentroids, Vertices, Indices, TriangleBoundingBoxes, Axis, CentroidIdx);
+
+		float CurrentSplitScore = CurrentSplit.ComputeSAH();
+
+// Turn this on for testing with really high res models for faster BVH construction
+#ifdef EARLY_SPLIT_TERMINATION
+
+		//Derivative/finite difference is now increasing, and it is likely that future splits will be even worse
+		//We can terminate the search for the best score early
+
+		if (CurrentSplitScore > LastSplitScore) {
+			// Early termination speeds up the BVH building process with not significant impact on tree quality
+			break;
+		}
+#endif
+		// I could put this into an else for the early termination if
+		if (CurrentSplitScore < BestSplit.SAH) {
+			BestSplit = CurrentSplit;
+		}
+
+#ifdef EARLY_SPLIT_TERMINATION
+		LastSplitScore = CurrentSplitScore;
+#endif
+	}
+
+	BestSplit.Axis = Axis;
+
+	return BestSplit;
+
+
+#if 0
+	std::future<void> Copier0 = std::async(std::launch::async, CopyFunc0, &CurrentSplit);
+	std::future<void> Copier1 = std::async(std::launch::async, CopyFunc1, &CurrentSplit);
+
+	Copier0.wait();
+	Copier1.wait();
+#else
+	CopyFunc0(&CurrentSplit);
+	CopyFunc1(&CurrentSplit);
+#endif
+
+
+	auto CopyFunc0 = [SortedCentroids, CentroidIdx](Split* OutputSplit) -> void {
+		std::copy_n(
+			SortedCentroids.begin(),
+			CentroidIdx,
+			std::back_inserter(OutputSplit->Centroids[0])
+		);
+	};
+
+	auto CopyFunc1 = [SortedCentroids, CentroidIdx](Split* OutputSplit) -> void {
+		std::copy(
+			SortedCentroids.begin() + CentroidIdx,
+			SortedCentroids.end(),
+			std::back_inserter(OutputSplit->Centroids[1])
+		);
+	};
+*/

@@ -3,9 +3,17 @@
 
 AABB::AABB(void) : Min(FLT_MAX), Max(-FLT_MAX) {}
 
+void AABB::ExtendMax(const glm::vec3& Val) {
+	Max = glm::max(Max, Val);
+}
+
+void AABB::ExtendMin(const glm::vec3& Val) {
+	Min = glm::min(Min, Val);
+}
+
 void AABB::Extend(const glm::vec3& Pos) {
-	Max = glm::max(Max, Pos);
-	Min = glm::min(Min, Pos);
+	ExtendMax(Pos);
+	ExtendMin(Pos);
 }
 
 float AABB::SurfaceArea(void) {
@@ -46,14 +54,32 @@ float AABB::SurfaceArea(void) {
 
 	glm::vec3 SideLengths = Max - Min;
 
-	// Maybe if we stored each value in a vector before multiplying we could use vectorization
+	glm::vec3 Mult = glm::vec3(SideLengths.y, SideLengths.z, SideLengths.x);
 
-	float Area =
-		SideLengths.x * SideLengths.y +
-		SideLengths.x * SideLengths.z +
-		SideLengths.y * SideLengths.z ;
-
-	Area *= 2.0f;
+	float Area = 2.0f * glm::dot(SideLengths, Mult);
 
 	return Area;
 }
+
+void AABB::Extend(const AABB& BBox) {
+	ExtendMax(BBox.Max);
+	ExtendMin(BBox.Min);
+}
+
+AABB::AABB(const glm::vec3& Mi, const glm::vec3& Ma) : Min(Mi), Max(Ma) {}
+
+/*
+	// Maybe if we stored each value in a vector before multiplying we could use vectorization
+
+
+Area =
+	SideLengths.x * SideLengths.y +
+	SideLengths.x * SideLengths.z +
+	SideLengths.y * SideLengths.z ;
+
+		Area =
+	SideLengths.x * SideLengths.y +
+	SideLengths.y * SideLengths.z +
+	SideLengths.z * SideLengths.x;
+
+*/

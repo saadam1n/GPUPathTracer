@@ -87,7 +87,7 @@ vec2 IntersectNode(in BVHNodeGeneric Node, in Ray InverseRay, in HitInfo Interse
 	vec3 t_max = max(t_node_min, t_node_max);
 
 	float t_entry = max(t_min.x, max(t_min.y,     t_min.z                     ));
-	float t_exit  = min(t_max.x, min(t_max.y, min(t_max.z, Intersection.Depth)));
+	float t_exit  = min(t_max.x, min(t_max.y, min(t_max.z, Intersection.Depth * 1000.0f)));
 	return vec2(t_entry, t_exit);
 }
 
@@ -145,7 +145,7 @@ bool TraverseBVH(in MeshSamplers M, in BVHSamplers BVH, in Ray IntersectionRay, 
 		return false;
 	} 
 	//else{
-		//HeatMap++;
+	//	HeatMap++;
 	//}
 
 	bool Result = false;
@@ -171,9 +171,6 @@ bool TraverseBVH(in MeshSamplers M, in BVHSamplers BVH, in Ray IntersectionRay, 
 
 		//HeatMap += int(ChildrenIntersectionSuccess[0]);
 		//HeatMap += int(ChildrenIntersectionSuccess[1]);
-
-		// Rename variable
-		// #define ChildrenIntersectionSuccess PushStack
 
 		if (ChildrenIntersectionSuccess[0] && Children[0].Data[1] < 0) {
 			IntersectLeaf(M, BVH, Children[0], IntersectionRay, Intersection, Result);

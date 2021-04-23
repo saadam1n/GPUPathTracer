@@ -93,13 +93,13 @@ private:
 		TextureBuffer Leaves;
 	} Samplers;
 	
-	AABB CreateBoundingBox(const std::vector<TriangleCentroid>& Centroids, const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices);
+	AABB CreateBoundingBox(const std::vector<TriangleCentroid>& Centroids, const std::vector<AABB>& TriangleBoundingBoxes);
 
 	std::vector<TriangleCentroid> SortAxis(const std::vector<TriangleCentroid>& Centroids, uint32_t Axis);
 	
-	Split CreateSplit(const std::vector<TriangleCentroid>& SortedCentroids, const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices, int32_t Axis, size_t CentroidIdx);
+	Split CreateSplit(const std::vector<TriangleCentroid>& SortedCentroids, const std::vector<AABB>& TriangleBoundingBoxes, size_t CentroidIdx);
 
-	Split FindBestSplit(const std::vector<TriangleCentroid>& Centroids, const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices, uint32_t Axis);
+	Split FindBestSplit(const std::vector<TriangleCentroid>& Centroids, const std::vector<AABB>& TriangleBoundingBoxes, uint32_t Axis);
 	Split ChooseBestSplit(const Split& X, const Split& Y, const Split& Z);
 
 	//void RefineSplit(Split& BestSplit, const std::vector<TriangleCentroid>& Centroids, const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices);

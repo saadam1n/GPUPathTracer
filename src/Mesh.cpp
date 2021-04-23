@@ -10,6 +10,7 @@
 #include "TriangleIndexing.h"
 
 #include <vector>
+#include <iostream>
 
 template<typename T>
 size_t GetVectorSizeBytes(const std::vector<T>& Vector) {
@@ -22,7 +23,8 @@ void Mesh::LoadMesh(const char* File) {
 
     Assimp::Importer Importer;
 
-    const aiScene* Scene = Importer.ReadFile(File, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenNormals);
+    // Turn off smooth normals for path tracing
+    const aiScene* Scene = Importer.ReadFile(File, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenSmoothNormals);
 
     // TODO: memory reservation
 
@@ -57,6 +59,8 @@ void Mesh::LoadMesh(const char* File) {
     }
 
     Importer.FreeScene();
+
+    std::cout << "Prim Counter: " << Indices.size() << std::endl;
 
     VertexBuffer.CreateBinding(BUFFER_TARGET_ARRAY);
     VertexBuffer.UploadData(GetVectorSizeBytes(Vertices), Vertices.data());
