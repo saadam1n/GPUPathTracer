@@ -1,6 +1,6 @@
 # OpenGL Light Transport
 
-A small program that I am writing in C++ and OpenGL to approximate the light transport equations using monte carlo integration. Currently it only ray traces a simple sphere.
+A computer program that I am writing to do ray tracing on the GPU
 
 ## Images
 
