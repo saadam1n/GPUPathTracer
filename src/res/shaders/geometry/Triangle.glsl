@@ -66,7 +66,7 @@ bool IntersectTriangle(in Triangle Triangle, in Ray Ray, inout HitInfo Hit) {
 
     float Det = dot(V01, Pvec);
 
-#define AVOID_DIV_BY_0
+//#define AVOID_DIV_BY_0
 
 #ifdef AVOID_DIV_BY_0
     const float Epsilon = 1e-6f;
@@ -118,27 +118,33 @@ Vertex GetInterpolatedVertex(in HitInfo Intersection) {
 
     // I should probably precompute 1 - U - V
 
+    vec3 Interpolation = vec3(
+        (1.0f - Intersection.TriangleHitInfo.InterpolationInfo.U - Intersection.TriangleHitInfo.InterpolationInfo.V),
+        Intersection.TriangleHitInfo.InterpolationInfo.U,
+        Intersection.TriangleHitInfo.InterpolationInfo.V
+    );
+
     InterpolatedVertex.Position =
 
-        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[1].Position * Intersection.TriangleHitInfo.InterpolationInfo.U +
-        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[2].Position * Intersection.TriangleHitInfo.InterpolationInfo.V +
-        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[0].Position * (1.0f - Intersection.TriangleHitInfo.InterpolationInfo.U - Intersection.TriangleHitInfo.InterpolationInfo.V)
+        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[1].Position * Interpolation[1] +
+        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[2].Position * Interpolation[2] +
+        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[0].Position * Interpolation[0]
 
         ;
 
     InterpolatedVertex.Normal =
 
-        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[1].Normal * Intersection.TriangleHitInfo.InterpolationInfo.U +
-        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[2].Normal * Intersection.TriangleHitInfo.InterpolationInfo.V +
-        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[0].Normal * (1.0f - Intersection.TriangleHitInfo.InterpolationInfo.U - Intersection.TriangleHitInfo.InterpolationInfo.V)
+        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[1].Normal * Interpolation[1] +
+        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[2].Normal * Interpolation[2] +
+        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[0].Normal * Interpolation[0]
 
         ;
 
     InterpolatedVertex.TextureCoordinate =
 
-        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[1].TextureCoordinate * Intersection.TriangleHitInfo.InterpolationInfo.U +
-        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[2].TextureCoordinate * Intersection.TriangleHitInfo.InterpolationInfo.V +
-        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[0].TextureCoordinate * (1.0f - Intersection.TriangleHitInfo.InterpolationInfo.U - Intersection.TriangleHitInfo.InterpolationInfo.V)
+        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[1].TextureCoordinate * Interpolation[1] +
+        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[2].TextureCoordinate * Interpolation[2] +
+        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[0].TextureCoordinate * Interpolation[0]
 
         ;
 

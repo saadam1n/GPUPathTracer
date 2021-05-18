@@ -1,0 +1,27 @@
+#version 430
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+uniform layout(rgba16f) writeonly image2D RayOrigin;
+uniform layout(rgba16f) writeonly image2D RayDirection;
+
+// I call this file finite aperture since it's end goal is to generate finite aperture lens ray directions
+
+#include "../../camera/Pinhole.glsl"
+#include "../../geometry/Ray.glsl"
+
+uniform CameraParameters Camera;
+
+void main() {
+	uvec2 PixelCoordinates = gl_GlobalInvocationID.xy;
+    vec2 ScreenCoordinates = PixelCoordinates / vec2(gl_WorkGroupSize.xy * gl_NumWorkGroups.xy);
+
+    Ray PrimaryRay;
+
+    PrimaryRay.Origin    = Camera.Position;
+    PrimaryRay.Direction = ComputeRayDirection(Camera, ScreenCoordinates);
+
+    ivec2 StoreLocation = ivec2(PixelCoordinates);
+	imageStore(RayOrigin,    StoreLocation, vec4(PrimaryRay.Origin   , 0.0f));
+	imageStore(RayDirection, StoreLocation, vec4(PrimaryRay.Direction, 0.0f));
+}

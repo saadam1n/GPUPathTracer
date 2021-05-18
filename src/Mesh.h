@@ -11,8 +11,11 @@
 
 class Mesh {
 public:
+	void LoadMesh(const std::vector<Vertex> Vertices, const std::vector<TriangleIndexData> Indices);
 	void LoadMesh(const char* Path);
 	void LoadTexture(const char* Path);
+	void SetColor(const glm::vec3& Color);
+
 private:
 	/*
 	For now, I will follow a simple layout where each mesh has it's own VAO. 

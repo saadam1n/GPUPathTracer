@@ -52,13 +52,16 @@ float AABB::SurfaceArea(void) {
 	And there we have it. Fast surface area calculations. 
 	*/
 
+	return SurfaceAreaHalf() * 2.0f;
+}
+
+// Taken from madman's blog. Seriously, that guy has some really good stuff on BVHs
+float AABB::SurfaceAreaHalf(void) {
 	glm::vec3 SideLengths = Max - Min;
 
-	glm::vec3 Mult = glm::vec3(SideLengths.y, SideLengths.z, SideLengths.x);
-
-	float Area = 2.0f * glm::dot(SideLengths, Mult);
-
-	return Area;
+	return
+		SideLengths.x * (SideLengths.y + SideLengths.z) +
+		SideLengths.y *  SideLengths.z;
 }
 
 void AABB::Extend(const AABB& BBox) {
@@ -82,4 +85,10 @@ Area =
 	SideLengths.y * SideLengths.z +
 	SideLengths.z * SideLengths.x;
 
+
+		glm::vec3 SideLengths = Max - Min;
+
+	glm::vec3 Mult = glm::vec3(SideLengths.y, SideLengths.z, SideLengths.x);
+
+	float Area = 2.0f * glm::dot(SideLengths, Mult);
 */

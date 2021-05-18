@@ -129,7 +129,7 @@ uint GetStackIndex(in BVHNodeGeneric BNG){
 }
 
 bool TraverseBVH(in MeshSamplers M, in BVHSamplers BVH, in Ray IntersectionRay, inout HitInfo Intersection) {
-	//int HeatMap = 0;
+	int HeatMap = 0;
 
 	Ray InverseRay;
 
@@ -144,9 +144,9 @@ bool TraverseBVH(in MeshSamplers M, in BVHSamplers BVH, in Ray IntersectionRay, 
 		//imageStore(ColorOutput, ivec2(gl_GlobalInvocationID.xy), vec4(vec3(0.0f), 1.0f));
 		return false;
 	} 
-	//else{
-	//	HeatMap++;
-	//}
+	else{
+		HeatMap++;
+	}
 
 	bool Result = false;
 
@@ -169,8 +169,8 @@ bool TraverseBVH(in MeshSamplers M, in BVHSamplers BVH, in Ray IntersectionRay, 
 		ChildrenIntersectionSuccess[0] = ValidateIntersection(ChildrenIntersectionDistances[0]);
 		ChildrenIntersectionSuccess[1] = ValidateIntersection(ChildrenIntersectionDistances[1]);
 
-		//HeatMap += int(ChildrenIntersectionSuccess[0]);
-		//HeatMap += int(ChildrenIntersectionSuccess[1]);
+		HeatMap += int(ChildrenIntersectionSuccess[0]);
+		HeatMap += int(ChildrenIntersectionSuccess[1]);
 
 		if (ChildrenIntersectionSuccess[0] && Children[0].Data[1] < 0) {
 			IntersectLeaf(M, BVH, Children[0], IntersectionRay, Intersection, Result);
@@ -225,6 +225,17 @@ bool TraverseBVH(in MeshSamplers M, in BVHSamplers BVH, in Ray IntersectionRay, 
 	//imageStore(ColorOutput, ivec2(gl_GlobalInvocationID.xy), vec4(vec3(HeatMap) / 128.0f, 1.0f));
 
 	return Result;
+}
+
+bool TraverseMesh(in MeshSamplers M, in Ray R, inout HitInfo I){
+	bool Res = false; 
+
+	for(uint TriangleIndex = 0; TriangleIndex < GetTriangleCount(M); TriangleIndex++){
+		bool HitRes = IntersectTriangle(FetchTriangle(M, TriangleIndex), R, I);
+		Res = Res || HitRes;
+	}
+
+	return Res;
 }
 
 /*

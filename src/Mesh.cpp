@@ -18,13 +18,10 @@ size_t GetVectorSizeBytes(const std::vector<T>& Vector) {
 }
 
 void Mesh::LoadMesh(const char* File) {
-    //BoundingBox.Max = glm::vec3(-FLT_MAX);
-    //BoundingBox.Min = glm::vec3( FLT_MAX);
-
     Assimp::Importer Importer;
 
-    // Turn off smooth normals for path tracing
-    const aiScene* Scene = Importer.ReadFile(File, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenSmoothNormals);
+    // Turn off smooth normals for path tracing to prevent "broken" BRDFs and energy loss. 
+    const aiScene* Scene = Importer.ReadFile(File, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenNormals);
 
     // TODO: memory reservation
 
@@ -33,19 +30,20 @@ void Mesh::LoadMesh(const char* File) {
 
     for (uint32_t MeshIndex = 0; MeshIndex < Scene->mNumMeshes; MeshIndex++) {
         const aiMesh* Mesh = Scene->mMeshes[MeshIndex];
+
+        Vertices.reserve(Vertices.size() + Mesh->mNumVertices);
         for (uint32_t VertexIndex = 0; VertexIndex < Mesh->mNumVertices; VertexIndex++) {
             Vertex CurrentVertex;
 
             CurrentVertex.Position = glm::vec3(Mesh->mVertices[VertexIndex].x, Mesh->mVertices[VertexIndex].y, Mesh->mVertices[VertexIndex].z);
-            CurrentVertex.Normal = glm::vec3(Mesh->mNormals[VertexIndex].x, Mesh->mNormals[VertexIndex].y, Mesh->mNormals[VertexIndex].z);
+            CurrentVertex.Normal   = glm::vec3(Mesh->mNormals[VertexIndex].x , Mesh->mNormals[VertexIndex].y , Mesh->mNormals[VertexIndex].z );
             if(Mesh->mTextureCoords[0])
                 CurrentVertex.TextureCoordinates = glm::vec2(Mesh->mTextureCoords[0][VertexIndex].x, Mesh->mTextureCoords[0][VertexIndex].y);
 
             Vertices.push_back(CurrentVertex);
-
-            //BoundingBox.Max = glm::max(BoundingBox.Max, CurrentVertex.Position);
-            //BoundingBox.Min = glm::min(BoundingBox.Min, CurrentVertex.Position);
         }
+
+        Indices.reserve(Indices.size() + Mesh->mNumFaces);
         for (uint32_t FaceIndex = 0; FaceIndex < Mesh->mNumFaces; FaceIndex++) {
             const aiFace& Face = Mesh->mFaces[FaceIndex];
 
@@ -60,7 +58,11 @@ void Mesh::LoadMesh(const char* File) {
 
     Importer.FreeScene();
 
-    std::cout << "Prim Counter: " << Indices.size() << std::endl;
+    LoadMesh(Vertices, Indices);
+}
+
+void Mesh::LoadMesh(const std::vector<Vertex> Vertices, const std::vector<TriangleIndexData> Indices) {
+    //std::cout << "Prim Counter: " << Indices.size() << std::endl;
 
     VertexBuffer.CreateBinding(BUFFER_TARGET_ARRAY);
     VertexBuffer.UploadData(GetVectorSizeBytes(Vertices), Vertices.data());
@@ -80,4 +82,9 @@ void Mesh::LoadMesh(const char* File) {
 void Mesh::LoadTexture(const char* Path) {
     Material.Diffuse.CreateBinding();
     Material.Diffuse.LoadTexture(Path);
+}
+
+void Mesh::SetColor(const glm::vec3& Color) {
+    Material.Diffuse.CreateBinding();
+    Material.Diffuse.LoadData(GL_RGB32F, GL_RGB, GL_FLOAT, 1, 1, (void*)&Color);
 }

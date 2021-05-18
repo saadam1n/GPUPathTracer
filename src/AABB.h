@@ -13,6 +13,7 @@ struct AABB {
 	void Extend(const AABB& BBox);
 
 	float SurfaceArea(void);
+	float SurfaceAreaHalf(void);
 
 	glm::vec3 Min;
 	glm::vec3 Max;

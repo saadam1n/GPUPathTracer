@@ -44,10 +44,10 @@ void Shader::LoadTextureBuffer(GLint Location, TextureBuffer& Value) {
 	Value.CreateBinding();
 }
 
-void Shader::LoadImage2D(const char* Name, Texture2D& Value) {
+void Shader::LoadImage2D(const char* Name, Texture2D& Value, GLenum Format) {
 	uint32_t TextureUnit = ActivateNextFreeTextureUnit(Name);
 
-	Value.CreateImageBinding(TextureUnit);
+	Value.CreateImageBinding(TextureUnit, Format);
 }
 
 void Shader::LoadVector3F32(const char* Name, const glm::vec3& Value) {

@@ -16,7 +16,7 @@ uniform CameraParameters Camera;
 // Sky by builderboy
 vec3 ComputeIncomingRadiance(in vec3 Direction) {
 	float UpDot = Direction.y;
-	const vec3 Coefficients =vec3(0.1686, 0.4, 0.8667);
+	const vec3 Coefficients =vec3(0.0625, 0.125, 0.25 ); //  0.1686, 0.4, 0.8667
 	vec3 Color = Coefficients / (UpDot * UpDot + Coefficients);
 	return Color;
 }
@@ -67,5 +67,5 @@ void main(){
 
     vec3 Color = ComputeColor(PixelCoordinates);
 
-	imageStore(ColorOutput, StoreLocation, vec4(Color, 0.0f));
+	//imageStore(ColorOutput, StoreLocation, vec4(Color, 0.0f));
 }

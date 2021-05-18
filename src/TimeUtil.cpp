@@ -6,7 +6,8 @@
 
 uint64_t GetCurrentTimeNano64(void) {
 	timespec NSec;
-	assert(timespec_get(&NSec, TIME_UTC));
+	int Res = timespec_get(&NSec, TIME_UTC);
+	assert(Res == TIME_UTC);
 	uint64_t Current = NSec.tv_sec * 1000000000 + NSec.tv_nsec;
 	return Current;
 }
@@ -26,4 +27,4 @@ void Timer::End(void) {
 
 void Timer::DebugTime(void) {
 	printf("Time: %f seconds\n", (float)Delta);
-}
+} 

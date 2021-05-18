@@ -1,0 +1,135 @@
+#version 430
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+// RGB = color, A = depth
+uniform layout(rgba16f) image2D ColorOutput;
+uniform layout(rgba16f) image2D RayOrigin;
+uniform layout(rgba16f) image2D RayDirection;
+uniform layout(r32f)    image2D IntersectionDepth;
+
+//uniform sampler2D RayOrigin;
+//uniform sampler2D RayDirection;
+
+#include "../../shading/BRDF.glsl"
+#include "../../shading/Material.glsl"
+#include "../../camera/Pinhole.glsl"
+#include "../../geometry/Triangle.glsl"
+#include "../../geometry/AABB.glsl"
+#include "../../accelstruct/BVH/Traverse.glsl"
+
+// Sky by builderboy
+vec3 ComputeIncomingRadiance(in vec3 Direction) {
+	float UpDot = Direction.y;
+	const vec3 Coefficients =vec3(0.0625, 0.125, 0.25 ); //  0.1686, 0.4, 0.8667
+	vec3 Color = Coefficients / (UpDot * UpDot + Coefficients);
+	return Color;
+}
+
+uniform MeshSamplers Mesh;
+uniform MaterialSamplers Material;
+uniform BVHSamplers BVH;
+
+vec3 ComputeColor(in ivec2 PixelCoordinates, inout float IntersectionDepthDistance, out bool HitResult){
+    vec3 Color = vec3(0.0f);
+
+    Ray PrimaryRay;
+    // I could use texelFetch here but whatever
+    PrimaryRay.Origin    = imageLoad(RayOrigin   , PixelCoordinates).rgb;
+    PrimaryRay.Direction = imageLoad(RayDirection, PixelCoordinates).rgb;
+
+    HitInfo IntersectionInfo;
+
+    IntersectionInfo.Depth = IntersectionDepthDistance;
+
+    HitResult = TraverseBVH(Mesh, BVH, PrimaryRay, IntersectionInfo);
+
+    if(HitResult) {
+        Vertex InterpolatedVertex = GetInterpolatedVertex(IntersectionInfo);
+
+        Color = texture(Material.Diffuse, InterpolatedVertex.TextureCoordinate).rgb;
+
+        // Reflection and refraction
+
+        vec3 RefractedRay = refract(PrimaryRay.Direction, InterpolatedVertex.Normal, 1.0 / 1.333f);
+        vec3 ReflectedRay = reflect(PrimaryRay.Direction, InterpolatedVertex.Normal);
+
+        // Color = (ComputeIncomingRadiance(RefractedRay) + ComputeIncomingRadiance(ReflectedRay)) / 2.0f;
+        // Color = vec3(InterpolatedVertex.TextureCoordinate, 0.0f);
+        // Color = InterpolatedVertex.Normal * 0.5f + 0.5f;
+    } else {
+        Color = ComputeIncomingRadiance(PrimaryRay.Direction);
+    }
+
+    IntersectionDepthDistance = IntersectionInfo.Depth;
+
+    // TODO: More accurate sRGB conversion
+    Color = pow(Color, vec3(1.0f / 2.2f));
+
+	return Color;
+}
+
+void main(){
+	uvec2 PixelCoordinates = gl_GlobalInvocationID.xy;
+    ivec2 StoreLocation = ivec2(PixelCoordinates);
+
+    float IntersectionDistance = imageLoad(IntersectionDepth, StoreLocation).r;
+    bool HitResult;
+
+    vec3 Color = ComputeColor(StoreLocation, IntersectionDistance, HitResult);
+    
+    if(HitResult){
+        imageStore(ColorOutput, StoreLocation, vec4(Color, 1.0f));
+        imageStore(IntersectionDepth, StoreLocation, vec4(IntersectionDistance));
+    }
+
+
+}
+
+/*
+vec4 ComputeColor(in ivec2 PixelCoordinates){
+    vec3 Color = vec3(0.0f);
+
+    Ray PrimaryRay;
+    // I could use texelFetch here but whatever
+    PrimaryRay.Origin    = imageLoad(RayOrigin   , PixelCoordinates).rgb;
+    PrimaryRay.Direction = imageLoad(RayDirection, PixelCoordinates).rgb;
+
+    HitInfo IntersectionInfo;
+
+    IntersectionInfo.Depth = imageLoad(IntersectionDepth, PixelCoordinates).r;
+
+    bool HitResult = TraverseBVH(Mesh, BVH, PrimaryRay, IntersectionInfo);
+
+    if(HitResult) {
+        Vertex InterpolatedVertex = GetInterpolatedVertex(IntersectionInfo);
+
+        Color = vec3(1.0f);//texture(Material.Diffuse, InterpolatedVertex.TextureCoordinate).rgb;
+
+        // Reflection and refraction
+
+        vec3 RefractedRay = refract(PrimaryRay.Direction, InterpolatedVertex.Normal, 1.0 / 1.333f);
+        vec3 ReflectedRay = reflect(PrimaryRay.Direction, InterpolatedVertex.Normal);
+
+        Color *= (ComputeIncomingRadiance(RefractedRay) + ComputeIncomingRadiance(ReflectedRay)) / 2.0f;
+    } else {
+        Color = ComputeIncomingRadiance(PrimaryRay.Direction);
+    }
+
+    // TODO: More accurate sRGB conversion
+    Color = pow(Color, vec3(1.0f / 2.2f));
+
+	return vec4(Color, IntersectionInfo.Depth);
+}
+
+void main(){
+	uvec2 PixelCoordinates = gl_GlobalInvocationID.xy;
+    ivec2 StoreLocation = ivec2(PixelCoordinates);
+
+    vec4 Color = ComputeColor(StoreLocation);
+    
+    if(StoreLocation.x > 640)
+    imageStore(ColorOutput, StoreLocation, vec4(Color.w / 500.0f));
+    imageStore(IntersectionDepth, StoreLocation, vec4(Color.w));
+}
+*/

@@ -7,6 +7,7 @@
 #include "Camera.h"
 #include "TimeUtil.h"
 #include "Mesh.h"
+#include "SceneManager.h"
 
 float QuadVertices[] = {
 	-1.0f,  1.0f,
@@ -23,7 +24,7 @@ uint32_t Height = 720;
 
 // Camera params 
 
-constexpr float CameraSpeed       = 2.000f;
+constexpr float CameraSpeed       = 2000.000f;
 constexpr float CameraSensitivity = 0.001f;
 glm::vec2 LastCursorPosition;
 
@@ -45,6 +46,19 @@ void MouseCallback(GLFWwindow* Window, double X, double Y) {
 	LastCursorPosition = CurrentCursorPosition;
 }
 
+struct RayBuffer {
+	RayBuffer(void) {
+		Origin.CreateBinding();
+		Origin.LoadData   (GL_RGBA16F, GL_RGB, GL_HALF_FLOAT, Width, Height, nullptr);
+
+		Direction.CreateBinding();
+		Direction.LoadData(GL_RGBA16F, GL_RGB, GL_HALF_FLOAT, Width, Height, nullptr);
+
+	}
+	Texture2D Origin;
+	Texture2D Direction;
+};
+
 int main() {
 	Window Window;
 	Window.Open("OpenGL Light Transport", Width, Height);
@@ -63,13 +77,22 @@ int main() {
 
 	Texture2D RenderTargetColor;
 	RenderTargetColor.CreateBinding();
-	RenderTargetColor.LoadData(GL_RGBA16F, GL_RGB, GL_HALF_FLOAT, Width, Height, nullptr);
+	RenderTargetColor.LoadData(GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT, Width, Height, nullptr);
+
+	Texture2D IntersectionDepth;
+	IntersectionDepth.CreateBinding();
+	IntersectionDepth.LoadData(GL_R32F, GL_RED, GL_FLOAT, Width, Height, nullptr);
 
 	ShaderRasterization PresentShader;
 	PresentShader.CompileFiles("res/shaders/present/Present.vert", "res/shaders/present/Present.frag");
 
-	ShaderCompute RayTraceShader;
-	RayTraceShader.CompileFile("res/shaders/kernel/mega/BasicRayTracer.comp");
+	ShaderCompute FiniteAperture;
+	FiniteAperture.CompileFile("res/shaders/kernel/raygen/FiniteAperture.comp");
+
+	ShaderCompute ClosestHit;
+	ClosestHit.CompileFile("res/shaders/kernel/intersect/Closest.comp");
+
+	RayBuffer PrimaryRayBuffer;
 
 	Camera.GenerateViewTransform();
 	Camera.UpdateImagePlaneParameters((float)Width / (float)Height, glm::radians(45.0f));
@@ -78,13 +101,9 @@ int main() {
 
 	Camera.SetPosition(glm::vec3(0.0f, 0.15f, 0.5f) * 6.0f);
 
-	Mesh Object;
+	SceneManager Scene;
 
-	// Don't get too close to the bunny, otherwise the compute shader will hang for long enough for the driver to request program termination 
-	// Average frame time on my GTX 980 is ~700-800 milliseconds while the camera stays at the initial position
-	// I'll implement BVHs to improve performance later
-	Object.LoadMesh   ("res/objects/Suzanne.obj"); // BunnyHighRes
-	Object.LoadTexture("res/textures/Metal.png" );
+	Scene.LoadScene("res/objects/crytek/Sponza.obj");
 
 	Timer FrameTimer;
 
@@ -101,12 +120,28 @@ int main() {
 		Camera.GenerateViewTransform();
 		Camera.GenerateImagePlane();
 
-		RayTraceShader.CreateBinding();
-		RayTraceShader.LoadImage2D("ColorOutput", RenderTargetColor);
-		RayTraceShader.LoadCamera ("Camera", Camera);
-		RayTraceShader.LoadMesh("Mesh", "BVH", "Material", Object);
+		const float Clear = 1e20f;
+		glClearTexImage(IntersectionDepth.GetHandle(), 0, GL_RED, GL_FLOAT, &Clear);
+
+		FiniteAperture.CreateBinding();
+		FiniteAperture.LoadImage2D("RayOrigin"   , PrimaryRayBuffer.Origin   );
+		FiniteAperture.LoadImage2D("RayDirection", PrimaryRayBuffer.Direction);
+		FiniteAperture.LoadCamera ("Camera", Camera);
 
 		glDispatchCompute(Width / 8, Height / 8, 1);
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+		for (auto MeshIter = Scene.StartMeshIterator(); MeshIter != Scene.StopMeshIterator(); MeshIter++) {
+			ClosestHit.CreateBinding();
+			ClosestHit.LoadImage2D("RayOrigin", PrimaryRayBuffer.Origin);
+			ClosestHit.LoadImage2D("RayDirection", PrimaryRayBuffer.Direction);
+			ClosestHit.LoadImage2D("ColorOutput", RenderTargetColor);
+			ClosestHit.LoadImage2D("IntersectionDepth", IntersectionDepth, GL_R32F);
+			ClosestHit.LoadMesh("Mesh", "BVH", "Material", *MeshIter);
+
+			glDispatchCompute(Width / 8, Height / 8, 1);
+			glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+		}
 
 		PresentShader.CreateBinding();
 		PresentShader.LoadTexture2D("ColorTexture", RenderTargetColor);
@@ -121,8 +156,11 @@ int main() {
 		FrameTimer.DebugTime();
 	}
 
-	RayTraceShader.FreeBinding();
-	RayTraceShader.Free();
+	FiniteAperture.FreeBinding();
+	FiniteAperture.Free();
+
+	ClosestHit.FreeBinding();
+	ClosestHit.Free();
 
 	PresentShader.FreeBinding();
 	PresentShader.Free();

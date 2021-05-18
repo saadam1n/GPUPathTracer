@@ -5,8 +5,14 @@
 
 #include <stdlib.h>
 
+#include <iostream>
+
 Texture::Texture(void) : TextureHandle(UINT32_MAX) {
 
+}
+
+GLuint Texture::GetHandle(void) {
+	return TextureHandle;
 }
 
 void Texture::EnsureGeneratedHandle(void) {
@@ -30,8 +36,8 @@ void Texture2D::CreateBinding(void) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 }
 
-void Texture2D::CreateImageBinding(uint32_t Unit) {
-	glBindImageTexture(Unit, TextureHandle, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
+void Texture2D::CreateImageBinding(uint32_t Unit, GLenum Format) {
+	glBindImageTexture(Unit, TextureHandle, 0, GL_FALSE, 0, GL_WRITE_ONLY, Format);
 }
 
 void Texture2D::FreeBinding(void) {
@@ -39,6 +45,8 @@ void Texture2D::FreeBinding(void) {
 }
 
 void Texture2D::LoadTexture(const char* Path) {
+	std::cout << "Loading texture " << Path << '\n';
+
 	int Width = 0;
 	int Height = 0;
 	int Channels = 0;

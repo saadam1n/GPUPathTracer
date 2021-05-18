@@ -17,8 +17,8 @@ public:
 
 	void Free(void);
 
-	void LoadTexture2D          (const char* Name, Texture2D& Value      );
-	void LoadImage2D            (const char* Name, Texture2D& Value      );
+	void LoadTexture2D          (const char* Name, Texture2D& Value               );
+	void LoadImage2D            (const char* Name, Texture2D& Value, GLenum Format = GL_RGBA16F);
 
 	void LoadTextureBuffer      (const char* Name, TextureBuffer& Value  );
 
