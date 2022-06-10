@@ -405,3 +405,11 @@ _deps
 x64
 
 !src/res/objects/*.obj
+
+RelWithDebInfo
+
+extern/ASSIMP
+extern/GLEW
+extern/GLFW
+extern/GLM
+extern/SOIL2

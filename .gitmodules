@@ -9,7 +9,7 @@
 	url = https://github.com/g-truc/glm
 [submodule "extern/SOIL2"]
 	path = extern/SOIL2
-	url = https://github.com/Jacob-Tate/soil2-cmake
+	url = https://github.com/saada2006/soil2-cmake
 [submodule "extern/ASSIMP"]
 	path = extern/ASSIMP
 	url = https://github.com/assimp/assimp

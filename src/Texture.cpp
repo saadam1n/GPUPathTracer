@@ -1,5 +1,6 @@
 #include "Texture.h"
 #include "Buffer.h"
+#define STB_IMAGE_IMPLEMENTATION
 #include <SOIL2.h>
 #include <stdio.h>
 
