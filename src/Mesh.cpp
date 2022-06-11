@@ -76,7 +76,7 @@ void Mesh::LoadMesh(const std::vector<Vertex> Vertices, const std::vector<Triang
     BufferTexture.Indices.CreateBinding();
     BufferTexture.Indices.SelectBuffer(&ElementBuffer, GL_RGB32UI);
 
-    BVH.ConstructAccelerationStructure(Vertices, Indices, 10, 4);
+    BVH.ConstructAccelerationStructure(Vertices, Indices);
 }
 
 void Mesh::LoadTexture(const char* Path) {
