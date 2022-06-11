@@ -48,16 +48,6 @@ vec3 ComputeColor(in ivec2 PixelCoordinates, inout float IntersectionDepthDistan
         Vertex InterpolatedVertex = GetInterpolatedVertex(IntersectionInfo);
 
         Color = texture(Material.Diffuse, InterpolatedVertex.TextureCoordinate).rgb;
-        //Color = vec3(InterpolatedVertex.TextureCoordinate, 0.0f);
-
-        // Reflection and refraction
-
-        // vec3 RefractedRay = refract(PrimaryRay.Direction, InterpolatedVertex.Normal, 1.0 / 1.333f);
-        // vec3 ReflectedRay = reflect(PrimaryRay.Direction, InterpolatedVertex.Normal);
-
-        // Color = (ComputeIncomingRadiance(RefractedRay) + ComputeIncomingRadiance(ReflectedRay)) / 2.0f;
-        // Color = vec3(InterpolatedVertex.TextureCoordinate, 0.0f);
-        // Color = InterpolatedVertex.Normal * 0.5f + 0.5f;
     } else {
         Color = ComputeIncomingRadiance(PrimaryRay.Direction);
     }

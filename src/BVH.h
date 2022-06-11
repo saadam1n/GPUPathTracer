@@ -80,7 +80,7 @@ struct Split {
 
 class BoundingVolumeHierarchy {
 public:
-	void ConstructAccelerationStructure(const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices, uint32_t DepthHint, uint32_t LeafHint);
+	void ConstructAccelerationStructure(const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices);
 private:
 	friend class Shader;
 

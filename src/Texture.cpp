@@ -52,7 +52,6 @@ CacheLoad LoadFromCache(std::string Path, int& Width, int& Height, int& Channels
 	}
 
 	if (!CacheRead) {
-		std::cout << "Cache no-read " << Path << "++++++++++++++++++++++++++++++" << '\n';
 		NewLoad.Successful_ = false;
 		
 		NewLoad.Data_ = SOIL_load_image(Path.c_str(), &Width, &Height, &Channels, force_channels);
@@ -67,7 +66,6 @@ CacheLoad LoadFromCache(std::string Path, int& Width, int& Height, int& Channels
 		fclose(CreateCache);
 	}
 	else {
-		std::cout << "Cache read " << Path << "---------------------------" << '\n';
 		NewLoad.Successful_ = true;
 
 		int MetaData[3];
@@ -112,8 +110,8 @@ void Texture2D::CreateBinding(void) {
 
 	glBindTexture(GL_TEXTURE_2D, TextureHandle);
 
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 }
@@ -129,7 +127,6 @@ void Texture2D::FreeBinding(void) {
 bool Texture2D::AttemptPreload(const char* Path) {
 	auto Iter = PreloadedTextureList.find(Path);
 	if (Iter != PreloadedTextureList.end()) {
-		//std::cout << "Preloaded using texture handle " << Iter->second << " for path " << Path << '\n';
 		TextureHandle = Iter->second;
 		return true;
 	}
@@ -139,20 +136,16 @@ bool Texture2D::AttemptPreload(const char* Path) {
 
 void Texture2D::LoadTexture(const char* Path) {
 
-
-	std::cout << "Loading texture " << Path << '\n';
-
 	int Width = 0;
 	int Height = 0;
 	int Channels = 0;
 
 	CacheLoad TextureData = LoadFromCache(Path, Width, Height, Channels, SOIL_LOAD_RGBA);
-	std::cout << "Num Channels: " << Channels << '\n';
 
 	LoadData(GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE, Width, Height, TextureData);
 
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 

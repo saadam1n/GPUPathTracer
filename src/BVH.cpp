@@ -231,8 +231,6 @@ void ParallelConstructionTask(
 	std::mutex& WorkMtx,
 	bool* WaitConditions,
 	bool& ThreadWait,
-	uint32_t LeafHint,
-	uint32_t DepthHint,
 	const std::vector<AABB>& TriAABBs,
 	std::stack<ConstructionNode>& ConstructionNodes,
 	std::mutex& ConstructionMutex,
@@ -346,7 +344,7 @@ void RenotifyThreads(std::condition_variable& WorkSignal, bool& WorkerThreadsRun
 	//std::cout << "Done renotifying\n";
 }
 
-void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices, uint32_t DepthHint, uint32_t LeafHint) {
+void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices) {
 	//std::cout << "Start of BVH construction" << std::endl;
 
 	Timer ConstructionTimer;
@@ -393,8 +391,6 @@ void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<V
 	ConstructionTimer.End();
 	//ConstructionTimer.DebugTime();
 	ConstructionTimer.Begin();
-
-	Depth = DepthHint;
 	
 	NodeAllocator Allocator;
 	std::mutex AllocatorMutex;
@@ -437,8 +433,6 @@ void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<V
 			std::ref(WorkMtx),
 			ThreadWaitingConditions, 
 			std::ref(ThreadWaitingConditions[Index]),
-			LeafHint,
-			DepthHint,
 			std::ref(TriangleBoundingBoxes),
 			std::ref(ConstructionNodeStack),
 			std::ref(ConstructionStackMutex),
