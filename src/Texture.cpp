@@ -7,8 +7,12 @@
 #include <stdlib.h>
 
 #include <iostream>
+#include <map>
 
-Texture::Texture(void) : TextureHandle(UINT32_MAX) {
+// perhaps I should use a proper system for taking into account already loaded textures but this will do fine, just for now
+std::map<std::string, GLuint> PreloadedTextureList;
+
+Texture::Texture(void) : TextureHandle(UINT32_MAX), RealHandle_(UINT32_MAX) {
 
 }
 
@@ -18,12 +22,13 @@ GLuint Texture::GetHandle(void) {
 
 void Texture::EnsureGeneratedHandle(void) {
 	if (TextureHandle == UINT32_MAX) {
-		glGenTextures(1, &TextureHandle);
+		glGenTextures(1, &RealHandle_);
+		TextureHandle = RealHandle_;
 	}
 }
 
 void Texture::Free(void) {
-	glDeleteTextures(1, &TextureHandle);
+	glDeleteTextures(1, &RealHandle_);
 }
 
 void Texture2D::CreateBinding(void) {
@@ -45,7 +50,20 @@ void Texture2D::FreeBinding(void) {
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
+bool Texture2D::AttemptPreload(const char* Path) {
+	auto Iter = PreloadedTextureList.find(Path);
+	if (Iter != PreloadedTextureList.end()) {
+		std::cout << "Preloaded using texture handle " << Iter->second << " for path " << Path << '\n';
+		TextureHandle = Iter->second;
+		return true;
+	}
+
+	return false;
+}
+
 void Texture2D::LoadTexture(const char* Path) {
+
+
 	std::cout << "Loading texture " << Path << '\n';
 
 	int Width = 0;
@@ -72,6 +90,8 @@ void Texture2D::LoadTexture(const char* Path) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+	PreloadedTextureList.insert({ std::string(Path), TextureHandle });
 }
 
 void Texture2D::LoadData(GLenum DestinationFormat, GLenum SourceFormat, GLenum SourceType, uint32_t X, uint32_t Y, void* Data) {

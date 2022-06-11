@@ -1,3 +1,14 @@
+Haha, time flies, right? Since I'm visiting this project after a year, everything below the line goes in the garbage until I can clear my mind about what to do.
+
+TODO LIST:
+- Get to know my project again
+- REWRITE AND REORGANIZE EVERYTHING!!!!!
+- Fix bugs and whatnot
+
+My vision for this project is getting a proper path tracer up and running only within OpenGL by next summer. 
+
+------------------------------------------------------------------------
+
 This is the todo list
 
 Things I need to do:

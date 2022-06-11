@@ -12,6 +12,7 @@ protected:
 	void EnsureGeneratedHandle(void);
 
 	GLuint TextureHandle;
+	GLuint RealHandle_; // oh yeah, about that, I need to fix naming schemes 
 };
 
 class Texture2D : public Texture {
@@ -23,6 +24,8 @@ public:
 
 	void LoadTexture(const char* Path);
 	void LoadData(GLenum DestinationFormat, GLenum SourceFormat, GLenum SourceType, uint32_t X, uint32_t Y, void* Data);
+
+	bool AttemptPreload(const char* Path);
 };
 
 class Buffer;
