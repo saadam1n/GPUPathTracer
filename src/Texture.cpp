@@ -8,9 +8,85 @@
 
 #include <iostream>
 #include <map>
+#include <filesystem>
 
 // perhaps I should use a proper system for taking into account already loaded textures but this will do fine, just for now
 std::map<std::string, GLuint> PreloadedTextureList;
+
+struct CacheLoad {
+	bool Successful_;
+	unsigned char* Data_;
+
+	operator unsigned char* () {
+		return Data_;
+	}
+
+	void Free() {
+		if (Successful_) {
+			delete[] Data_;
+		}
+		else {
+			SOIL_free_image_data(Data_);
+		}
+	}
+};
+
+CacheLoad LoadFromCache(std::string Path, int& Width, int& Height, int& Channels, int force_channels) {
+	for (char& c : Path) {
+		if (c == '\\') {
+			c = '/';
+		}
+	}
+
+	constexpr bool ClearCache = false;
+
+	CacheLoad NewLoad;
+
+	std::string CachedPath = "cache/" + Path + ".BIN";
+	FILE* CacheRead = fopen(CachedPath.c_str(), "rb");
+
+	if (ClearCache && CacheRead) {
+		fclose(CacheRead);
+		remove(CachedPath.c_str());
+		CacheRead = nullptr;
+	}
+
+	if (!CacheRead) {
+		std::cout << "Cache no-read " << Path << "++++++++++++++++++++++++++++++" << '\n';
+		NewLoad.Successful_ = false;
+		
+		NewLoad.Data_ = SOIL_load_image(Path.c_str(), &Width, &Height, &Channels, force_channels);
+
+		std::filesystem::create_directories(CachedPath.substr(0, CachedPath.rfind('/')));
+		FILE* CreateCache = fopen(CachedPath.c_str(), "wb");
+
+		int MetaData[] = { Width, Height, force_channels };
+		fwrite(MetaData, 1, sizeof(MetaData), CreateCache);
+		fwrite(NewLoad.Data_, 1, Width * Height * force_channels, CreateCache);
+
+		fclose(CreateCache);
+	}
+	else {
+		std::cout << "Cache read " << Path << "---------------------------" << '\n';
+		NewLoad.Successful_ = true;
+
+		int MetaData[3];
+		fread(MetaData, sizeof(MetaData), 1, CacheRead);
+
+		Width = MetaData[0];
+		Height = MetaData[1];
+		Channels = MetaData[2];
+
+		std::cout << Width << ' ' << Height << ' ' << Channels << '\n';
+
+		long long Size = Width * Height * Channels;
+		NewLoad.Data_ = new unsigned char[Size];
+		fread(NewLoad.Data_, 1, Size, CacheRead);
+		fclose(CacheRead);
+	}
+
+	return NewLoad;
+}
 
 Texture::Texture(void) : TextureHandle(UINT32_MAX), RealHandle_(UINT32_MAX) {
 
@@ -53,7 +129,7 @@ void Texture2D::FreeBinding(void) {
 bool Texture2D::AttemptPreload(const char* Path) {
 	auto Iter = PreloadedTextureList.find(Path);
 	if (Iter != PreloadedTextureList.end()) {
-		std::cout << "Preloaded using texture handle " << Iter->second << " for path " << Path << '\n';
+		//std::cout << "Preloaded using texture handle " << Iter->second << " for path " << Path << '\n';
 		TextureHandle = Iter->second;
 		return true;
 	}
@@ -69,22 +145,11 @@ void Texture2D::LoadTexture(const char* Path) {
 	int Width = 0;
 	int Height = 0;
 	int Channels = 0;
-	unsigned char* TextureData = nullptr;
 
-	TextureData = SOIL_load_image(Path, &Width, &Height, &Channels, SOIL_LOAD_AUTO);
+	CacheLoad TextureData = LoadFromCache(Path, Width, Height, Channels, SOIL_LOAD_RGBA);
+	std::cout << "Num Channels: " << Channels << '\n';
 
-	GLenum Formats[4] = {
-		GL_RED,
-		GL_RG,
-		GL_RGB,
-		GL_RGBA
-	};
-
-	GLenum Format = Formats[Channels - 1];
-
-	LoadData(GL_RGB, Format, GL_UNSIGNED_BYTE, Width, Height, TextureData);
-
-	SOIL_free_image_data(TextureData);
+	LoadData(GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE, Width, Height, TextureData);
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
