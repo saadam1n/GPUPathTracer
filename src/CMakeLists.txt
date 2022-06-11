@@ -6,3 +6,5 @@ target_link_libraries("OpenGL_LightTransport" PRIVATE "glfw" "libglew_static" "g
 target_include_directories("OpenGL_LightTransport" PRIVATE ${glm_SOURCE_DIR})
 
 set_property(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" PROPERTY VS_STARTUP_PROJECT "OpenGL_LightTransport")
+
+set_property(TARGET "OpenGL_LightTransport" PROPERTY CXX_STANDARD 17)

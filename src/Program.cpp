@@ -77,7 +77,7 @@ int main() {
 
 	Texture2D RenderTargetColor;
 	RenderTargetColor.CreateBinding();
-	RenderTargetColor.LoadData(GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT, Width, Height, nullptr);
+	RenderTargetColor.LoadData(GL_RGBA16F, GL_RGBA, GL_FLOAT, Width, Height, nullptr);
 
 	Texture2D IntersectionDepth;
 	IntersectionDepth.CreateBinding();
@@ -122,6 +122,8 @@ int main() {
 
 		const float Clear = 1e20f;
 		glClearTexImage(IntersectionDepth.GetHandle(), 0, GL_RED, GL_FLOAT, &Clear);
+		const float BlackColor[] = { 0.0, 0.0, 0.0, 0.0 };
+		glClearTexImage(RenderTargetColor.GetHandle(), 0, GL_RGBA, GL_FLOAT, BlackColor);
 
 		FiniteAperture.CreateBinding();
 		FiniteAperture.LoadImage2D("RayOrigin"   , PrimaryRayBuffer.Origin   );
