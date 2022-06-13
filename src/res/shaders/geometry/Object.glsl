@@ -21,12 +21,13 @@ TriangleIndexData FetchIndexData(in MeshSamplers M, uint TriangleIndex) {
 }
 
 Vertex FetchVertex(in MeshSamplers M, uint IDX){
-	IDX *= 2;
+	IDX *= 3;
 
 	PackedVertex PV;
 
 	PV.PN = texelFetch(M.Vertices, int(IDX    ));
 	PV.NT = texelFetch(M.Vertices, int(IDX + 1));
+	PV.MP = texelFetch(M.Vertices, int(IDX + 2));
 
 	return UnpackVertex(PV);
 } 

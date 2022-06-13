@@ -18,3 +18,6 @@ Acheived April 21, 2021
 
 Acheived June 11, 2022
 ![Sponza Realtime](images/4SponzaRendering.png)
+
+Acheived June 13, 2022
+![140 FPS on the Table Scene](images/5MergingMesh.png)

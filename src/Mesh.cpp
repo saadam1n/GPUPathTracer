@@ -80,13 +80,8 @@ void Mesh::LoadMesh(const std::vector<Vertex> Vertices, const std::vector<Triang
 }
 
 void Mesh::LoadTexture(const char* Path) {
-    if (Material.Diffuse.AttemptPreload(Path)) {
-        Material.Diffuse.CreateBinding(); // Bind just in case to not break future code. I will remove this once I rewrite everything
-    }
-    else {
-        Material.Diffuse.CreateBinding();
-        Material.Diffuse.LoadTexture(Path);
-    }
+    Material.Diffuse.CreateBinding();
+    Material.Diffuse.LoadTexture(Path);
 }
 
 void Mesh::SetColor(const glm::vec3& Color) {

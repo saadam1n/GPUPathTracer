@@ -26,5 +26,5 @@ void Timer::End(void) {
 }
 
 void Timer::DebugTime(void) {
-	printf("Time: %f seconds\n", (float)Delta);
+	printf("Time: %f seconds\t\t%f FPS\n", (float)Delta, 1.0f / (float)Delta);
 } 

@@ -24,7 +24,7 @@ uint32_t Height = 720;
 
 // Camera params 
 
-constexpr float CameraSpeed       = 2000.000f;
+constexpr float CameraSpeed       = 2000.000f * 0.001f;
 constexpr float CameraSensitivity = 0.001f;
 glm::vec2 LastCursorPosition;
 
@@ -101,9 +101,9 @@ int main() {
 
 	Camera.SetPosition(glm::vec3(0.0f, 0.15f, 0.5f) * 6.0f);
 
-	SceneManager Scene;
+	SceneManager World;
 
-	Scene.LoadScene("res/objects/crytek/Sponza.obj");
+	World.LoadScene("res/objects/sponza2/sponza.obj");
 
 	Timer FrameTimer;
 
@@ -133,17 +133,16 @@ int main() {
 		glDispatchCompute(Width / 8, Height / 8, 1);
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
-		for (auto MeshIter = Scene.StartMeshIterator(); MeshIter != Scene.StopMeshIterator(); MeshIter++) {
-			ClosestHit.CreateBinding();
-			ClosestHit.LoadImage2D("RayOrigin", PrimaryRayBuffer.Origin);
-			ClosestHit.LoadImage2D("RayDirection", PrimaryRayBuffer.Direction);
-			ClosestHit.LoadImage2D("ColorOutput", RenderTargetColor);
-			ClosestHit.LoadImage2D("IntersectionDepth", IntersectionDepth, GL_R32F);
-			ClosestHit.LoadMesh("Mesh", "BVH", "Material", *MeshIter);
+		ClosestHit.CreateBinding();
+		ClosestHit.LoadImage2D("RayOrigin", PrimaryRayBuffer.Origin);
+		ClosestHit.LoadImage2D("RayDirection", PrimaryRayBuffer.Direction);
+		ClosestHit.LoadImage2D("ColorOutput", RenderTargetColor);
+		ClosestHit.LoadImage2D("IntersectionDepth", IntersectionDepth, GL_R32F);
+		ClosestHit.LoadScene("Mesh", "BVH", "Samplers", World);
+		//ClosestHit.LoadFloat("RandVal", ((float)rand() / (RAND_MAX)));
 
-			glDispatchCompute(Width / 8, Height / 8, 1);
-			glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
-		}
+		glDispatchCompute(Width / 8, Height / 8, 1);
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
 
 		PresentShader.CreateBinding();
 		PresentShader.LoadTexture2D("ColorTexture", RenderTargetColor);

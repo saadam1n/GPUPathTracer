@@ -8,6 +8,8 @@ add_subdirectory("GLM")
 add_subdirectory("SOIL2")
 add_subdirectory("ASSIMP")
 
+add_library(rectpack_include INTERFACE)
+target_include_directories(rectpack_include INTERFACE "rectpack2d")
 
 
 set_target_properties("glfw" PROPERTIES FOLDER "extern/GLFW")

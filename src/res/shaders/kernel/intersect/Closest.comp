@@ -1,5 +1,7 @@
 #version 430
 
+#extension GL_ARB_bindless_texture : enable
+
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 // RGB = color, A = depth
@@ -28,8 +30,36 @@ vec3 ComputeIncomingRadiance(in vec3 Direction) {
 }
 
 uniform MeshSamplers Mesh;
-uniform MaterialSamplers Material;
 uniform BVHSamplers BVH;
+
+layout(std430) buffer Samplers {
+    readonly uvec2 Handles[];
+};
+
+vec3 SunDir = normalize (vec3(-5.0f, 15.0f, 0.0f));
+vec3 SunCol = vec3(1.3f, 0.9f, 0.45f);
+vec3 Ambient = vec3(0.2);
+
+int NumSamples = 4;
+int NumBounces = 2;
+
+uniform float RandVal;
+
+
+
+float getrandom(inout uint seed0, inout uint seed1) {
+ seed0 = 36969 * ((seed0) & 65535) + ((seed0) >> 16);  // hash the seeds using bitwise AND and bitshifts
+ seed1 = 18000 * ((seed1) & 65535) + ((seed1) >> 16);
+
+ uint ires = ((seed0) << 16) + (seed1);
+
+ // Convert to float
+ uint ui = (ires & 0x007fffff) | 0x40000000;  // bitwise AND, bitwise OR
+
+ return (uintBitsToFloat(ui) - 2.f) / 2.f;
+}
+
+
 
 vec3 ComputeColor(in ivec2 PixelCoordinates, inout float IntersectionDepthDistance, inout bool HitResult){
     vec3 Color = vec3(0.0f);
@@ -39,16 +69,58 @@ vec3 ComputeColor(in ivec2 PixelCoordinates, inout float IntersectionDepthDistan
     PrimaryRay.Origin    = imageLoad(RayOrigin   , PixelCoordinates).rgb;
     PrimaryRay.Direction = imageLoad(RayDirection, PixelCoordinates).rgb;
 
+
     // Initialize our intersection data based off the last intersection test with the previous mesh within our scene
     HitInfo IntersectionInfo;
     IntersectionInfo.Depth = IntersectionDepthDistance;
 
     if(HitResult = TraverseBVH(Mesh, BVH, PrimaryRay, IntersectionInfo)) {
         Vertex InterpolatedVertex = GetInterpolatedVertex(IntersectionInfo);
+        uint seed0 = gl_GlobalInvocationID.x;
+        uint seed1 = gl_GlobalInvocationID.y;
 
-        Color = texture(Material.Diffuse, InterpolatedVertex.TextureCoordinate).rgb;
-        // TODO: More accurate sRGB conversion
-        Color = pow(Color, vec3(1.0f / 2.2f));
+        
+        vec3 Accum = vec3(0.0f);
+
+        for(int i = 0; i < NumSamples; i++) {
+            vec3 ThroughPut = vec3(1.0);
+            Ray RandomRay;
+
+            Vertex CurrentVertex = InterpolatedVertex;
+            for(int j = 0; j < NumBounces; j++) {
+                RandomRay.Origin = CurrentVertex.Position;
+
+                float r0 = getrandom(seed0, seed1);
+                float r1 = getrandom(seed0, seed1);
+
+                float r = sqrt(r0);
+                float theta = 2 * 3.1412529 * r1;
+                float x = r * cos(theta);
+                float y = r * sin(theta);
+                
+                RandomRay.Direction = vec3(x, y, sqrt(1 - r0));
+                vec3 tangent = normalize(cross(vec3(0.15, 0.15, 0.34f), CurrentVertex.Normal));
+                vec3 bitangent = cross(tangent, CurrentVertex.Normal);
+
+                RandomRay.Direction = mat3(tangent, bitangent, CurrentVertex.Normal) * RandomRay.Direction;
+
+                HitInfo NextIsect;
+                NextIsect.Depth = 1e20;
+                bool HitWorld = TraverseBVH(Mesh, BVH, RandomRay, NextIsect);
+
+                if(HitWorld) {
+                    CurrentVertex = GetInterpolatedVertex(NextIsect);
+                    ThroughPut *= texture(sampler2D(Handles[CurrentVertex.MatID]), CurrentVertex.TextureCoordinate).rgb;
+                } else {
+                    Accum += ThroughPut * ComputeIncomingRadiance(RandomRay.Direction);
+                    break;
+                }
+
+            }
+        }
+
+        Color = texture(sampler2D(Handles[InterpolatedVertex.MatID]), InterpolatedVertex.TextureCoordinate).rgb * Accum / NumSamples;
+        
     } else {
         // Basically if the intersection depth is a specific very large number (ie nothing as been hit yet) we wipe the screen with the sky Color
         // Then the intersection depth is replaced with a slightly smaller but still large number that is not equal to the specific number in the first place
@@ -58,6 +130,9 @@ vec3 ComputeColor(in ivec2 PixelCoordinates, inout float IntersectionDepthDistan
         }
         Color = ComputeIncomingRadiance(PrimaryRay.Direction);
     }
+
+    // TODO: More accurate sRGB conversion
+        Color = pow(Color, vec3(1.0f / 2.2f));
 
     IntersectionDepthDistance = IntersectionInfo.Depth;
 

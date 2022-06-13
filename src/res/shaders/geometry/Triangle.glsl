@@ -7,6 +7,7 @@ struct Vertex {
     vec3 Position;
     vec3 Normal;
     vec2 TextureCoordinate;
+    int MatID;
 };
 
 // Workaround for vec4 alignment
@@ -15,19 +16,23 @@ struct PackedVertex {
     vec4 PN;
     // Normal yz, tex coord xy
     vec4 NT;
+    // Material ID and 3 ints of padding
+    vec4 MP;
 };
 
 Vertex UnpackVertex(in PackedVertex PV) {
-    Vertex UnpackedVertex;
+    Vertex Unpacked;
 
-    UnpackedVertex.Position = PV.PN.xyz;
+    Unpacked.Position = PV.PN.xyz;
 
-    UnpackedVertex.Normal.x = PV.PN.w;
-    UnpackedVertex.Normal.yz = PV.NT.xy;
+    Unpacked.Normal.x = PV.PN.w;
+    Unpacked.Normal.yz = PV.NT.xy;
 
-    UnpackedVertex.TextureCoordinate = PV.NT.zw;
+    Unpacked.TextureCoordinate = PV.NT.zw;
+    
+    Unpacked.MatID = floatBitsToInt(PV.MP.x);
 
-    return UnpackedVertex;
+    return Unpacked;
 }
 
 struct Triangle {
@@ -149,6 +154,7 @@ Vertex GetInterpolatedVertex(in HitInfo Intersection) {
         ;
 
     InterpolatedVertex.Normal = normalize(InterpolatedVertex.Normal);
+    InterpolatedVertex.MatID = Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[0].MatID;
 
     return InterpolatedVertex;
 }

@@ -1,18 +1,44 @@
 #pragma once
 
 #include "Mesh.h"
+#include "Texture.h"
+#include "Buffer.h"
+#include <string>
+#include <memory>
 
 class SceneManager {
 public:
-	void LoadScene(const char* Path);
-
-	std::vector<Mesh>::iterator StartMeshIterator(void);
-	std::vector<Mesh>::iterator StopMeshIterator (void);
+	void LoadScene(const std::string& Path);
 private:
-	//struct Node {
-	//	Mesh Object;
-	//	std::vector<Node> Subnodes;
-	//};
+	Buffer VerticesBuf;
+	TextureBuffer VerticesTex;
 
-	std::vector<Mesh> Meshes;
+	Buffer IndicesBuf;
+	TextureBuffer IndicesTex;
+
+	BoundingVolumeHierarchy BVH;
+
+	// We never actually use the texture names after initialization but I keep them anyway
+	std::vector<std::shared_ptr<Texture2D>> Textures;
+	Buffer HandlesBuf;
+
+	friend class Shader;
 };
+
+/*
+	Buffer VertexBuffer;
+	Buffer ElementBuffer;
+
+	struct {
+		TextureBuffer Vertices;
+		TextureBuffer Indices;
+	} BufferTexture;
+
+	BoundingVolumeHierarchy BVH;
+
+	//AABB BoundingBox;
+
+	struct {
+		Texture2D Diffuse;
+	} Material;
+*/

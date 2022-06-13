@@ -11,7 +11,7 @@
 #include <filesystem>
 
 // perhaps I should use a proper system for taking into account already loaded textures but this will do fine, just for now
-std::map<std::string, GLuint> PreloadedTextureList;
+//std::map<std::string, GLuint> PreloadedTextureList;
 
 struct CacheLoad {
 	bool Successful_;
@@ -124,16 +124,6 @@ void Texture2D::FreeBinding(void) {
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-bool Texture2D::AttemptPreload(const char* Path) {
-	auto Iter = PreloadedTextureList.find(Path);
-	if (Iter != PreloadedTextureList.end()) {
-		TextureHandle = Iter->second;
-		return true;
-	}
-
-	return false;
-}
-
 void Texture2D::LoadTexture(const char* Path) {
 
 	int Width = 0;
@@ -148,8 +138,6 @@ void Texture2D::LoadTexture(const char* Path) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-
-	PreloadedTextureList.insert({ std::string(Path), TextureHandle });
 }
 
 void Texture2D::LoadData(GLenum DestinationFormat, GLenum SourceFormat, GLenum SourceType, uint32_t X, uint32_t Y, void* Data) {

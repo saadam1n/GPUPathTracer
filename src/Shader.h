@@ -5,6 +5,7 @@
 #include "Camera.h"
 #include "Buffer.h"
 #include "Mesh.h"
+#include "SceneManager.h"
 
 #include <string>
 
@@ -22,6 +23,7 @@ public:
 
 	void LoadTextureBuffer      (const char* Name, TextureBuffer& Value  );
 
+	void LoadFloat              (const char* Name, const float Value);
 	void LoadVector3F32         (const char* Name, const glm::vec3& Value);
 
 	void LoadCamera             (const char* Name, const Camera& Value   );
@@ -29,6 +31,7 @@ public:
 	void LoadShaderStorageBuffer(const char* Name, Buffer& Value         );
 
 	void LoadMesh               (const char* Buf, const char* BVH, const char* Mtrl, Mesh& Mesh);
+	void LoadScene              (const char* Buf, const char* BVH, const char* Mtrl, SceneManager& Scene);
 protected:
 	GLint    GetUniformLocation         (const char* Name       );
 	uint32_t ActivateNextFreeTextureUnit(const char* Name       );

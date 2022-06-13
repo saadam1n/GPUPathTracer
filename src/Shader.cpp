@@ -54,6 +54,10 @@ void Shader::LoadVector3F32(const char* Name, const glm::vec3& Value) {
 	LoadVector3F32(GetUniformLocation(Name), Value);
 }
 
+void Shader::LoadFloat(const char* Name, const float Value) {
+	glUniform1f(GetUniformLocation(Name), Value);
+}
+
 void Shader::LoadVector3F32(GLint Location, const glm::vec3& Value) {
 	glUniform3fv(Location, 1, glm::value_ptr(Value));
 }
@@ -91,6 +95,22 @@ void Shader::LoadMesh(const char* Buf, const char* BVH, const char* Mtrl, Mesh& 
 	LoadTextureBuffer(GetStructureMemberLocation(BVH, "Leaves"), Mesh.BVH.Samplers.Leaves);
 
 	LoadTexture2D(GetStructureMemberLocation(Mtrl, "Diffuse"), Mesh.Material.Diffuse);
+}
+
+void Shader::LoadScene(const char* Buf, const char* BVH, const char* Mtrl, SceneManager& Scene) {
+	//LoadShaderStorageBuffer(GetStructureMemberLocation(Mtrl, "Diffuse"), Mesh.VertexBuffer );
+	//LoadShaderStorageBuffer(GetStructureMemberLocation(Mtrl, "Diffuse"), Mesh.ElementBuffer);
+
+	//LoadVector3F32(GetStructureMemberLocation(BBox, "Max")     , Mesh.BoundingBox.Max     );
+	//LoadVector3F32(GetStructureMemberLocation(BBox, "Min")     , Mesh.BoundingBox.Min     );
+
+	LoadTextureBuffer(GetStructureMemberLocation(Buf, "Vertices"), Scene.VerticesTex);
+	LoadTextureBuffer(GetStructureMemberLocation(Buf, "Indices"), Scene.IndicesTex);
+
+	LoadTextureBuffer(GetStructureMemberLocation(BVH, "Nodes"), Scene.BVH.Samplers.Nodes);
+	LoadTextureBuffer(GetStructureMemberLocation(BVH, "Leaves"), Scene.BVH.Samplers.Leaves);
+
+	LoadShaderStorageBuffer(Mtrl, Scene.HandlesBuf);
 }
 
 /*

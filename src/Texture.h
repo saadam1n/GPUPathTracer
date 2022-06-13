@@ -24,8 +24,6 @@ public:
 
 	void LoadTexture(const char* Path);
 	void LoadData(GLenum DestinationFormat, GLenum SourceFormat, GLenum SourceType, uint32_t X, uint32_t Y, void* Data);
-
-	bool AttemptPreload(const char* Path);
 };
 
 class Buffer;
