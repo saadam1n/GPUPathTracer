@@ -31,7 +31,7 @@ This entire organization makes it very easy to understand the code, albiet a bit
 Naming convention wise, I am finally going to give up NamingEveryVariableLikeThis because it becomes hard to discern between functions, types, and variables
 I will now move onto namingVariablesLikeThis. While mixed case looks ugly, it certainly is better than my NotWidelyUsedFormat and hellala lot better than mVarName or VarName_ like how google does it
 
-I will rename all the folders in extern to the normal project names instead of capitalizing everything (GLFW vs glfw)
+DONE!!!!!: I will rename all the folders in extern to the normal project names instead of capitalizing everything (GLFW vs glfw)
 I really one day need to learn how to properly include external projects instead of compiling by source through a submodule
 
 I need to clean up the res folder instead of having many useless things laying around
@@ -49,6 +49,14 @@ No more unnessary abstraction. No more OCD.
 I also really need to clean up my shaders folder. Once again, the GLSL path tracer project comes in hand. 
 The shader folder is directly full of kernels, and a subfolder called "common" contains shared stuff like the RNG library
 
+Here's my plan of attack:
+- DONE: rename submodules because it is easiest
+- Clean res folder of useless junk (or organize it)
+- Move it outside of the src folder (might need to change debugging directory)
+- Reorganize sources folder, this includes a rewrite
+- Clean up of junk code and proper placement of comments
+- Finish rewriting variable names
+- Hopefullly I will be done by here!
 
 ------------------------------------------------------------------------
 
