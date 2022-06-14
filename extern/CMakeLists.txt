@@ -2,11 +2,11 @@ set(glew-cmake_BUILD_SHARED OFF CACHE BOOL "" FORCE)
 
 
 
-add_subdirectory("GLEW")
-add_subdirectory("GLFW")
-add_subdirectory("GLM")
-add_subdirectory("SOIL2")
-add_subdirectory("ASSIMP")
+add_subdirectory("glew-cmake")
+add_subdirectory("glfw")
+add_subdirectory("glm")
+add_subdirectory("soil2-cmake")
+add_subdirectory("assimp")
 
 add_library(rectpack_include INTERFACE)
 target_include_directories(rectpack_include INTERFACE "rectpack2d")
