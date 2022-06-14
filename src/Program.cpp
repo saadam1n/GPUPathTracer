@@ -103,9 +103,11 @@ int main() {
 
 	SceneManager World;
 
-	World.LoadScene("res/objects/sponza2/sponza.obj");
+	World.LoadScene("res/objects/CornellBox-Original.obj");
 
 	Timer FrameTimer;
+
+	int FrameNum = 0;
 
 	while (!Window.ShouldClose()) {
 		FrameTimer.Begin();
@@ -139,7 +141,7 @@ int main() {
 		ClosestHit.LoadImage2D("ColorOutput", RenderTargetColor);
 		ClosestHit.LoadImage2D("IntersectionDepth", IntersectionDepth, GL_R32F);
 		ClosestHit.LoadScene("Mesh", "BVH", "Samplers", World);
-		//ClosestHit.LoadFloat("RandVal", ((float)rand() / (RAND_MAX)));
+		ClosestHit.LoadInteger("Frame", FrameNum++);
 
 		glDispatchCompute(Width / 8, Height / 8, 1);
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);

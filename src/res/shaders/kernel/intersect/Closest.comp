@@ -43,22 +43,33 @@ vec3 Ambient = vec3(0.2);
 int NumSamples = 4;
 int NumBounces = 2;
 
-uniform float RandVal;
 
+uniform int FrameNum;
 
+//RNG from code by Moroz Mykhailo (https://www.shadertoy.com/view/wltcRS)
 
-float getrandom(inout uint seed0, inout uint seed1) {
- seed0 = 36969 * ((seed0) & 65535) + ((seed0) >> 16);  // hash the seeds using bitwise AND and bitshifts
- seed1 = 18000 * ((seed1) & 65535) + ((seed1) >> 16);
+//internal RNG state 
+uvec4 seed;
+ivec2 pixel;
 
- uint ires = ((seed0) << 16) + (seed1);
-
- // Convert to float
- uint ui = (ires & 0x007fffff) | 0x40000000;  // bitwise AND, bitwise OR
-
- return (uintBitsToFloat(ui) - 2.f) / 2.f;
+void InitRNG(vec2 p, int frame)
+{
+    pixel = ivec2(p);
+    seed = uvec4(p, uint(frame), uint(p.x) + uint(p.y));
 }
 
+void pcg4d(inout uvec4 v)
+{
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.w; v.y += v.z * v.x; v.z += v.x * v.y; v.w += v.y * v.z;
+    v = v ^ (v >> 16u);
+    v.x += v.y * v.w; v.y += v.z * v.x; v.z += v.x * v.y; v.w += v.y * v.z;
+}
+
+float rand()
+{
+    pcg4d(seed); return float(seed.x) / float(0xffffffffu);
+}
 
 
 vec3 ComputeColor(in ivec2 PixelCoordinates, inout float IntersectionDepthDistance, inout bool HitResult){
@@ -76,59 +87,9 @@ vec3 ComputeColor(in ivec2 PixelCoordinates, inout float IntersectionDepthDistan
 
     if(HitResult = TraverseBVH(Mesh, BVH, PrimaryRay, IntersectionInfo)) {
         Vertex InterpolatedVertex = GetInterpolatedVertex(IntersectionInfo);
-        uint seed0 = gl_GlobalInvocationID.x;
-        uint seed1 = gl_GlobalInvocationID.y;
 
+        Color = texture(sampler2D(Handles[InterpolatedVertex.MatID]), InterpolatedVertex.TextureCoordinate).rgb;
         
-        vec3 Accum = vec3(0.0f);
-
-        for(int i = 0; i < NumSamples; i++) {
-            vec3 ThroughPut = vec3(1.0);
-            Ray RandomRay;
-
-            Vertex CurrentVertex = InterpolatedVertex;
-            for(int j = 0; j < NumBounces; j++) {
-                RandomRay.Origin = CurrentVertex.Position;
-
-                float r0 = getrandom(seed0, seed1);
-                float r1 = getrandom(seed0, seed1);
-
-                float r = sqrt(r0);
-                float theta = 2 * 3.1412529 * r1;
-                float x = r * cos(theta);
-                float y = r * sin(theta);
-                
-                RandomRay.Direction = vec3(x, y, sqrt(1 - r0));
-                vec3 tangent = normalize(cross(vec3(0.15, 0.15, 0.34f), CurrentVertex.Normal));
-                vec3 bitangent = cross(tangent, CurrentVertex.Normal);
-
-                RandomRay.Direction = mat3(tangent, bitangent, CurrentVertex.Normal) * RandomRay.Direction;
-
-                HitInfo NextIsect;
-                NextIsect.Depth = 1e20;
-                bool HitWorld = TraverseBVH(Mesh, BVH, RandomRay, NextIsect);
-
-                if(HitWorld) {
-                    CurrentVertex = GetInterpolatedVertex(NextIsect);
-                    ThroughPut *= texture(sampler2D(Handles[CurrentVertex.MatID]), CurrentVertex.TextureCoordinate).rgb;
-                } else {
-                    Accum += ThroughPut * ComputeIncomingRadiance(RandomRay.Direction);
-                    break;
-                }
-
-            }
-        }
-
-        Color = texture(sampler2D(Handles[InterpolatedVertex.MatID]), InterpolatedVertex.TextureCoordinate).rgb * Accum / NumSamples;
-        
-    } else {
-        // Basically if the intersection depth is a specific very large number (ie nothing as been hit yet) we wipe the screen with the sky Color
-        // Then the intersection depth is replaced with a slightly smaller but still large number that is not equal to the specific number in the first place
-        if(IntersectionInfo.Depth == 1e20) {
-            HitResult = true; 
-            IntersectionInfo.Depth = 1e19;
-        }
-        Color = ComputeIncomingRadiance(PrimaryRay.Direction);
     }
 
     // TODO: More accurate sRGB conversion
@@ -140,6 +101,8 @@ vec3 ComputeColor(in ivec2 PixelCoordinates, inout float IntersectionDepthDistan
 }
 
 void main(){
+    InitRNG(vec2(gl_GlobalInvocationID.xy), FrameNum);
+
 	uvec2 PixelCoordinates = gl_GlobalInvocationID.xy;
     ivec2 StoreLocation = ivec2(PixelCoordinates);
 
@@ -202,4 +165,47 @@ void main(){
     imageStore(ColorOutput, StoreLocation, vec4(Color.w / 500.0f));
     imageStore(IntersectionDepth, StoreLocation, vec4(Color.w));
 }
+
+        uint seed0 = gl_GlobalInvocationID.x * 3;
+        uint seed1 = gl_GlobalInvocationID.y* 2;
+
+        
+        vec3 Accum = vec3(0.0f);
+
+        for(int i = 0; i < NumSamples; i++) {
+            vec3 ThroughPut = vec3(1.0);
+            Ray RandomRay;
+
+            Vertex CurrentVertex = InterpolatedVertex;
+            for(int j = 0; j < NumBounces; j++) {
+                RandomRay.Origin = CurrentVertex.Position;
+
+                float r0 = getrandom(seed0, seed1);
+                float r1 = getrandom(seed0, seed1);
+
+                float r = sqrt(r0);
+                float theta = 2 * 3.1412529 * r1;
+                float x = r * cos(theta);
+                float y = r * sin(theta);
+                
+                RandomRay.Direction = vec3(x, y, sqrt(1 - r0));
+                vec3 tangent = normalize(cross(vec3(0.15, 0.15, 0.34f), CurrentVertex.Normal));
+                vec3 bitangent = cross(tangent, CurrentVertex.Normal);
+
+                RandomRay.Direction = mat3(tangent, bitangent, CurrentVertex.Normal) * RandomRay.Direction;
+
+                HitInfo NextIsect;
+                NextIsect.Depth = 1e20;
+                bool HitWorld = TraverseBVH(Mesh, BVH, RandomRay, NextIsect);
+
+                if(HitWorld) {
+                    CurrentVertex = GetInterpolatedVertex(NextIsect);
+                    ThroughPut *= texture(sampler2D(Handles[CurrentVertex.MatID]), CurrentVertex.TextureCoordinate).rgb;
+                } else {
+                    Accum += ThroughPut * ComputeIncomingRadiance(RandomRay.Direction);
+                    break;
+                }
+
+            }
+        }
 */

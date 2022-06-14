@@ -23,6 +23,7 @@ public:
 
 	void LoadTextureBuffer      (const char* Name, TextureBuffer& Value  );
 
+	void LoadInteger            (const char* Name, const int Value);
 	void LoadFloat              (const char* Name, const float Value);
 	void LoadVector3F32         (const char* Name, const glm::vec3& Value);
 

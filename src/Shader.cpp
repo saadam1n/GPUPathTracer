@@ -58,6 +58,10 @@ void Shader::LoadFloat(const char* Name, const float Value) {
 	glUniform1f(GetUniformLocation(Name), Value);
 }
 
+void Shader::LoadInteger(const char* Name, const int Value) {
+	glUniform1i(GetUniformLocation(Name), Value);
+}
+
 void Shader::LoadVector3F32(GLint Location, const glm::vec3& Value) {
 	glUniform3fv(Location, 1, glm::value_ptr(Value));
 }
