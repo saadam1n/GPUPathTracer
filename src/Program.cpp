@@ -1,3 +1,5 @@
+#include <iostream>
+#include <stdio.h>
 #include "Window.h"
 #include "Renderer.h"
 #include "Buffer.h"
@@ -59,7 +61,9 @@ struct RayBuffer {
 	Texture2D Direction;
 };
 
-int main() {
+int main(int argc, char** argv) {
+	std::cout << "Working Directory: " << argv[0] << '\n';
+
 	Window Window;
 	Window.Open("OpenGL Light Transport", Width, Height);
 
@@ -84,13 +88,13 @@ int main() {
 	IntersectionDepth.LoadData(GL_R32F, GL_RED, GL_FLOAT, Width, Height, nullptr);
 
 	ShaderRasterization PresentShader;
-	PresentShader.CompileFiles("res/shaders/present/Present.vert", "res/shaders/present/Present.frag");
+	PresentShader.CompileFiles("present/Present.vert", "present/Present.frag");
 
 	ShaderCompute FiniteAperture;
-	FiniteAperture.CompileFile("res/shaders/kernel/raygen/FiniteAperture.comp");
+	FiniteAperture.CompileFile("kernel/raygen/FiniteAperture.comp");
 
 	ShaderCompute ClosestHit;
-	ClosestHit.CompileFile("res/shaders/kernel/intersect/Closest.comp");
+	ClosestHit.CompileFile("kernel/intersect/Closest.comp");
 
 	RayBuffer PrimaryRayBuffer;
 
@@ -103,7 +107,7 @@ int main() {
 
 	SceneManager World;
 
-	World.LoadScene("res/objects/CornellBox-Original.obj");
+	World.LoadScene("res/objects/cornellbox.obj");
 
 	Timer FrameTimer;
 

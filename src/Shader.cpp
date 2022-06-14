@@ -219,16 +219,18 @@ void CollapseFilePath(std::string& Path) {
 
 // TODO: Make this non-recursive, and read the file into a string once to reduce I/O operations
 std::ostringstream ParseShader(std::string& Path, std::map<uint32_t, FileLineNumber>& LineNumbers, uint32_t& GlobalLineIndex) {
+
 	MakeUnixIncludeSlash(Path);
-	std::string Folder = Path.substr(0, Path.find_last_of('/') + 1);
+	std::string RealPath = (Path.find_first_of("src/shaders/") != 0 ? "src/shaders/" + Path : Path);
+	std::string Folder = RealPath.substr(0, RealPath.find_last_of('/') + 1);
 
 	printf("Shader file folder is %s\n", Folder.c_str());
 
 	std::ostringstream ShaderParsedCode;
 
-	std::ifstream ShaderFile(Path);
+	std::ifstream ShaderFile(RealPath);
 	if (!ShaderFile.is_open()) {
-		printf("Invalid file path: %s\n", Path.c_str());
+		printf("Invalid file path: %s\n", RealPath.c_str());
 	}
 
 	uint32_t LocalLineIndex = 0;
@@ -247,7 +249,7 @@ std::ostringstream ParseShader(std::string& Path, std::map<uint32_t, FileLineNum
 			ShaderLine = ParseShader(IncludePath, LineNumbers, GlobalLineIndex).str();
 		}
 
-		LineNumbers.emplace(GlobalLineIndex++, FileLineNumber(LocalLineIndex++, Path));
+		LineNumbers.emplace(GlobalLineIndex++, FileLineNumber(LocalLineIndex++, RealPath));
 
 		ShaderParsedCode << ShaderLine << '\n';
 	}

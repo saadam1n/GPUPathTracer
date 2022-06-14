@@ -8,3 +8,4 @@ target_include_directories("OpenGL_LightTransport" PRIVATE ${glm_SOURCE_DIR})
 set_property(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" PROPERTY VS_STARTUP_PROJECT "OpenGL_LightTransport")
 
 set_property(TARGET "OpenGL_LightTransport" PROPERTY CXX_STANDARD 17)
+set_property(TARGET "OpenGL_LightTransport" PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
