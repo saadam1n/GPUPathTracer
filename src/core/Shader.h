@@ -7,6 +7,7 @@
 #include "Scene.h"
 
 #include <string>
+#include <map>
 
 class Shader {
 public:
@@ -45,10 +46,7 @@ protected:
 
 	void LoadTextureBuffer(GLint Location, TextureBuffer& Value);
 
-	// String cat
-	std::string GetStructureMemberName(const char* Structure, const char* Member);
-
-	GLint       GetStructureMemberLocation(const char* Structure, const char* Member);
+	GLint       GetStructureMemberLocation(const std::string& str, const std::string& mem);
 
 	void CreateProgramHandle(void);
 	void LinkProgram(void);
@@ -57,6 +55,8 @@ protected:
 
 	uint32_t NextFreeTextureUnit;
 	uint32_t NextFreeBlockBinding;
+
+	std::map <std::string, GLint> locationCache;
 };
 
 class ShaderRasterization : public Shader {

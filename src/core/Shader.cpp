@@ -107,24 +107,22 @@ End of loading code
 Beginning of shader location retrieval 
 */
 
-std::string Shader::GetStructureMemberName(const char* Structure, const char* Member) {
-	// I wish there was a easy way to reserve memory but STL sucks
-	std::stringstream StringBuilder;
 
-	StringBuilder << Structure << '.' << Member;
 
-	return StringBuilder.str();
-}
-
-GLint Shader::GetUniformLocation(const char* Name) {
-	GLint Location = glGetUniformLocation(ProgramHandle, Name);
-
-	//assert(Location != -1);
-	if (Location == -1) {
-		printf("Warning: unable to find location for variable %s\n", Name);
+GLint Shader::GetUniformLocation(const char* name) {
+	auto result = locationCache.find(name);
+	
+	if (result == locationCache.end()) {
+		GLint location = glGetUniformLocation(ProgramHandle, name);
+		if (location == -1) {
+			printf("Warning: unable to find location for variable \"%s\". This message will only appear once\n", name); 
+		}
+		locationCache.insert({ name, location });
+		return location;
 	}
-
-	return Location;
+	else {
+		return result->second;
+	}
 }
 
 uint32_t Shader::ActivateNextFreeTextureUnit(const char* Name) {
@@ -145,8 +143,8 @@ uint32_t Shader::ActivateNextFreeTextureUnit(const std::string& Name) {
 	return ActivateNextFreeTextureUnit(Name.c_str());
 }
 
-GLint       Shader::GetStructureMemberLocation(const char* Structure, const char* Member) {
-	return GetUniformLocation(GetStructureMemberName(Structure, Member));
+GLint       Shader::GetStructureMemberLocation(const std::string& str, const std::string& mem) {
+	return GetUniformLocation(str + '.' + mem);
 }
 
 /*
