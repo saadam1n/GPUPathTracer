@@ -83,9 +83,7 @@ public:
 	void ConstructAccelerationStructure(const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices);
 private:
 	friend class Shader;
-
-	// Depth of the BVH
-	uint32_t Depth;
+	friend class Renderer;
 
 	// the binary large objects that contains BVH data
 	struct {

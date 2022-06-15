@@ -122,7 +122,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(DebugMessageCallback, NULL);
 
-
+    scene.LoadScene(scenePath);
 
     float quad[] = {
     -1.0f,  1.0f,
@@ -159,14 +159,45 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     genRays.CompileFile("kernel/raygen/FiniteAperture.comp");
     closestHit.CompileFile("kernel/intersect/Closest.comp");
 
+    colorTexture.BindImageUnit(0, GL_RGBA16F);
+    rayOrigin.BindImageUnit(1, GL_RGBA16F);
+    rayDirection.BindImageUnit(2, GL_RGBA16F);
+    rayDepth.BindImageUnit(3, GL_R32F);
 
-    scene.LoadScene(scenePath);
+    scene.VerticesTex.BindTextureUnit(4, GL_TEXTURE_BUFFER);
+    scene.IndicesTex.BindTextureUnit(5, GL_TEXTURE_BUFFER);
+    scene.BVH.Samplers.Nodes.BindTextureUnit(6, GL_TEXTURE_BUFFER);
+    scene.BVH.Samplers.Leaves.BindTextureUnit(7, GL_TEXTURE_BUFFER);
+
+    colorTexture.BindTextureUnit(8, GL_TEXTURE_2D);
+
+    genRays.CreateBinding();
+    genRays.LoadInteger("RayOrigin", 1);
+    genRays.LoadInteger("RayDirection", 2);
+
+    closestHit.CreateBinding();
+    closestHit.LoadInteger("ColorOutput", 0);
+    closestHit.LoadInteger("RayOrigin", 1);
+    closestHit.LoadInteger("RayDirection", 2);
+    closestHit.LoadInteger("IntersectionDepth", 3);
+    
+    closestHit.LoadInteger("Mesh.Vertices", 4);
+    closestHit.LoadInteger("Mesh.Indices", 5);
+    closestHit.LoadInteger("BVH.Nodes", 6);
+    closestHit.LoadInteger("BVH.Leaves", 7);
+
+    closestHit.LoadShaderStorageBuffer("Samplers", scene.HandlesBuf);
+
+
+    presentShader.CreateBinding();
+    presentShader.LoadInteger("ColorTexture", 8);
 
 
     frameCounter = 0;
 }
 
 void Renderer::CleanUp(void) {
+    // I hope the scene destructor frees its resources
     genRays.Free();
     closestHit.Free();
     presentShader.Free();
@@ -175,7 +206,6 @@ void Renderer::CleanUp(void) {
     rayDepth.Free();
     rayOrigin.Free();
     rayDirection.Free();
-
 
     screenQuad.Free();
     quadBuf.Free();
@@ -187,19 +217,12 @@ void Renderer::RenderFrame(const Camera& camera) {
     glClearTexImage(rayDepth.GetHandle(), 0, GL_RED, GL_FLOAT, &kClear);
 
     genRays.CreateBinding();
-    genRays.LoadImage2D("RayOrigin", rayOrigin);
-    genRays.LoadImage2D("RayDirection", rayDirection);
     genRays.LoadCamera("Camera", camera);
 
     glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
     glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
     closestHit.CreateBinding();
-    closestHit.LoadImage2D("RayOrigin", rayOrigin);
-    closestHit.LoadImage2D("RayDirection", rayDirection);
-    closestHit.LoadImage2D("ColorOutput", colorTexture);
-    closestHit.LoadImage2D("IntersectionDepth", rayDepth, GL_R32F);
-    closestHit.LoadScene("Mesh", "BVH", "Samplers", scene);
     closestHit.LoadInteger("Frame", frameCounter++);
 
     glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
@@ -207,9 +230,6 @@ void Renderer::RenderFrame(const Camera& camera) {
 }
 
 void Renderer::Present() {
-    std::cout << "Entering present shader\n";
     presentShader.CreateBinding();
-    presentShader.LoadTexture2D("ColorTexture", colorTexture);
-
     glDrawArrays(GL_TRIANGLES, 0, 6);
 }

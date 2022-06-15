@@ -5,9 +5,12 @@
 class Texture {
 public:
 	Texture(void);
+	void Free(void);
+
 	GLuint GetHandle(void);
 
-	void Free(void);
+	void BindImageUnit(uint32_t Unit, GLenum Format);
+	void BindTextureUnit(uint32_t unit, GLenum target);
 protected:
 	void EnsureGeneratedHandle(void);
 
@@ -20,7 +23,7 @@ public:
 	void CreateBinding(void);
 	void FreeBinding(void);
 
-	void CreateImageBinding(uint32_t Unit, GLenum Format);
+	
 
 	void LoadTexture(const char* Path);
 	void LoadData(GLenum DestinationFormat, GLenum SourceFormat, GLenum SourceType, uint32_t X, uint32_t Y, void* Data);

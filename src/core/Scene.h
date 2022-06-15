@@ -23,6 +23,7 @@ private:
 	Buffer HandlesBuf;
 
 	friend class Shader;
+	friend class Renderer;
 };
 
 /*

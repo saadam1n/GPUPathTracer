@@ -116,8 +116,13 @@ void Texture2D::CreateBinding(void) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 }
 
-void Texture2D::CreateImageBinding(uint32_t Unit, GLenum Format) {
+void Texture::BindImageUnit(uint32_t Unit, GLenum Format) {
 	glBindImageTexture(Unit, TextureHandle, 0, GL_FALSE, 0, GL_WRITE_ONLY, Format);
+}
+
+void Texture::BindTextureUnit(uint32_t unit, GLenum target) {
+	glActiveTexture(GL_TEXTURE0 + unit);
+	glBindTexture(target, TextureHandle);
 }
 
 void Texture2D::FreeBinding(void) {

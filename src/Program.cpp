@@ -51,22 +51,13 @@ int main(int argc, char** argv) {
 	Renderer* renderer = new Renderer;
 	renderer->Initialize(&Window, "res/objects/cornellbox.obj");
 
-
-
-
-
-
-
 	camera.UpdateImagePlaneParameters((float)Width / (float)Height, glm::radians(45.0f));
 	camera.SetPosition(glm::vec3(0.0f, 0.15f, 0.5f) * 6.0f);
-
-
 
 	Timer FrameTimer;
 
 	while (!Window.ShouldClose()) {
 		FrameTimer.Begin();
-
 
 		if (Window.GetKey(GLFW_KEY_W)) {
 			camera.Move(CameraSpeed * (float)FrameTimer.Delta);
@@ -74,6 +65,7 @@ int main(int argc, char** argv) {
 		else if (Window.GetKey(GLFW_KEY_S)) {
 			camera.Move(-CameraSpeed * (float)FrameTimer.Delta);
 		}
+
 		camera.GenerateViewTransform();
 		camera.GenerateImagePlane();
 
@@ -87,8 +79,6 @@ int main(int argc, char** argv) {
 		FrameTimer.End();
 		FrameTimer.DebugTime();
 	}
-
-
 
 	renderer->CleanUp();
 	Window.Close();

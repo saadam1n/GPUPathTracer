@@ -111,12 +111,8 @@ void main(){
 
     vec3 Color = ComputeColor(StoreLocation, IntersectionDistance, HitResult);
 
-    if(HitResult){
-        imageStore(IntersectionDepth, StoreLocation, vec4(IntersectionDistance));
-        
-        imageStore(ColorOutput, StoreLocation, vec4(Color, 1.0f));
-    }
-
+    imageStore(IntersectionDepth, StoreLocation, vec4(IntersectionDistance));
+    imageStore(ColorOutput, StoreLocation, vec4(Color, 1.0f));
 }
 
 /*
