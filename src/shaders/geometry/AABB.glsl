@@ -4,7 +4,6 @@
 #include "Ray.glsl"
 
 struct AABB {
-    vec3 Position;
     vec3 Min;
     vec3 Max;
 };
@@ -28,8 +27,6 @@ vec2 IntersectionAABBDistance(in AABB Box, in Ray Ray, uint Index) {
 }
 
 bool IntersectAABB(in AABB Box, in Ray Ray) {
-    Box.Max += Box.Position;
-    Box.Min += Box.Position;
 
     Box.Max -= Ray.Origin;
     Box.Min -= Ray.Origin;
@@ -68,9 +65,6 @@ bool IntersectAABB(in AABB Box, in Ray Ray) {
 }
 
 bool IntersectAABB2(in AABB Box, in Ray Ray) {
-    Box.Max += Box.Position;
-    Box.Min += Box.Position;
-
     vec3 InverseDirection = 1.0f / Ray.Direction;
 
     vec3 tbot = InverseDirection * (Box.Min - Ray.Origin);

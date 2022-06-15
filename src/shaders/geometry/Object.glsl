@@ -3,47 +3,44 @@
 
 #include "Triangle.glsl"
 
-struct MeshSamplers {
-	samplerBuffer Vertices;
-	usamplerBuffer Indices;
+layout(std430) buffer vertexBuf {
+	PackedVertex vertices[];
 };
 
-uint GetTriangleCount(in MeshSamplers M) {
-	return textureSize(M.Indices);
+layout(std430) buffer indexBuf {
+	uvec4 indices[];
+};
+
+uint GetTriangleCount() {
+	return indices.length();
 }
 
-TriangleIndexData FetchIndexData(in MeshSamplers M, uint TriangleIndex) {
+TriangleIndexData FetchIndexData(uint TriangleIndex) {
 	TriangleIndexData TriangleIDX;
 
-	TriangleIDX.Indices = texelFetch(M.Indices, int(TriangleIndex)).xyz;
+	TriangleIDX.Indices = indices[TriangleIndex].xyz;
 
 	return TriangleIDX;
 }
 
-Vertex FetchVertex(in MeshSamplers M, uint IDX){
-	IDX *= 3;
-
-	PackedVertex PV;
-
-	PV.PN = texelFetch(M.Vertices, int(IDX    ));
-	PV.NT = texelFetch(M.Vertices, int(IDX + 1));
-	PV.MP = texelFetch(M.Vertices, int(IDX + 2));
+Vertex FetchVertex(uint IDX){
+	PackedVertex PV = vertices[IDX];
 
 	return UnpackVertex(PV);
 } 
 
-Triangle FetchTriangle(in MeshSamplers M, TriangleIndexData TriIDX) {
+Triangle FetchTriangle(TriangleIndexData TriIDX) {
     Triangle CurrentTriangle;
 
-	CurrentTriangle.Vertices[0] = FetchVertex(M, TriIDX.Indices[0]);
-	CurrentTriangle.Vertices[1] = FetchVertex(M, TriIDX.Indices[1]);
-	CurrentTriangle.Vertices[2] = FetchVertex(M, TriIDX.Indices[2]);
+	CurrentTriangle.Vertices[0] = FetchVertex(TriIDX.Indices[0]);
+	CurrentTriangle.Vertices[1] = FetchVertex(TriIDX.Indices[1]);
+	CurrentTriangle.Vertices[2] = FetchVertex(TriIDX.Indices[2]);
 
 	return CurrentTriangle;
 }
 
-Triangle FetchTriangle(in MeshSamplers M, uint IDX) {
-	return FetchTriangle(M, FetchIndexData(M, IDX));
+Triangle FetchTriangle(uint IDX) {
+	return FetchTriangle(FetchIndexData(IDX));
 }
 
 #endif

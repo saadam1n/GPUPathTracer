@@ -18,7 +18,7 @@ uniform layout(r32f)    image2D IntersectionDepth;
 #include "../../camera/Pinhole.glsl"
 #include "../../geometry/Triangle.glsl"
 #include "../../geometry/AABB.glsl"
-#include "../../accelstruct/BVH/Traverse.glsl"
+#include "../../accelstruct/Traverse.glsl"
 
 // Sky by builderboy
 // Original coeffs: vec3(0.0625, 0.125, 0.25)
@@ -28,9 +28,6 @@ vec3 ComputeIncomingRadiance(in vec3 Direction) {
 	vec3 Color = Coefficients / (UpDot * UpDot + Coefficients);
 	return Color;
 }
-
-uniform MeshSamplers Mesh;
-uniform BVHSamplers BVH;
 
 layout(std430) buffer Samplers {
     readonly uvec2 Handles[];
@@ -85,7 +82,7 @@ vec3 ComputeColor(in ivec2 PixelCoordinates, inout float IntersectionDepthDistan
     HitInfo IntersectionInfo;
     IntersectionInfo.Depth = IntersectionDepthDistance;
 
-    if(HitResult = TraverseBVH(Mesh, BVH, PrimaryRay, IntersectionInfo)) {
+    if(HitResult = TraverseBVH(PrimaryRay, IntersectionInfo)) {
         Vertex InterpolatedVertex = GetInterpolatedVertex(IntersectionInfo);
 
         Color = texture(sampler2D(Handles[InterpolatedVertex.MatID]), InterpolatedVertex.TextureCoordinate).rgb;

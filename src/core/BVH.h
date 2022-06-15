@@ -86,17 +86,8 @@ private:
 	friend class Renderer;
 
 	// the binary large objects that contains BVH data
-	struct {
-		// TODO: compact these into a single buffer
-		Buffer Nodes ;
-		Buffer Leaves;
-	} StructureBuffers;
-
-	// Buffer textures so we can access the bvh data from the shader
-	struct {
-		TextureBuffer Nodes;
-		TextureBuffer Leaves;
-	} Samplers;
+	Buffer nodes;
+	Buffer leaves;
 	
 	//AABB CreateBoundingBox(const std::vector<TriangleCentroid>& Centroids, const std::vector<AABB>& TriangleBoundingBoxes);
 

@@ -85,22 +85,6 @@ void Shader::LoadShaderStorageBuffer(const char* Name, Buffer& Value) {
 	Value.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, BlockBinding);
 }
 
-void Shader::LoadScene(const char* Buf, const char* BVH, const char* Mtrl, Scene& Scene) {
-	//LoadShaderStorageBuffer(GetStructureMemberLocation(Mtrl, "Diffuse"), Mesh.VertexBuffer );
-	//LoadShaderStorageBuffer(GetStructureMemberLocation(Mtrl, "Diffuse"), Mesh.ElementBuffer);
-
-	//LoadVector3F32(GetStructureMemberLocation(BBox, "Max")     , Mesh.BoundingBox.Max     );
-	//LoadVector3F32(GetStructureMemberLocation(BBox, "Min")     , Mesh.BoundingBox.Min     );
-
-	LoadTextureBuffer(GetStructureMemberLocation(Buf, "Vertices"), Scene.VerticesTex);
-	LoadTextureBuffer(GetStructureMemberLocation(Buf, "Indices"), Scene.IndicesTex);
-
-	LoadTextureBuffer(GetStructureMemberLocation(BVH, "Nodes"), Scene.BVH.Samplers.Nodes);
-	LoadTextureBuffer(GetStructureMemberLocation(BVH, "Leaves"), Scene.BVH.Samplers.Leaves);
-
-	LoadShaderStorageBuffer(Mtrl, Scene.HandlesBuf);
-}
-
 /*
 End of loading code
 ===============================================

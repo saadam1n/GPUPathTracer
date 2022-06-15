@@ -507,17 +507,11 @@ void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<V
 	//ConstructionTimer.DebugTime();
 	ConstructionTimer.Begin();
 
-	StructureBuffers.Nodes.CreateBinding(BUFFER_TARGET_ARRAY);
-	StructureBuffers.Nodes.UploadData(ProcessedNodes.size() * sizeof(NodeSerialized), ProcessedNodes.data());
+	nodes.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
+	nodes.UploadData(ProcessedNodes);
 
-	Samplers.Nodes.CreateBinding();
-	Samplers.Nodes.SelectBuffer(&StructureBuffers.Nodes, GL_RGBA32F);
-
-	StructureBuffers.Leaves.CreateBinding(BUFFER_TARGET_ARRAY);
-	StructureBuffers.Leaves.UploadData(LeafContentBuffer.size() * sizeof(int32_t), LeafContentBuffer.data());
-
-	Samplers.Leaves.CreateBinding();
-	Samplers.Leaves.SelectBuffer(&StructureBuffers.Leaves, GL_R32I);
+	leaves.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
+	leaves.UploadData(LeafContentBuffer);
 
 	ConstructionTimer.End();
 	ConstructionTimer.DebugTime();

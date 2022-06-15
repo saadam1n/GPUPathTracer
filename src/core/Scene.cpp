@@ -66,13 +66,13 @@ void Scene::LoadScene(const std::string& Path) {
             
             auto result = TexCache.find(location);
             if (result == TexCache.end()) {
-                int j = (int)Textures.size();
+                int j = (int)textures.size();
                 currmatid = j;
                 TexCache.insert({ location, j });
                 std::shared_ptr<Texture2D> currtex(new Texture2D);
                 currtex->CreateBinding();
                 currtex->LoadTexture(location.c_str());
-                Textures.push_back(currtex);
+                textures.push_back(currtex);
             }
             else {
                 currmatid = result->second;
@@ -87,14 +87,14 @@ void Scene::LoadScene(const std::string& Path) {
 
             auto result = TexCache.find(triple.str());
             if (result == TexCache.end()) {
-                int j = (int)Textures.size();
+                int j = (int)textures.size();
                 currmatid = j;
                 TexCache.insert({ triple.str(), j });
                 std::shared_ptr<Texture2D> currtex(new Texture2D);
                 currtex->CreateBinding();
                 float coldata[3]{ diffcol.r, diffcol.g, diffcol.b };
                 currtex->LoadData(GL_RGBA32F, GL_RGB, GL_FLOAT, 1, 1, (void*)coldata);
-                Textures.push_back(currtex);
+                textures.push_back(currtex);
             }
             else {
                 currmatid = result->second;
@@ -138,29 +138,23 @@ void Scene::LoadScene(const std::string& Path) {
     importer.FreeScene();
 
     // Now we create handles and whatnot
-    std::vector<GLuint64> TexHandles(Textures.size());
+    std::vector<GLuint64> TexHandles(textures.size());
     for (int i = 0; i < TexHandles.size(); i++) {
-        GLuint64 handle = glGetTextureHandleARB(Textures[i]->GetHandle());
+        GLuint64 handle = glGetTextureHandleARB(textures[i]->GetHandle());
         glMakeTextureHandleResidentARB(handle);
         TexHandles[i] = handle;
     }
 
-    HandlesBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
-    HandlesBuf.UploadData(TexHandles);
+    textureHandlesBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
+    textureHandlesBuf.UploadData(TexHandles);
 
-    VerticesBuf.CreateBinding(BUFFER_TARGET_ARRAY);
-    VerticesBuf.UploadData(Vertices);
+    vertexBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
+    vertexBuf.UploadData(Vertices);
 
-    IndicesBuf.CreateBinding(BUFFER_TARGET_ARRAY);
-    IndicesBuf.UploadData(Indices);
+    indexBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
+    indexBuf.UploadData(Indices);
 
-    VerticesTex.CreateBinding();
-    VerticesTex.SelectBuffer(&VerticesBuf, GL_RGBA32F);
-
-    IndicesTex.CreateBinding();
-    IndicesTex.SelectBuffer(&IndicesBuf, GL_RGB32UI);
-
-    BVH.ConstructAccelerationStructure(Vertices, Indices);
+    bvh.ConstructAccelerationStructure(Vertices, Indices);
     
 }
 

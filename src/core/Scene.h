@@ -10,17 +10,14 @@ class Scene {
 public:
 	void LoadScene(const std::string& Path);
 private:
-	Buffer VerticesBuf;
-	TextureBuffer VerticesTex;
+	Buffer vertexBuf;
+	Buffer indexBuf;
 
-	Buffer IndicesBuf;
-	TextureBuffer IndicesTex;
-
-	BoundingVolumeHierarchy BVH;
+	BoundingVolumeHierarchy bvh;
 
 	// We never actually use the texture names after initialization but I keep them anyway
-	std::vector<std::shared_ptr<Texture2D>> Textures;
-	Buffer HandlesBuf;
+	std::vector<std::shared_ptr<Texture2D>> textures;
+	Buffer textureHandlesBuf;
 
 	friend class Shader;
 	friend class Renderer;

@@ -164,12 +164,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     rayDirection.BindImageUnit(2, GL_RGBA16F);
     rayDepth.BindImageUnit(3, GL_R32F);
 
-    scene.VerticesTex.BindTextureUnit(4, GL_TEXTURE_BUFFER);
-    scene.IndicesTex.BindTextureUnit(5, GL_TEXTURE_BUFFER);
-    scene.BVH.Samplers.Nodes.BindTextureUnit(6, GL_TEXTURE_BUFFER);
-    scene.BVH.Samplers.Leaves.BindTextureUnit(7, GL_TEXTURE_BUFFER);
-
-    colorTexture.BindTextureUnit(8, GL_TEXTURE_2D);
+    colorTexture.BindTextureUnit(4, GL_TEXTURE_2D);
 
     genRays.CreateBinding();
     genRays.LoadInteger("RayOrigin", 1);
@@ -180,17 +175,16 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     closestHit.LoadInteger("RayOrigin", 1);
     closestHit.LoadInteger("RayDirection", 2);
     closestHit.LoadInteger("IntersectionDepth", 3);
-    
-    closestHit.LoadInteger("Mesh.Vertices", 4);
-    closestHit.LoadInteger("Mesh.Indices", 5);
-    closestHit.LoadInteger("BVH.Nodes", 6);
-    closestHit.LoadInteger("BVH.Leaves", 7);
 
-    closestHit.LoadShaderStorageBuffer("Samplers", scene.HandlesBuf);
+    closestHit.LoadShaderStorageBuffer("Samplers", scene.textureHandlesBuf);
+    closestHit.LoadShaderStorageBuffer("vertexBuf", scene.vertexBuf);
+    closestHit.LoadShaderStorageBuffer("indexBuf", scene.indexBuf);
+    closestHit.LoadShaderStorageBuffer("nodes", scene.bvh.nodes);
+    closestHit.LoadShaderStorageBuffer("leaves", scene.bvh.leaves);
 
 
     presentShader.CreateBinding();
-    presentShader.LoadInteger("ColorTexture", 8);
+    presentShader.LoadInteger("ColorTexture", 4);
 
 
     frameCounter = 0;
