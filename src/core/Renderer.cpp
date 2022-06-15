@@ -2,6 +2,7 @@
 #include "OpenGL.h"
 
 #include <stdio.h>
+#include <iostream>
 
 void DebugMessageCallback(GLenum source, GLenum type, GLuint id,
     GLenum severity, GLsizei length,
@@ -103,31 +104,112 @@ void DebugMessageCallback(GLenum source, GLenum type, GLuint id,
         id, _type, _severity, _source, msg);
 }
 
-void Renderer::Init(Window* Window) {
-	WindowOutput = Window;
+void Renderer::Initialize(Window* Window, const char* scenePath) {
+    bindedWindow = Window;
+    viewportWidth = bindedWindow->Width;
+    viewportHeight = bindedWindow->Height;
 
-	static bool OpenGLLoaded = false;
-	if (!OpenGLLoaded) {
-		glewInit();
-		OpenGLLoaded = true;
-	}
+    static bool OpenGLLoaded = false;
+    if (!OpenGLLoaded) {
+        glewInit();
+        OpenGLLoaded = true;
+    }
 
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-	glClearDepth(1.0f);
-	glClearStencil(0xFF);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClearDepth(1.0f);
+    glClearStencil(0xFF);
 
-	glEnable(GL_DEBUG_OUTPUT);
-	glDebugMessageCallback(DebugMessageCallback, NULL);
+    glEnable(GL_DEBUG_OUTPUT);
+    glDebugMessageCallback(DebugMessageCallback, NULL);
+
+
+
+    float quad[] = {
+    -1.0f,  1.0f,
+    -1.0f, -1.0f,
+     1.0f, -1.0f,
+
+    -1.0f,  1.0f,
+     1.0f, -1.0f,
+     1.0f,  1.0f
+    };
+
+    quadBuf.CreateBinding(BUFFER_TARGET_ARRAY);
+    quadBuf.UploadData(sizeof(quad), quad);
+
+    screenQuad.CreateBinding();
+    screenQuad.CreateStream(0, 2, 2 * sizeof(float));
+    //
+
+    presentShader.CompileFiles("present/Present.vert", "present/Present.frag");
+
+    colorTexture.CreateBinding();
+    colorTexture.LoadData(GL_RGBA16F, GL_RGBA, GL_FLOAT, viewportWidth, viewportHeight, nullptr);
+
+
+    rayDepth.CreateBinding();
+    rayDepth.LoadData(GL_R32F, GL_RED, GL_FLOAT, viewportWidth, viewportHeight, nullptr);
+
+    rayOrigin.CreateBinding();
+    rayOrigin.LoadData(GL_RGBA16F, GL_RGB, GL_HALF_FLOAT, viewportWidth, viewportHeight, nullptr);
+
+    rayDirection.CreateBinding();
+    rayDirection.LoadData(GL_RGBA16F, GL_RGB, GL_HALF_FLOAT, viewportWidth, viewportHeight, nullptr);
+
+    genRays.CompileFile("kernel/raygen/FiniteAperture.comp");
+    closestHit.CompileFile("kernel/intersect/Closest.comp");
+
+
+    scene.LoadScene(scenePath);
+
+
+    frameCounter = 0;
 }
 
-void Renderer::Free(void) {
+void Renderer::CleanUp(void) {
+    genRays.Free();
+    closestHit.Free();
+    presentShader.Free();
 
+    colorTexture.Free();
+    rayDepth.Free();
+    rayOrigin.Free();
+    rayDirection.Free();
+
+
+    screenQuad.Free();
+    quadBuf.Free();
 }
 
-void Renderer::Begin(void) {
-	glClear(GL_COLOR_BUFFER_BIT);
+void Renderer::RenderFrame(const Camera& camera) {
+    // We only need to clear the ray depth; the color, ray origin, and ray dir will be overwritten
+    const float kClear = 1e20f;
+    glClearTexImage(rayDepth.GetHandle(), 0, GL_RED, GL_FLOAT, &kClear);
+
+    genRays.CreateBinding();
+    genRays.LoadImage2D("RayOrigin", rayOrigin);
+    genRays.LoadImage2D("RayDirection", rayDirection);
+    genRays.LoadCamera("Camera", camera);
+
+    glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+    closestHit.CreateBinding();
+    closestHit.LoadImage2D("RayOrigin", rayOrigin);
+    closestHit.LoadImage2D("RayDirection", rayDirection);
+    closestHit.LoadImage2D("ColorOutput", colorTexture);
+    closestHit.LoadImage2D("IntersectionDepth", rayDepth, GL_R32F);
+    closestHit.LoadScene("Mesh", "BVH", "Samplers", scene);
+    closestHit.LoadInteger("Frame", frameCounter++);
+
+    glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
 }
 
-void Renderer::End(void) {
+void Renderer::Present() {
+    std::cout << "Entering present shader\n";
+    presentShader.CreateBinding();
+    presentShader.LoadTexture2D("ColorTexture", colorTexture);
 
+    glDrawArrays(GL_TRIANGLES, 0, 6);
 }

@@ -21,6 +21,8 @@ private:
 
 	uint32_t Width;
 	uint32_t Height;
+
+	friend class Renderer;
 };
 
 #endif

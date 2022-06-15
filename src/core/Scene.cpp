@@ -14,7 +14,6 @@
 #include <sstream>
 #include <map>
 
-#include <finders_interface.h>
 #include <SOIL2.h>
 #include <cmath>
 
