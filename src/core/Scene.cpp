@@ -1,13 +1,13 @@
-#include "SceneManager.h"
+#include "Scene.h"
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 #include <glm/gtx/norm.hpp>
 
-#include "Vertex.h"
-#include "Triangle.h"
-#include "TriangleIndexing.h"
+#include "../math/Vertex.h"
+#include "../math/Triangle.h"
+#include "../math/TriangleIndexing.h"
 
 #include <vector>
 #include <iostream>
@@ -20,7 +20,7 @@
 
 #include <glm/gtx/matrix_transform_2d.hpp>
 
-void SceneManager::LoadScene(const std::string& Path) {
+void Scene::LoadScene(const std::string& Path) {
     std::string Folder = Path.substr(0, Path.find_last_of('/') + 1);
 
     Assimp::Importer importer;
@@ -67,7 +67,7 @@ void SceneManager::LoadScene(const std::string& Path) {
             
             auto result = TexCache.find(location);
             if (result == TexCache.end()) {
-                int j = Textures.size();
+                int j = (int)Textures.size();
                 currmatid = j;
                 TexCache.insert({ location, j });
                 std::shared_ptr<Texture2D> currtex(new Texture2D);
@@ -88,7 +88,7 @@ void SceneManager::LoadScene(const std::string& Path) {
 
             auto result = TexCache.find(triple.str());
             if (result == TexCache.end()) {
-                int j = Textures.size();
+                int j = (int)Textures.size();
                 currmatid = j;
                 TexCache.insert({ triple.str(), j });
                 std::shared_ptr<Texture2D> currtex(new Texture2D);
@@ -141,7 +141,7 @@ void SceneManager::LoadScene(const std::string& Path) {
     // Now we create handles and whatnot
     std::vector<GLuint64> TexHandles(Textures.size());
     for (int i = 0; i < TexHandles.size(); i++) {
-        int handle = glGetTextureHandleARB(Textures[i]->GetHandle());
+        GLuint64 handle = glGetTextureHandleARB(Textures[i]->GetHandle());
         glMakeTextureHandleResidentARB(handle);
         TexHandles[i] = handle;
     }

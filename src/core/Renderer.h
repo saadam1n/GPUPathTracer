@@ -1,7 +1,7 @@
 #ifndef OPENGL_LIGHT_TRANSPORT_RENDERER_H
 #define OPENGL_LIGHT_TRANSPORT_RENDERER_H
 
-#include "Window.h"
+#include "../misc/Window.h"
 
 class Renderer {
 public:

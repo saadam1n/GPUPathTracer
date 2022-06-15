@@ -2,10 +2,9 @@
 
 #include "OpenGL.h"
 #include "Texture.h"
-#include "Camera.h"
+#include "../math/Camera.h"
 #include "Buffer.h"
-#include "Mesh.h"
-#include "SceneManager.h"
+#include "Scene.h"
 
 #include <string>
 
@@ -31,8 +30,7 @@ public:
 
 	void LoadShaderStorageBuffer(const char* Name, Buffer& Value         );
 
-	void LoadMesh               (const char* Buf, const char* BVH, const char* Mtrl, Mesh& Mesh);
-	void LoadScene              (const char* Buf, const char* BVH, const char* Mtrl, SceneManager& Scene);
+	void LoadScene              (const char* Buf, const char* BVH, const char* Mtrl, Scene& Scene);
 protected:
 	GLint    GetUniformLocation         (const char* Name       );
 	uint32_t ActivateNextFreeTextureUnit(const char* Name       );

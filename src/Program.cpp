@@ -1,15 +1,14 @@
 #include <iostream>
 #include <stdio.h>
-#include "Window.h"
-#include "Renderer.h"
-#include "Buffer.h"
-#include "VertexArray.h"
-#include "Shader.h"
-#include "Texture.h"
-#include "Camera.h"
-#include "TimeUtil.h"
-#include "Mesh.h"
-#include "SceneManager.h"
+#include "misc/Window.h"
+#include "core/Renderer.h"
+#include "core/Buffer.h"
+#include "core/VertexArray.h"
+#include "core/Shader.h"
+#include "core/Texture.h"
+#include "math/Camera.h"
+#include "misc/TimeUtil.h"
+#include "core/Scene.h"
 
 float QuadVertices[] = {
 	-1.0f,  1.0f,
@@ -105,7 +104,7 @@ int main(int argc, char** argv) {
 
 	Camera.SetPosition(glm::vec3(0.0f, 0.15f, 0.5f) * 6.0f);
 
-	SceneManager World;
+	Scene World;
 
 	World.LoadScene("res/objects/cornellbox.obj");
 

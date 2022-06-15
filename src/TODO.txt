@@ -53,8 +53,8 @@ Here's my plan of attack:
 - DONE: rename submodules because it is easiest
 - Done: Clean res folder of useless junk (or organize it)
 - Done: Move it outside of the src folder (might need to change debugging directory)
-- *Reorganize sources folder, this includes a rewrite
-- Clean up of junk code and proper placement of comments
+- Done?: *Reorganize sources folder, this includes a rewrite
+- Doneish: Clean up of junk code and proper placement of comments
 - Finish rewriting variable names
 - Hopefullly I will be done by here!
 

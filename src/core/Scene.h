@@ -1,12 +1,12 @@
 #pragma once
 
-#include "Mesh.h"
+#include "BVH.h"
 #include "Texture.h"
 #include "Buffer.h"
 #include <string>
 #include <memory>
 
-class SceneManager {
+class Scene {
 public:
 	void LoadScene(const std::string& Path);
 private:

@@ -2,9 +2,9 @@
 
 #include "Buffer.h"
 #include "Texture.h"
-#include "Triangle.h"
-#include "TriangleIndexing.h"
-#include "AABB.h"
+#include "../math/Triangle.h"
+#include "../math/TriangleIndexing.h"
+#include "../math/AABB.h"
 
 #include <vector>
 #include <stdint.h>

@@ -1,7 +1,7 @@
 #ifndef OPENGL_LIGHT_TRANSPORT_WINDOW_H
 #define OPENGL_LIGHT_TRANSPORT_WINDOW_H
 
-#include "OpenGL.h"
+#include "../core/OpenGL.h"
 #include <stdint.h>
 
 class Window {

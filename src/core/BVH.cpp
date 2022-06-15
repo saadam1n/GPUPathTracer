@@ -1,5 +1,5 @@
 #include "BVH.h"
-#include "TimeUtil.h"
+#include "../misc/TimeUtil.h"
 #include <stack>
 #include <algorithm>
 #include <list>
