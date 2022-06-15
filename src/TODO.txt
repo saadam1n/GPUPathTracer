@@ -51,12 +51,23 @@ The shader folder is directly full of kernels, and a subfolder called "common" c
 
 Here's my plan of attack:
 - DONE: rename submodules because it is easiest
-- Clean res folder of useless junk (or organize it)
-- Move it outside of the src folder (might need to change debugging directory)
-- Reorganize sources folder, this includes a rewrite
+- Done: Clean res folder of useless junk (or organize it)
+- Done: Move it outside of the src folder (might need to change debugging directory)
+- *Reorganize sources folder, this includes a rewrite
 - Clean up of junk code and proper placement of comments
 - Finish rewriting variable names
 - Hopefullly I will be done by here!
+
+*Now for the remaining tasks:
+If we look to the GLSL path tracer, there are really just 3 folders:
+1. The rendering stuff, where the meat of the code is
+2. Math stuff, which contains basically the transform class and nothing more
+3. Loading stuff, which I don't need since I don't require an over-the-top loader yet and assimp will suffice
+If we look at my case, I have the odd stuff the GLSL path tracer doesn't have, such as a timer file, window, etc.
+It would probably be better to have three folders: "core", "math", and "misc"
+
+After my plan of attack, what I will do is:
+- Fix my BVH traversal, reading the stackless paper "Efficient Stack-less BVH Traversal for Ray Tracing" gave me ideas, even though the authors stated the algorithm was slower than the stacked traversal
 
 ------------------------------------------------------------------------
 
