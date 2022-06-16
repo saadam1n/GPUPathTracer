@@ -283,7 +283,7 @@ while true
 
 */
 
-#include "../../geometry/AABB.glsl"
+#include "../geometry/AABB.glsl"
 
 // Leaf of a BVH
 struct BVHLeaf {

@@ -8,12 +8,13 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <map>
 #include <stack>
+#include <iostream>
 
 void Shader::CreateBinding(void) {
 	glUseProgram(ProgramHandle);
 
 	NextFreeTextureUnit  = 0;
-	NextFreeBlockBinding = 0;
+	NextFreeBlockBinding = 2;
 }
 
 void Shader::FreeBinding(void) {
@@ -76,13 +77,16 @@ void Shader::LoadCamera(const char* Name, const Camera& Value) {
 }
 
 void Shader::LoadShaderStorageBuffer(const char* Name, Buffer& Value) {
-	uint32_t BlockBinding = NextFreeBlockBinding++;
+	uint32_t BlockBinding = Value.GetBlockBinding(); // initially 0 
 
 	GLuint Location = glGetProgramResourceIndex(ProgramHandle, GL_SHADER_STORAGE_BLOCK, Name);
+	std::cout << Name << ' ' << BlockBinding << '\n';
 
 	glShaderStorageBlockBinding(ProgramHandle, Location, BlockBinding);
+}
 
-	Value.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, BlockBinding);
+void Shader::LoadAtomicBuffer(uint32_t index, Buffer& Value) {
+	glBindBufferBase(ProgramHandle, index, Value.GetHandle());
 }
 
 /*

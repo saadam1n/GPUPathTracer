@@ -3,6 +3,15 @@
 
 #include <stdio.h>
 #include <iostream>
+#include <glm/glm.hpp>
+
+using namespace glm;
+
+struct RayInfo {
+    vec3 origin;
+    vec3 direction;
+    vec2 pixel;
+};
 
 void DebugMessageCallback(GLenum source, GLenum type, GLuint id,
     GLenum severity, GLsizei length,
@@ -135,7 +144,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     };
 
     quadBuf.CreateBinding(BUFFER_TARGET_ARRAY);
-    quadBuf.UploadData(sizeof(quad), quad);
+    quadBuf.UploadData(sizeof(quad), quad, GL_STATIC_DRAW);
 
     screenQuad.CreateBinding();
     screenQuad.CreateStream(0, 2, 2 * sizeof(float));
@@ -146,45 +155,45 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     colorTexture.CreateBinding();
     colorTexture.LoadData(GL_RGBA16F, GL_RGBA, GL_FLOAT, viewportWidth, viewportHeight, nullptr);
 
+    rayBuffer.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
+    rayBuffer.UploadData(sizeof(RayInfo) * viewportWidth * viewportHeight, nullptr, GL_DYNAMIC_DRAW);
 
-    rayDepth.CreateBinding();
-    rayDepth.LoadData(GL_R32F, GL_RED, GL_FLOAT, viewportWidth, viewportHeight, nullptr);
+    rayCounter.CreateBinding(BUFFER_TARGET_ATOMIC_COUNTER);
+    rayCounter.UploadData(sizeof(int) * 2, nullptr, GL_DYNAMIC_DRAW);
+    rayCounter.CreateBlockBinding(BUFFER_TARGET_ATOMIC_COUNTER, 0);
 
-    rayOrigin.CreateBinding();
-    rayOrigin.LoadData(GL_RGBA16F, GL_RGB, GL_HALF_FLOAT, viewportWidth, viewportHeight, nullptr);
-
-    rayDirection.CreateBinding();
-    rayDirection.LoadData(GL_RGBA16F, GL_RGB, GL_HALF_FLOAT, viewportWidth, viewportHeight, nullptr);
+    rayBuffer.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 1);
+    scene.vertexBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 2);
+    scene.indexBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 3);
+    scene.bvh.nodes.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 4);
+    scene.bvh.leaves.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 5);
+    scene.textureHandlesBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 6);
+    
 
     genRays.CompileFile("kernel/raygen/FiniteAperture.comp");
     closestHit.CompileFile("kernel/intersect/Closest.comp");
 
     colorTexture.BindImageUnit(0, GL_RGBA16F);
-    rayOrigin.BindImageUnit(1, GL_RGBA16F);
-    rayDirection.BindImageUnit(2, GL_RGBA16F);
-    rayDepth.BindImageUnit(3, GL_R32F);
-
-    colorTexture.BindTextureUnit(4, GL_TEXTURE_2D);
+    colorTexture.BindTextureUnit(1, GL_TEXTURE_2D);
 
     genRays.CreateBinding();
-    genRays.LoadInteger("RayOrigin", 1);
-    genRays.LoadInteger("RayDirection", 2);
+    genRays.LoadShaderStorageBuffer("RayBuffer", rayBuffer);
+    genRays.LoadAtomicBuffer(0, rayCounter);
 
     closestHit.CreateBinding();
     closestHit.LoadInteger("ColorOutput", 0);
-    closestHit.LoadInteger("RayOrigin", 1);
-    closestHit.LoadInteger("RayDirection", 2);
-    closestHit.LoadInteger("IntersectionDepth", 3);
 
     closestHit.LoadShaderStorageBuffer("Samplers", scene.textureHandlesBuf);
     closestHit.LoadShaderStorageBuffer("vertexBuf", scene.vertexBuf);
     closestHit.LoadShaderStorageBuffer("indexBuf", scene.indexBuf);
     closestHit.LoadShaderStorageBuffer("nodes", scene.bvh.nodes);
     closestHit.LoadShaderStorageBuffer("leaves", scene.bvh.leaves);
+    closestHit.LoadShaderStorageBuffer("RayBuffer", rayBuffer);
 
+    closestHit.LoadAtomicBuffer(0, rayCounter);
 
     presentShader.CreateBinding();
-    presentShader.LoadInteger("ColorTexture", 4);
+    presentShader.LoadInteger("ColorTexture", 1);
 
 
     frameCounter = 0;
@@ -197,30 +206,29 @@ void Renderer::CleanUp(void) {
     presentShader.Free();
 
     colorTexture.Free();
-    rayDepth.Free();
-    rayOrigin.Free();
-    rayDirection.Free();
 
     screenQuad.Free();
     quadBuf.Free();
 }
 
-void Renderer::RenderFrame(const Camera& camera) {
-    // We only need to clear the ray depth; the color, ray origin, and ray dir will be overwritten
-    const float kClear = 1e20f;
-    glClearTexImage(rayDepth.GetHandle(), 0, GL_RED, GL_FLOAT, &kClear);
+void Renderer::RenderFrame(const Camera& camera)  {
+
+    // Begin by clearing our atomic counters
+    int empty[2] = { 0, 0 };
+    glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 0, sizeof(empty), empty);
 
     genRays.CreateBinding();
     genRays.LoadCamera("Camera", camera);
 
     glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
-    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT | GL_ALL_BARRIER_BITS);
+
 
     closestHit.CreateBinding();
     closestHit.LoadInteger("Frame", frameCounter++);
 
     glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
-    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT);
 }
 
 void Renderer::Present() {

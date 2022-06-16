@@ -4,11 +4,7 @@
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
-// RGB = color, A = depth
 uniform layout(rgba16f) image2D ColorOutput;
-uniform layout(rgba16f) image2D RayOrigin;
-uniform layout(rgba16f) image2D RayDirection;
-uniform layout(r32f)    image2D IntersectionDepth;
 
 //uniform sampler2D RayOrigin;
 //uniform sampler2D RayDirection;
@@ -68,31 +64,37 @@ float rand()
     pcg4d(seed); return float(seed.x) / float(0xffffffffu);
 }
 
+layout(std430) readonly buffer RayBuffer {
+    vec4 rays[];
+};
 
-vec3 ComputeColor(in ivec2 PixelCoordinates, inout float IntersectionDepthDistance, inout bool HitResult){
+layout(binding = 0, offset = 4) uniform atomic_uint rayCounter;
+
+
+vec3 ComputeColor(out uvec2 PixelCoordinates, out bool HitResult){
     vec3 Color = vec3(0.0f);
 
-    Ray PrimaryRay;
+    Ray ray;
     
-    PrimaryRay.Origin    = imageLoad(RayOrigin   , PixelCoordinates).rgb;
-    PrimaryRay.Direction = imageLoad(RayDirection, PixelCoordinates).rgb;
-
+    uint idx = atomicCounterIncrement(rayCounter) * 2;
+    
+    ray.Origin.xyz = rays[idx  ].xyz;
+    ray.Direction.x = rays[idx  ].w;
+    ray.Direction.yz = rays[idx+1].xy;
+    PixelCoordinates.x = floatBitsToUint( rays[idx+1].z);
+    PixelCoordinates.y = floatBitsToUint( rays[idx+1].w);
 
     // Initialize our intersection data based off the last intersection test with the previous mesh within our scene
     HitInfo IntersectionInfo;
-    IntersectionInfo.Depth = IntersectionDepthDistance;
+    IntersectionInfo.Depth = 1e20;
 
-    if(HitResult = TraverseBVH(PrimaryRay, IntersectionInfo)) {
+    if(HitResult = TraverseBVH(ray, IntersectionInfo)) {
         Vertex InterpolatedVertex = GetInterpolatedVertex(IntersectionInfo);
-
         Color = texture(sampler2D(Handles[InterpolatedVertex.MatID]), InterpolatedVertex.TextureCoordinate).rgb;
-        
     }
 
     // TODO: More accurate sRGB conversion
-        Color = pow(Color, vec3(1.0f / 2.2f));
-
-    IntersectionDepthDistance = IntersectionInfo.Depth;
+    Color = pow(Color, vec3(1.0f / 2.2f));
 
 	return Color;
 }
@@ -100,16 +102,11 @@ vec3 ComputeColor(in ivec2 PixelCoordinates, inout float IntersectionDepthDistan
 void main(){
     InitRNG(vec2(gl_GlobalInvocationID.xy), FrameNum);
 
-	uvec2 PixelCoordinates = gl_GlobalInvocationID.xy;
-    ivec2 StoreLocation = ivec2(PixelCoordinates);
-
-    float IntersectionDistance = imageLoad(IntersectionDepth, StoreLocation).r;
+	uvec2 PixelCoordinates;
     bool HitResult;
+    vec3 Color = ComputeColor(PixelCoordinates, HitResult);
 
-    vec3 Color = ComputeColor(StoreLocation, IntersectionDistance, HitResult);
-
-    imageStore(IntersectionDepth, StoreLocation, vec4(IntersectionDistance));
-    imageStore(ColorOutput, StoreLocation, vec4(Color, 1.0f));
+    imageStore(ColorOutput, ivec2(PixelCoordinates), vec4(Color, 1.0f));
 }
 
 /*

@@ -2,9 +2,6 @@
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
-uniform layout(rgba16f) writeonly image2D RayOrigin;
-uniform layout(rgba16f) writeonly image2D RayDirection;
-
 // I call this file finite aperture since it's end goal is to generate finite aperture lens ray directions
 
 #include "../../camera/Pinhole.glsl"
@@ -12,16 +9,34 @@ uniform layout(rgba16f) writeonly image2D RayDirection;
 
 uniform CameraParameters Camera;
 
+layout(binding = 0, offset = 0) uniform atomic_uint rayCounter;
+
+layout(std430) writeonly buffer RayBuffer {
+    vec4 rays[];
+};
+
 void main() {
 	uvec2 PixelCoordinates = gl_GlobalInvocationID.xy;
     vec2 ScreenCoordinates = PixelCoordinates / vec2(gl_WorkGroupSize.xy * gl_NumWorkGroups.xy);
 
-    Ray PrimaryRay;
+    Ray ray;
 
-    PrimaryRay.Origin    = Camera.Position;
-    PrimaryRay.Direction = ComputeRayDirection(Camera, ScreenCoordinates);
+    ray.Origin    = Camera.Position;
+    ray.Direction = ComputeRayDirection(Camera, ScreenCoordinates);
 
     ivec2 StoreLocation = ivec2(PixelCoordinates);
-	imageStore(RayOrigin,    StoreLocation, vec4(PrimaryRay.Origin   , 0.0f));
-	imageStore(RayDirection, StoreLocation, vec4(PrimaryRay.Direction, 0.0f));
+
+    uint idx = atomicCounterIncrement(rayCounter) * 2;
+
+    //rays[idx].origin = ray.Origin;
+    //rays[idx].direction = ray.Direction;
+    //rays[idx].pixel = PixelCoordinates;
+
+    
+    rays[idx  ].xyz = ray.Origin.xyz;
+    rays[idx  ].w = ray.Direction.x;
+    rays[idx+1].xy = ray.Direction.yz;
+    rays[idx+1].z = uintBitsToFloat(PixelCoordinates.x);
+    rays[idx+1].w = uintBitsToFloat(PixelCoordinates.y);
+    
 }

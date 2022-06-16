@@ -180,9 +180,6 @@ bool TraverseBVH(in Ray IntersectionRay, inout HitInfo Intersection) {
 		ChildrenIntersectionSuccess[0] = ValidateIntersection(ChildrenIntersectionDistances[0]);
 		ChildrenIntersectionSuccess[1] = ValidateIntersection(ChildrenIntersectionDistances[1]);
 
-		HeatMap += int(ChildrenIntersectionSuccess[0]);
-		HeatMap += int(ChildrenIntersectionSuccess[1]);
-
 		if (ChildrenIntersectionSuccess[0] && Children[0].Data[1] < 0) {
 			IntersectLeaf(Children[0], IntersectionRay, Intersection, Result);
 			ChildrenIntersectionSuccess[0] = false;

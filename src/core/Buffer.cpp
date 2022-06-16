@@ -17,8 +17,12 @@ void Buffer::FreeBinding(void) {
 	glBindBuffer(CurrentTarget, 0);
 }
 
-void Buffer::UploadData(size_t Bytes, const void* Data) {
-	glBufferData(CurrentTarget, Bytes, Data, GL_STATIC_DRAW);
+GLuint Buffer::GetHandle() {
+	return BufferHandle;
+}
+
+void Buffer::UploadData(size_t Bytes, const void* Data, GLenum access) {
+	glBufferData(CurrentTarget, Bytes, Data, access);
 }
 
 void Buffer::Free(void) {
@@ -27,4 +31,9 @@ void Buffer::Free(void) {
 
 void Buffer::CreateBlockBinding(BufferTarget Target, uint32_t Binding) {
 	glBindBufferBase(Target, Binding, BufferHandle);
+	blockBinding = Binding;
+}
+
+GLuint Buffer::GetBlockBinding() {
+	return blockBinding;
 }

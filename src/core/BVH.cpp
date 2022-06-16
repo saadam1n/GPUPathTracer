@@ -508,10 +508,10 @@ void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<V
 	ConstructionTimer.Begin();
 
 	nodes.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
-	nodes.UploadData(ProcessedNodes);
+	nodes.UploadData(ProcessedNodes, GL_STATIC_DRAW);
 
 	leaves.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
-	leaves.UploadData(LeafContentBuffer);
+	leaves.UploadData(LeafContentBuffer, GL_STATIC_DRAW);
 
 	ConstructionTimer.End();
 	ConstructionTimer.DebugTime();

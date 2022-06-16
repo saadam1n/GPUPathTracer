@@ -146,13 +146,13 @@ void Scene::LoadScene(const std::string& Path) {
     }
 
     textureHandlesBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
-    textureHandlesBuf.UploadData(TexHandles);
+    textureHandlesBuf.UploadData(TexHandles, GL_STATIC_DRAW);
 
     vertexBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
-    vertexBuf.UploadData(Vertices);
+    vertexBuf.UploadData(Vertices, GL_STATIC_DRAW);
 
     indexBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
-    indexBuf.UploadData(Indices);
+    indexBuf.UploadData(Indices, GL_STATIC_DRAW);
 
     bvh.ConstructAccelerationStructure(Vertices, Indices);
     

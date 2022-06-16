@@ -30,6 +30,7 @@ public:
 	void LoadCamera             (const char* Name, const Camera& Value   );
 
 	void LoadShaderStorageBuffer(const char* Name, Buffer& Value         );
+	void LoadAtomicBuffer(uint32_t index, Buffer& Value);
 protected:
 	GLint    GetUniformLocation         (const char* Name       );
 	uint32_t ActivateNextFreeTextureUnit(const char* Name       );

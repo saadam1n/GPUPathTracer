@@ -24,9 +24,9 @@ private:
 	ShaderRasterization presentShader;
 	Texture2D colorTexture;
 
-	Texture2D rayDepth;
-	Texture2D rayOrigin;
-	Texture2D rayDirection;
+	// Wavefront path tracing
+	Buffer rayBuffer;
+	Buffer rayCounter;
 
 	ShaderCompute genRays;
 	ShaderCompute closestHit;
