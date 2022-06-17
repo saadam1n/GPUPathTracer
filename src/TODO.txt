@@ -16,7 +16,7 @@ goals:
 - Reorganize shader code
 - Properly seperate kernels
 - Fix the bug when you look at rays that don't exist (becuase they were removed from the ray pool) it starts drowning your screen in undefined from the top. This probably requires indirect compute now
-
+- Need to have different traversal logic for shadow (we only need an obstruction on the shadow segment, not the closest one on it), so we can have better performance
 
 =================================================================
 Haha, time flies, right? Since I'm visiting this project after a year, everything below the line goes in the garbage until I can clear my mind about what to do.

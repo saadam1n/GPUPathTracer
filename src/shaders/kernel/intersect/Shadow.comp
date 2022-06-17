@@ -24,6 +24,7 @@ layout(std430) readonly buffer RayBuffer {
     vec4 rays[];
 };
 
+layout(binding = 0, offset = 8) uniform atomic_uint raysWritten;
 layout(binding = 0, offset = 12) uniform atomic_uint rayReadCounter;
 
 uniform vec3 lightPos;
@@ -36,7 +37,9 @@ void main(){
 
     Vertex currVertex;
     
-    uint idx = atomicCounterIncrement(rayReadCounter) * 5;
+    uint idx = atomicCounterIncrement(rayReadCounter);
+    if(idx >= atomicCounter(raysWritten)) return;
+    idx *= 5;
     
     /*
     rays[idx  ].x   = uintBitsToFloat(PixelCoordinates.x);
