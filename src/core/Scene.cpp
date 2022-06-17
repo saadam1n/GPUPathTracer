@@ -145,6 +145,8 @@ void Scene::LoadScene(const std::string& Path) {
         TexHandles[i] = handle;
     }
 
+    bvh.ConstructAccelerationStructure(Vertices, Indices);
+
     textureHandlesBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
     textureHandlesBuf.UploadData(TexHandles, GL_STATIC_DRAW);
 
@@ -154,7 +156,6 @@ void Scene::LoadScene(const std::string& Path) {
     indexBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
     indexBuf.UploadData(Indices, GL_STATIC_DRAW);
 
-    bvh.ConstructAccelerationStructure(Vertices, Indices);
     
 }
 

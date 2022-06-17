@@ -80,14 +80,12 @@ struct Split {
 
 class BoundingVolumeHierarchy {
 public:
-	void ConstructAccelerationStructure(const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices);
+	void ConstructAccelerationStructure(const std::vector<Vertex>& Vertices, std::vector<TriangleIndexData>& Indices);
 private:
 	friend class Shader;
 	friend class Renderer;
 
-	// the binary large objects that contains BVH data
 	Buffer nodes;
-	Buffer leaves;
 	
 	//AABB CreateBoundingBox(const std::vector<TriangleCentroid>& Centroids, const std::vector<AABB>& TriangleBoundingBoxes);
 

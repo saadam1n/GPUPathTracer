@@ -212,7 +212,6 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     scene.vertexBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 2);
     scene.indexBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 3);
     scene.bvh.nodes.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 4);
-    scene.bvh.leaves.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 5);
     scene.textureHandlesBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 6);
     
 
@@ -232,7 +231,6 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     closestHit.LoadShaderStorageBuffer("vertexBuf", scene.vertexBuf);
     closestHit.LoadShaderStorageBuffer("indexBuf", scene.indexBuf);
     closestHit.LoadShaderStorageBuffer("nodes", scene.bvh.nodes);
-    closestHit.LoadShaderStorageBuffer("leaves", scene.bvh.leaves);
     closestHit.LoadShaderStorageBuffer("RayBuffer", rayBuffer);
     closestHit.LoadAtomicBuffer(0, rayCounter);
 
@@ -242,7 +240,6 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     shadow.LoadShaderStorageBuffer("vertexBuf", scene.vertexBuf);
     shadow.LoadShaderStorageBuffer("indexBuf", scene.indexBuf);
     shadow.LoadShaderStorageBuffer("nodes", scene.bvh.nodes);
-    shadow.LoadShaderStorageBuffer("leaves", scene.bvh.leaves);
     shadow.LoadShaderStorageBuffer("RayBuffer", rayBuffer);
     shadow.LoadAtomicBuffer(0, rayCounter);
 

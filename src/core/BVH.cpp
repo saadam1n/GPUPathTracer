@@ -344,7 +344,7 @@ void RenotifyThreads(std::condition_variable& WorkSignal, bool& WorkerThreadsRun
 	//std::cout << "Done renotifying\n";
 }
 
-void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<Vertex>& Vertices, const std::vector<TriangleIndexData>& Indices) {
+void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<Vertex>& Vertices, std::vector<TriangleIndexData>& Indices) {
 	//std::cout << "Start of BVH construction" << std::endl;
 
 	Timer ConstructionTimer;
@@ -507,11 +507,16 @@ void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<V
 	//ConstructionTimer.DebugTime();
 	ConstructionTimer.Begin();
 
+	// Directly substitute the index values in the leaf buffer
+	std::vector<TriangleIndexData> directTriangleIndices;
+	directTriangleIndices.reserve(LeafContentBuffer.size());
+	for (const auto indexBufferIdx : LeafContentBuffer) {
+		directTriangleIndices.push_back(Indices[indexBufferIdx]);
+	}
+	Indices = directTriangleIndices;
+
 	nodes.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
 	nodes.UploadData(ProcessedNodes, GL_STATIC_DRAW);
-
-	leaves.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
-	leaves.UploadData(LeafContentBuffer, GL_STATIC_DRAW);
 
 	ConstructionTimer.End();
 	ConstructionTimer.DebugTime();

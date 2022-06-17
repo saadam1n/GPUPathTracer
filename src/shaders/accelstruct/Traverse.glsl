@@ -10,10 +10,6 @@ struct BVHStackItem {
 
 // BVH_Stack_Item BVH_Stack[64];
 
-layout(std430) buffer leaves {
-	int triLocations[];
-};
-
 // For some reason, directly setting the type to generic node seems to have alignment issues
 // I have heard that GPUs align structs and whatnot to 16-byte alignments
 // That might have something to do here but I do not want to find the optimal solution to a trivial task like sampling from memory
@@ -117,9 +113,9 @@ void IntersectLeaf(in BVHNodeGeneric Generic, in Ray Ray, inout HitInfo Intersec
 	int IterEnd = IterStart + Leaf.Leaf.IndexCount;
 
 	for(int Iter = IterStart; Iter < IterEnd; Iter++){
-		uint Index = uint(triLocations[Iter]);
+		TriangleIndexData currTriIdx = FetchIndexData(Iter);
 
-		bool TriRes = IntersectTriangle(FetchTriangle(Index), Ray, Intersection);
+		bool TriRes = IntersectTriangle(FetchTriangle(currTriIdx), Ray, Intersection);
 
 		Result = Result || TriRes;
 	}
@@ -408,7 +404,7 @@ bool TraverseBVH2(in Ray currRay, inout HitInfo intersection) {
 			int n = currNode.data.x - currNode.data.y;
 
 			for (int i = currNode.data.x; i < n; i++) {
-				bool currRes = IntersectTriangle(FetchTriangle(uint(triLocations[i])), currRay, intersection);
+				bool currRes = IntersectTriangle(FetchTriangle(i), currRay, intersection);
 				hitResult = hitResult || currRes;
 			}
 		}
