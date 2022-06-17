@@ -12,6 +12,9 @@ Here's what I will do:
 
 On Monday I will move on to shadow ray tracing and may go for whitted style ray tacing via path tracing
 
+goals:
+- Reorganize shader code
+- Properly seperate kernels
 
 =================================================================
 Haha, time flies, right? Since I'm visiting this project after a year, everything below the line goes in the garbage until I can clear my mind about what to do.
