@@ -17,7 +17,7 @@ uint32_t Height = 720;
 
 // Camera params 
 
-constexpr float CameraSpeed = 2000.000f;// * 0.001f;
+constexpr float CameraSpeed = 2000.000f * 0.001f;
 constexpr float CameraSensitivity = 0.001f;
 glm::vec2 LastCursorPosition;
 
@@ -49,7 +49,7 @@ int main(int argc, char** argv) {
 	Window.SetInputCallback(MouseCallback);
 
 	Renderer* renderer = new Renderer;
-	renderer->Initialize(&Window, "res/crytek/sponza.obj");
+	renderer->Initialize(&Window, "res/objects/cornellbox.obj");
 
 	camera.UpdateImagePlaneParameters((float)Width / (float)Height, glm::radians(45.0f));
 	camera.SetPosition(glm::vec3(0.0f, 0.15f, 0.5f) * 6.0f);

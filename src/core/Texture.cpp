@@ -86,29 +86,27 @@ CacheLoad LoadFromCache(std::string Path, int& Width, int& Height, int& Channels
 	return NewLoad;
 }
 
-Texture::Texture(void) : TextureHandle(UINT32_MAX), RealHandle_(UINT32_MAX) {
+Texture::Texture(void) : texture(UINT32_MAX) {
 
 }
 
 GLuint Texture::GetHandle(void) {
-	return TextureHandle;
+	return texture;
 }
 
 void Texture::EnsureGeneratedHandle(void) {
-	if (TextureHandle == UINT32_MAX) {
-		glGenTextures(1, &RealHandle_);
-		TextureHandle = RealHandle_;
+	if (texture == UINT32_MAX) {
+		glGenTextures(1, &texture);
 	}
 }
 
 void Texture::Free(void) {
-	glDeleteTextures(1, &RealHandle_);
+	glDeleteTextures(1, &texture);
 }
 
 void Texture2D::CreateBinding(void) {
 	EnsureGeneratedHandle();
-
-	glBindTexture(GL_TEXTURE_2D, TextureHandle);
+	glBindTexture(GL_TEXTURE_2D, texture);
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -117,12 +115,12 @@ void Texture2D::CreateBinding(void) {
 }
 
 void Texture::BindImageUnit(uint32_t Unit, GLenum Format) {
-	glBindImageTexture(Unit, TextureHandle, 0, GL_FALSE, 0, GL_WRITE_ONLY, Format);
+	glBindImageTexture(Unit, texture, 0, GL_FALSE, 0, GL_WRITE_ONLY, Format);
 }
 
 void Texture::BindTextureUnit(uint32_t unit, GLenum target) {
 	glActiveTexture(GL_TEXTURE0 + unit);
-	glBindTexture(target, TextureHandle);
+	glBindTexture(target, texture);
 }
 
 void Texture2D::FreeBinding(void) {
@@ -152,7 +150,7 @@ void Texture2D::LoadData(GLenum DestinationFormat, GLenum SourceFormat, GLenum S
 void TextureBuffer::CreateBinding(void) {
 	EnsureGeneratedHandle();
 
-	glBindTexture(GL_TEXTURE_BUFFER, TextureHandle);
+	glBindTexture(GL_TEXTURE_BUFFER, texture);
 }
 
 void TextureBuffer::FreeBinding(void) {

@@ -18,6 +18,19 @@ goals:
 - Fix the bug when you look at rays that don't exist (becuase they were removed from the ray pool) it starts drowning your screen in undefined from the top. This probably requires indirect compute now
 - Need to have different traversal logic for shadow (we only need an obstruction on the shadow segment, not the closest one on it), so we can have better performance
 
+Path trace algorithm:
+- Gen rays and get closest primary vertex as usual (refactor this later)
+- Shade kernel generates a new ray and its associated BRDF, mults with throughput
+- Extend the ray into the path
+- Go back to shade kernel unless we have emissive object
+
+Better rewrite:
+- Generate kernel runs and outputs rays according to the camera
+- Extend kernel traces these rays and finds the closest intersection. If the closest intersection happens to be an emissive light, we output that times the throughput into our color buffer, otherwise we output hte vertex into the ray buffer
+- Shade kernel uses the previously found vertex and generates a new ray to for the extend kernel to extend the path by. It also multiplies the throughput by the BRDF for that ray
+
+Accumulation is trivial. We read from the color buffer in the extend kernel, multiply it by currNumSamples-1, add our new sample, and divide by currNumSamples, and write back to the buffer
+
 =================================================================
 Haha, time flies, right? Since I'm visiting this project after a year, everything below the line goes in the garbage until I can clear my mind about what to do.
 

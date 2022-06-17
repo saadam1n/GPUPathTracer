@@ -201,6 +201,7 @@ std::ostringstream ParseShader(std::string& Path, std::map<uint32_t, FileLineNum
 	std::ifstream ShaderFile(RealPath);
 	if (!ShaderFile.is_open()) {
 		printf("Invalid file path: %s\n", RealPath.c_str());
+		exit(-1);
 	}
 
 	uint32_t LocalLineIndex = 0;

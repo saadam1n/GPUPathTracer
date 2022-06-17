@@ -14,8 +14,7 @@ public:
 protected:
 	void EnsureGeneratedHandle(void);
 
-	GLuint TextureHandle;
-	GLuint RealHandle_; // oh yeah, about that, I need to fix naming schemes 
+	GLuint texture;
 };
 
 class Texture2D : public Texture {

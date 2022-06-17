@@ -177,10 +177,10 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(DebugMessageCallback, NULL);
 
-    genRays.CompileFile("kernel/raygen/FiniteAperture.comp");
-    closestHit.CompileFile("kernel/intersect/Closest.comp");
-    shadow.CompileFile("kernel/intersect/Shadow.comp");
-    presentShader.CompileFiles("present/Present.vert", "present/Present.frag");
+    genRays.CompileFile("Generate.comp");
+    closestHit.CompileFile("Extend.comp");
+    shadow.CompileFile("Shade.comp");
+    presentShader.CompileFiles("Present.vert", "Present.frag");
 
     scene.LoadScene(scenePath);
 
@@ -239,12 +239,12 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     shadow.LoadShaderStorageBuffer("RayBuffer", rayBuffer);
     shadow.LoadAtomicBuffer(0, rayCounter);
 
-    shadow.LoadVector3F32("lightPos", glm::vec3(0.0, 400.0, 0.0));
-    shadow.LoadVector3F32("lightCol", glm::vec3(1.2, 1.25, 1.3) * 300000.0f);
-    shadow.LoadVector3F32("ambient", glm::vec3(0.1));
+    shadow.LoadVector3F32("lightPos", glm::vec3(0.0, 1.95, 0.0));
+    shadow.LoadVector3F32("lightCol", glm::vec3(1.2, 1.25, 1.3) * 100.0f); // 3000000.0f
+    //shadow.LoadVector3F32("ambient", glm::vec3(0.1));
 
     presentShader.CreateBinding();
-    presentShader.LoadFloat("exposure", 0.66);
+    presentShader.LoadFloat("exposure", 0.66f);
     presentShader.LoadInteger("ColorTexture", 0);
 
 
@@ -268,6 +268,8 @@ void Renderer::RenderFrame(const Camera& camera)  {
     // Begin by clearing our atomic counters
     int empty[4] = { 0, 0, 0, 0 };
     glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 0, sizeof(empty), empty);
+    float clearcol[4] = { 0.5, 0.5, 0.5, 1.0 };
+    glClearTexSubImage(colorTexture.GetHandle(), 0, 0, 0, 0, viewportWidth, viewportHeight, 1, GL_RGBA, GL_FLOAT, clearcol);
 
     genRays.CreateBinding();
     genRays.LoadCamera("Camera", camera);

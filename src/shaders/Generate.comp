@@ -1,0 +1,66 @@
+#version 430
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+#include "common/geometry.glsl"
+
+layout(binding = 0, offset = 0) uniform atomic_uint rayCounter;
+
+layout(std430) writeonly buffer RayBuffer {
+    vec4 rays[];
+};
+
+struct CameraParameters {
+    vec3 Corner[2][2];
+
+    vec3 Position;
+};
+
+uniform CameraParameters Camera;
+
+vec3 ComputeRayDirection(in CameraParameters PinholeCamera, in vec2 UV) {
+
+    vec3 Direction;
+
+    vec3 Y[2];
+
+    Y[0] = mix(PinholeCamera.Corner[0][0], PinholeCamera.Corner[0][1], UV.x);
+    Y[1] = mix(PinholeCamera.Corner[1][0], PinholeCamera.Corner[1][1], UV.x);
+
+    Direction = mix(Y[0], Y[1], UV.y);
+
+    Direction = normalize(Direction);
+
+    return Direction;
+}
+
+
+void main() {
+	uvec2 PixelCoordinates = gl_GlobalInvocationID.xy;
+    vec2 ScreenCoordinates = PixelCoordinates / vec2(gl_WorkGroupSize.xy * gl_NumWorkGroups.xy);
+
+    Ray ray;
+
+    ray.Origin    = Camera.Position;
+    ray.Direction = ComputeRayDirection(Camera, ScreenCoordinates);
+
+    ivec2 StoreLocation = ivec2(PixelCoordinates);
+
+    uint idx = atomicCounterIncrement(rayCounter) * 5;
+
+    //rays[idx].origin = ray.Origin;
+    //rays[idx].direction = ray.Direction;
+    //rays[idx].pixel = PixelCoordinates;
+
+    const vec3 initThroughPut = vec3(1.0);
+    const vec3 initAccumulated = vec3(0.0);
+    
+    rays[idx  ].x   = uintBitsToFloat(PixelCoordinates.x);
+    rays[idx  ].y   = uintBitsToFloat(PixelCoordinates.y);
+    rays[idx  ].zw  = initThroughPut.xy;
+    rays[idx+1].x   = initThroughPut.z;
+    rays[idx+1].yzw = initAccumulated;
+    rays[idx+2].xyz = ray.Origin;
+    rays[idx+3].xyz = ray.Direction;
+    
+}
