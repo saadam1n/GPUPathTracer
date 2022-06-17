@@ -92,7 +92,7 @@ vec3 ComputeColor(out uvec2 PixelCoordinates, out bool HitResult){
 
     //vec3 debugColor = vec3(0.0);
 
-    if(HitResult = TraverseBVH2(ray, IntersectionInfo)) {
+    if(HitResult = TraverseBVH(ray, IntersectionInfo)) {
         Vertex InterpolatedVertex = GetInterpolatedVertex(IntersectionInfo);
         Color = texture(sampler2D(Handles[InterpolatedVertex.MatID]), InterpolatedVertex.TextureCoordinate).rgb;
     }

@@ -318,6 +318,19 @@ vec2 IntersectNode(in BVHNodeGeneric Node, in Ray InverseRay) {
 	return vec2(t_entry, t_exit);
 }
 
+float IntersectMinimalData(in BVHNodeGeneric Node, in Ray InverseRay, in HitInfo Intersection, out bool res) {
+	vec3 t_node_min = Node.Node.BoundingBox.Min * InverseRay.Direction + InverseRay.Origin;
+	vec3 t_node_max = Node.Node.BoundingBox.Max * InverseRay.Direction + InverseRay.Origin;
+
+	vec3 t_min = min(t_node_min, t_node_max);
+	vec3 t_max = max(t_node_min, t_node_max);
+
+	float t_entry = max(t_min.x, max(t_min.y, t_min.z));
+	float t_exit = min(t_max.x, min(t_max.y, min(t_max.z, Intersection.Depth)));
+	res = (t_entry <= t_exit && t_exit > 0.0f);
+	return t_entry;
+}
+
 /*
 Something I found interesting:
 Before, my definition of NextNode included a float value called "depth"
@@ -339,13 +352,14 @@ bool TraverseBVH2(in Ray currRay, inout HitInfo intersection) {
 
 	BVHNodeRecursive root = GetRootNode();
 
-	vec2 rootDist = IntersectNode(GetRecursiveNodeAsGeneric(root), inverseRay, intersection);
-	if (!ValidateIntersection(rootDist)) {
+	bool rootRes;
+	IntersectMinimalData(GetRecursiveNodeAsGeneric(root), inverseRay, intersection, rootRes);
+	if (!rootRes) {
 		return false;
 	}
 	
 	bool hitResult = false;
-	NextNode stack[32];
+	NextNode stack[26]; // log2(100 million vertices) = 26
 
 	stack[0].data.x = root.ChildrenNodes[0];
 	stack[0].data.y = root.ChildrenNodes[1];
@@ -357,8 +371,8 @@ bool TraverseBVH2(in Ray currRay, inout HitInfo intersection) {
 		if (currNode.data.y >= 0) {
 			// Read both nodes
 			BVHNodeGeneric child0 = GetNode(currNode.data.x), child1 = GetNode(currNode.data.x + 1);
-			vec2 dist0 = IntersectNode(child0, inverseRay, intersection), dist1 = IntersectNode(child1, inverseRay, intersection);
-			bool intersect0 = ValidateIntersection(dist0), intersect1 = ValidateIntersection(dist1);
+			bool intersect0, intersect1;
+			float dist0 = IntersectMinimalData(child0, inverseRay, intersection, intersect0), dist1 = IntersectMinimalData(child1, inverseRay, intersection, intersect1);
 
 			// rewrite as stack items for every thread
 			NextNode push0, push1;
@@ -370,7 +384,7 @@ bool TraverseBVH2(in Ray currRay, inout HitInfo intersection) {
 			push1.data.y = child1.Data[1];
 
 			if (intersect0 && intersect1) {
-				if (dist0.x > dist0.x) {
+				if (dist0 > dist1) {
 					// swapping requires 3 moves of variables, certainly slower than writing directly
 					// If some nodes need to swap, we wait by 3 writes, and then proceed to 2 writes to the stack, a total of 5 effective writes
 					// If we write directly, we do 2+2=4
