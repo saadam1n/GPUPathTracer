@@ -7,10 +7,56 @@
 
 using namespace glm;
 
+/*
+When we trace a ray, we don't actually care about the ray, we care about the path
+There are two things a path is always associated with:
+1. The pixel it belongs to, so we can update the framebuffer after we are done rendering the current frames
+2. Throughput (energy transmitted from one end of the path to the other, needed for any basic path tracing)
+3. Accumulated energy (for NEE)
+When we generate a new ray, we only care about two things:
+1. Origin
+2. And direction
+When we query the intersection result of a ray, we discard any information about it as the intersection result is what is worth to us now:
+1. The position of the vertex
+2. Normal vector
+3. Texture coordinate
+4. material ID
+
+Memory wise this is a big screw-up but we programmers are gonna have to suck it up and deal with it. At least I hope the newer GPUs have loads of memory laying around
+Either way, the base part (the pixel and energy information) align nicely to 32 bytes (ivec2-vec3-vec3 combo, woohoo!)
+This allows us to start over again for the ray and vertex information
+The ray unforunately only goes up to vec3-vec3 (24 byes) so we have to add 8 bytes of padding
+That's not the worst bit. The standard information about hte vertex (pos, norm, and tex coords) round nicely to 32 bytes as a vec3-vec3-vec2 combo. 
+But we need to add a material ID, which is four bytes, which forces us to add another 16 bytes for raeding/write reasons and general performance.
+So if we add that up, 32+32+16 = 64+16=80 BYTES FOR JUST A SINGLE RAY
+Wow. Now let's do some math, 1920 * 1080 * 80, or 165888000 bytes. Thankfully this is just 158.203125 MB, far short of what even older GPUs require
+Even my weak and old GTX 750 Ti that is laying around somewhere which was my first graphics card had 2 GB of memory, ample for our task
+In fact, your office PC's GT 210 has 1 GB of VRAM, good enough for 158 MB
+
+Btw, 80/16 is 5, so 5 vec4s for each ray
+
+Now, let's code
+*/
 struct RayInfo {
-    vec3 origin;
-    vec3 direction;
-    vec2 pixel;
+    ivec2 pixel;
+    vec3 throughput;
+    vec3 accumulated;
+    
+    union {
+        struct {
+            // read from shader as vec4 to make my life easier, and that memory would be wasted anyway
+            vec4 origin;
+            vec4 pos;
+        };
+        struct {
+            vec3 position;
+            vec3 normal;
+            vec2 texcoord;
+            uint32_t matID;
+            uint32_t padding[3];
+        };
+    };
+
 };
 
 void DebugMessageCallback(GLenum source, GLenum type, GLuint id,
@@ -159,7 +205,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     rayBuffer.UploadData(sizeof(RayInfo) * viewportWidth * viewportHeight, nullptr, GL_DYNAMIC_DRAW);
 
     rayCounter.CreateBinding(BUFFER_TARGET_ATOMIC_COUNTER);
-    rayCounter.UploadData(sizeof(int) * 2, nullptr, GL_DYNAMIC_DRAW);
+    rayCounter.UploadData(sizeof(int) * 4, nullptr, GL_DYNAMIC_DRAW);
     rayCounter.CreateBlockBinding(BUFFER_TARGET_ATOMIC_COUNTER, 0);
 
     rayBuffer.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 1);
@@ -172,29 +218,41 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
 
     genRays.CompileFile("kernel/raygen/FiniteAperture.comp");
     closestHit.CompileFile("kernel/intersect/Closest.comp");
+    shadow.CompileFile("kernel/intersect/Shadow.comp");
 
     colorTexture.BindImageUnit(0, GL_RGBA16F);
-    colorTexture.BindTextureUnit(1, GL_TEXTURE_2D);
+    colorTexture.BindTextureUnit(0, GL_TEXTURE_2D);
 
     genRays.CreateBinding();
     genRays.LoadShaderStorageBuffer("RayBuffer", rayBuffer);
     genRays.LoadAtomicBuffer(0, rayCounter);
 
     closestHit.CreateBinding();
-    closestHit.LoadInteger("ColorOutput", 0);
 
-    closestHit.LoadShaderStorageBuffer("Samplers", scene.textureHandlesBuf);
     closestHit.LoadShaderStorageBuffer("vertexBuf", scene.vertexBuf);
     closestHit.LoadShaderStorageBuffer("indexBuf", scene.indexBuf);
     closestHit.LoadShaderStorageBuffer("nodes", scene.bvh.nodes);
     closestHit.LoadShaderStorageBuffer("leaves", scene.bvh.leaves);
     closestHit.LoadShaderStorageBuffer("RayBuffer", rayBuffer);
-
     closestHit.LoadAtomicBuffer(0, rayCounter);
 
+    shadow.CreateBinding();
+    shadow.LoadInteger("ColorOutput", 0);
+    shadow.LoadShaderStorageBuffer("Samplers", scene.textureHandlesBuf);
+    shadow.LoadShaderStorageBuffer("vertexBuf", scene.vertexBuf);
+    shadow.LoadShaderStorageBuffer("indexBuf", scene.indexBuf);
+    shadow.LoadShaderStorageBuffer("nodes", scene.bvh.nodes);
+    shadow.LoadShaderStorageBuffer("leaves", scene.bvh.leaves);
+    shadow.LoadShaderStorageBuffer("RayBuffer", rayBuffer);
+    shadow.LoadAtomicBuffer(0, rayCounter);
+
+    shadow.LoadVector3F32("lightPos", glm::vec3(0.0, 400.0, 0.0));
+    shadow.LoadVector3F32("lightCol", glm::vec3(1.2, 1.25, 1.3) * 300000.0f);
+    shadow.LoadVector3F32("ambient", glm::vec3(0.1));
+
     presentShader.CreateBinding();
-    presentShader.LoadFloat("exposure", 0.76);
-    presentShader.LoadInteger("ColorTexture", 1);
+    presentShader.LoadFloat("exposure", 0.66);
+    presentShader.LoadInteger("ColorTexture", 0);
 
 
     frameCounter = 0;
@@ -215,7 +273,7 @@ void Renderer::CleanUp(void) {
 void Renderer::RenderFrame(const Camera& camera)  {
 
     // Begin by clearing our atomic counters
-    int empty[2] = { 0, 0 };
+    int empty[4] = { 0, 0, 0, 0 };
     glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 0, sizeof(empty), empty);
 
     genRays.CreateBinding();
@@ -227,6 +285,12 @@ void Renderer::RenderFrame(const Camera& camera)  {
 
     closestHit.CreateBinding();
     closestHit.LoadInteger("Frame", frameCounter++);
+
+    glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT);
+
+    shadow.CreateBinding();
+    //shadow.LoadInteger("Frame", frameCounter++);
 
     glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
     glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT);

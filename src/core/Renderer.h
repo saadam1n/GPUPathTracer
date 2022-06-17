@@ -30,6 +30,7 @@ private:
 
 	ShaderCompute genRays;
 	ShaderCompute closestHit;
+	ShaderCompute shadow;
 
 	Scene scene;
 

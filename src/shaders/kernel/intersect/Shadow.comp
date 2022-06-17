@@ -1,0 +1,75 @@
+#version 430
+
+vec3 debugColor;
+
+#extension GL_ARB_bindless_texture : enable
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+uniform layout(rgba16f) image2D ColorOutput;
+
+#include "../../shading/BRDF.glsl"
+#include "../../shading/Material.glsl"
+#include "../../camera/Pinhole.glsl"
+#include "../../geometry/Triangle.glsl"
+#include "../../geometry/AABB.glsl"
+#include "../../accelstruct/Traverse.glsl"
+
+layout(std430) buffer Samplers {
+    readonly uvec2 Handles[];
+};
+
+
+layout(std430) readonly buffer RayBuffer {
+    vec4 rays[];
+};
+
+layout(binding = 0, offset = 12) uniform atomic_uint rayReadCounter;
+
+uniform vec3 lightPos;
+uniform vec3 lightCol;
+uniform vec3 ambient;
+
+void main(){
+	uvec2 PixelCoordinates;
+    vec3 Color = vec3(0.0f);
+
+    Vertex currVertex;
+    
+    uint idx = atomicCounterIncrement(rayReadCounter) * 5;
+    
+    /*
+    rays[idx  ].x   = uintBitsToFloat(PixelCoordinates.x);
+    rays[idx  ].y   = uintBitsToFloat(PixelCoordinates.y);
+    rays[idx  ].zw  = initThroughPut.xy;
+    rays[idx+1].x   = initThroughPut.z;
+    rays[idx+1].yzw = initAccumulated;
+    rays[idx+2].xyz = ray.Origin;
+    rays[idx+3].xyz = ray.Direction;
+    */
+
+    PixelCoordinates.x = floatBitsToUint( rays[idx].x);
+    PixelCoordinates.y = floatBitsToUint( rays[idx].y);
+
+    currVertex.Position          =                rays[idx+2].xyz;
+    currVertex.Normal.x          =                rays[idx+2].w  ;
+    currVertex.Normal.yz         =                rays[idx+3].xy ;
+    currVertex.TextureCoordinate =                rays[idx+3].zw ;
+    currVertex.MatID             = floatBitsToInt(rays[idx+4].x) ;
+
+    vec3 color = texture(sampler2D(Handles[currVertex.MatID]), currVertex.TextureCoordinate).xyz;
+
+    float lightDist = distance(lightPos, currVertex.Position);
+
+    Ray shadowRay;
+    shadowRay.Origin = currVertex.Position + 1.0 * currVertex.Normal;
+    shadowRay.Direction = (lightPos - currVertex.Position) / lightDist;
+    
+    HitInfo obstruction;
+    obstruction.Depth = 1e20;
+    TraverseBVH(shadowRay, obstruction);
+
+    vec3 energy = ambient + max(0.0, dot(currVertex.Normal, shadowRay.Direction)) * (obstruction.Depth > lightDist ? lightCol : vec3(0.0)) / (lightDist * lightDist);
+
+    imageStore(ColorOutput, ivec2(PixelCoordinates), vec4(color * energy, 1.0f));
+}

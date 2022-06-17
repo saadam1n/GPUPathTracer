@@ -27,10 +27,6 @@ vec3 ComputeIncomingRadiance(in vec3 Direction) {
 	return Color;
 }
 
-layout(std430) buffer Samplers {
-    readonly uvec2 Handles[];
-};
-
 vec3 SunDir = normalize (vec3(-5.0f, 15.0f, 0.0f));
 vec3 SunCol = vec3(1.3f, 0.9f, 0.45f);
 vec3 Ambient = vec3(0.2);
@@ -66,25 +62,39 @@ float rand()
     pcg4d(seed); return float(seed.x) / float(0xffffffffu);
 }
 
-layout(std430) readonly buffer RayBuffer {
+layout(std430) buffer RayBuffer {
     vec4 rays[];
 };
 
-layout(binding = 0, offset = 4) uniform atomic_uint rayCounter;
+layout(binding = 0, offset = 4) uniform atomic_uint rayReadCounter;
+layout(binding = 0, offset = 8) uniform atomic_uint rayWriteCounter;
 
+void main(){
+    InitRNG(vec2(gl_GlobalInvocationID.xy), FrameNum);
 
-vec3 ComputeColor(out uvec2 PixelCoordinates, out bool HitResult){
-    vec3 Color = vec3(0.0f);
+	uvec2 PixelCoordinates;
+    bool HitResult;
 
     Ray ray;
     
-    uint idx = atomicCounterIncrement(rayCounter) * 2;
+    uint idxR = atomicCounterIncrement(rayReadCounter) * 5;
     
-    ray.Origin.xyz = rays[idx  ].xyz;
-    ray.Direction.x = rays[idx  ].w;
-    ray.Direction.yz = rays[idx+1].xy;
-    PixelCoordinates.x = floatBitsToUint( rays[idx+1].z);
-    PixelCoordinates.y = floatBitsToUint( rays[idx+1].w);
+    /*
+    rays[idx  ].x   = uintBitsToFloat(PixelCoordinates.x);
+    rays[idx  ].y   = uintBitsToFloat(PixelCoordinates.y);
+    rays[idx  ].zw  = initThroughPut.xy;
+    rays[idx+1].x   = initThroughPut.z;
+    rays[idx+1].yzw = initAccumulated;
+    rays[idx+2].xyz = ray.Origin;
+    rays[idx+3].xyz = ray.Direction;
+    */
+
+    PixelCoordinates.x = floatBitsToUint( rays[idxR].x);
+    PixelCoordinates.y = floatBitsToUint( rays[idxR].y);
+
+    ray.Origin    = rays[idxR+2].xyz;
+    ray.Direction = rays[idxR+3].xyz;
+    
 
     // Initialize our intersection data based off the last intersection test with the previous mesh within our scene
     HitInfo IntersectionInfo;
@@ -93,40 +103,18 @@ vec3 ComputeColor(out uvec2 PixelCoordinates, out bool HitResult){
     //vec3 debugColor = vec3(0.0);
 
     if(HitResult = TraverseBVH(ray, IntersectionInfo)) {
+        uint idxW = atomicCounterIncrement(rayWriteCounter) * 5;
         Vertex currVertex = GetInterpolatedVertex(IntersectionInfo);
-        vec3 lightPos = vec3(0.0, 300.0, 0.0);
-        float lightDist = distance(lightPos, currVertex.Position);
-        vec3 lightDir = normalize(lightPos - currVertex.Position);
-
-        Ray shadowRay;
-        shadowRay.Origin = currVertex.Position + currVertex.Normal * 1.0;
-        shadowRay.Direction = lightDir;
-
-        HitInfo tmp;
-        tmp.Depth = 1e20;
-
-        bool shadowRes = TraverseBVH(shadowRay, tmp);
-
-        Color = texture(sampler2D(Handles[currVertex.MatID]), currVertex.TextureCoordinate).rgb;
-
-        Color *= 0.1 + max(dot(lightDir, currVertex.Normal), 0.0) * (lightDist > tmp.Depth ? 0.0 : 100000.3) / (lightDist * lightDist);
+        // overwrite our ray with our vertex
+        rays[idxW].x   = uintBitsToFloat(PixelCoordinates.x);
+        rays[idxW].y   = uintBitsToFloat(PixelCoordinates.y);
+        rays[idxW+2].xyz = currVertex.Position;
+        rays[idxW+2].w = currVertex.Normal.x;
+        rays[idxW+3].xy = currVertex.Normal.yz;
+        rays[idxW+3].zw = currVertex.TextureCoordinate;
+        rays[idxW+4].x = intBitsToFloat(currVertex.MatID);
     }
 
-    //Color = debugColor;
-
-    
-
-	return Color;
-}
-
-void main(){
-    InitRNG(vec2(gl_GlobalInvocationID.xy), FrameNum);
-
-	uvec2 PixelCoordinates;
-    bool HitResult;
-    vec3 Color = ComputeColor(PixelCoordinates, HitResult);
-
-    imageStore(ColorOutput, ivec2(PixelCoordinates), vec4(Color, 1.0f));
 }
 
 /*

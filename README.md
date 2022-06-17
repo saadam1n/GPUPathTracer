@@ -23,4 +23,4 @@ Acheived June 13, 2022
 ![140 FPS on the Table Scene](images/5MergingMesh.png)
 
 Acheived Jun 16, 2022
-![Ray-traced Shadows in a Single Pass (no wavefront ray-tracing @ 30 FPS on a GTX 980)](images/6MegaKernelShadows)
+![Shadows Using Wavefront Ray-Tracing Rendered 60 FPS on my GTX 980](images/6WavefrontShadows.png)
