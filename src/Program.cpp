@@ -49,7 +49,7 @@ int main(int argc, char** argv) {
 	Window.SetInputCallback(MouseCallback);
 
 	Renderer* renderer = new Renderer;
-	renderer->Initialize(&Window, "res/objects/cornellbox.obj");
+	renderer->Initialize(&Window, "res/crytek/sponza.obj");
 
 	camera.UpdateImagePlaneParameters((float)Width / (float)Height, glm::radians(45.0f));
 	camera.SetPosition(glm::vec3(0.0f, 0.15f, 0.5f) * 6.0f);

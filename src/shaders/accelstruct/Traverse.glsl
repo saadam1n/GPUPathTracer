@@ -98,7 +98,7 @@ vec2 IntersectNode(in BVHNodeGeneric Node, in Ray InverseRay, in HitInfo Interse
 	vec3 t_max = max(t_node_min, t_node_max);
 
 	float t_entry = max(t_min.x, max(t_min.y,     t_min.z                     ));
-	float t_exit  = min(t_max.x, min(t_max.y, min(t_max.z, Intersection.Depth * 1000.0f)));
+	float t_exit  = min(t_max.x, min(t_max.y, min(t_max.z, Intersection.Depth )));
 	return vec2(t_entry, t_exit);
 }
 
@@ -272,5 +272,136 @@ function pop stack node
 	else
 		break out of traversal loop
 */
+
+/*
+
+6/16/2022
+New traversal algo?
+The stack wil lstore the node intersection info
+We only push nodes we are certain were intersected on the stack
+Similair to the if-if loop in alia 2009
+
+if intersect(parent)
+	push parent node on stack
+else
+	return
+
+while true
+	get next node or break if empty stack
+	if current triangle intersection is closer than box intersection
+		get next node or break if empty stack
+	if parent node
+		intersect child 1
+		intersect child 2
+		if child 1 and child 2
+			sort by intersection dist
+			push both on stack
+		if child 1 // (and not child 2)
+			push child 1 on stack
+		if child 2 // (and not child 1)
+			push child 2 on stack
+	else // leaf node
+		intersect leaves
+
+*/
+
+// cause of numerical instability (line when camera flat)
+vec2 IntersectNode(in BVHNodeGeneric Node, in Ray InverseRay) {
+	vec3 t_node_min = Node.Node.BoundingBox.Min * InverseRay.Direction + InverseRay.Origin;
+	vec3 t_node_max = Node.Node.BoundingBox.Max * InverseRay.Direction + InverseRay.Origin;
+
+	vec3 t_min = min(t_node_min, t_node_max);
+	vec3 t_max = max(t_node_min, t_node_max);
+
+	float t_entry = max(t_min.x, max(t_min.y, t_min.z));
+	float t_exit  = min(t_max.x, min(t_max.y, t_max.z));
+	return vec2(t_entry, t_exit);
+}
+
+/*
+Something I found interesting:
+Before, my definition of NextNode included a float value called "depth"
+When I had this, my speed was around 50-60 FPS, sometimes dipping below 50
+When I removed depth, my FPS skyrocketed to 70-80
+
+My explanation for this is that such a small difference in structure size can mess up cache sizes a lot
+It is probably rounding up both to 16 bytes
+*/
+struct NextNode {
+	ivec2 data;
+};
+
+bool TraverseBVH2(in Ray currRay, inout HitInfo intersection) {
+	Ray inverseRay;
+
+	inverseRay.Direction = 1.0f / currRay.Direction;
+	inverseRay.Origin = -currRay.Origin * inverseRay.Direction;
+
+	BVHNodeRecursive root = GetRootNode();
+
+	vec2 rootDist = IntersectNode(GetRecursiveNodeAsGeneric(root), inverseRay, intersection);
+	if (!ValidateIntersection(rootDist)) {
+		return false;
+	}
+	
+	bool hitResult = false;
+	NextNode stack[32];
+
+	stack[0].data.x = root.ChildrenNodes[0];
+	stack[0].data.y = root.ChildrenNodes[1];
+
+	int stackIdx = 0; // next node to pop
+	while (stackIdx != -1) {
+		NextNode currNode = stack[stackIdx--];
+
+		if (currNode.data.y >= 0) {
+			// Read both nodes
+			BVHNodeGeneric child0 = GetNode(currNode.data.x), child1 = GetNode(currNode.data.x + 1);
+			vec2 dist0 = IntersectNode(child0, inverseRay, intersection), dist1 = IntersectNode(child1, inverseRay, intersection);
+			bool intersect0 = ValidateIntersection(dist0), intersect1 = ValidateIntersection(dist1);
+
+			// rewrite as stack items for every thread
+			NextNode push0, push1;
+			
+			push0.data.x = child0.Data[0];
+			push0.data.y = child0.Data[1];
+
+			push1.data.x = child1.Data[0];
+			push1.data.y = child1.Data[1];
+
+			if (intersect0 && intersect1) {
+				if (dist0.x > dist0.x) {
+					// swapping requires 3 moves of variables, certainly slower than writing directly
+					// If some nodes need to swap, we wait by 3 writes, and then proceed to 2 writes to the stack, a total of 5 effective writes
+					// If we write directly, we do 2+2=4
+					//NextNode temp = push0;
+					//push0 = push1;
+					//push1 = temp;
+					stack[++stackIdx] = push1;
+					stack[++stackIdx] = push0;
+				}
+				else {
+					stack[++stackIdx] = push0;
+					stack[++stackIdx] = push1;
+				}
+			}
+			else if (intersect0) 
+				stack[++stackIdx] = push0;
+			else if (intersect1) 
+				stack[++stackIdx] = push1;
+		}
+		else {
+			int n = currNode.data.x - currNode.data.y;
+
+			for (int i = currNode.data.x; i < n; i++) {
+				bool currRes = IntersectTriangle(FetchTriangle(uint(triLocations[i])), currRay, intersection);
+				hitResult = hitResult || currRes;
+			}
+		}
+	}
+
+	//debugColor /= ;
+	return hitResult;
+}
 
 #endif

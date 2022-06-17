@@ -1,3 +1,19 @@
+Updated TODO list, 6/15/22, everything below the line is useless
+
+Now that I have a working ray pooling system, I want to take a crack at wavefront path tracing, but path tracing itself is an algorithm that is easy to make mistakes and have hidden bugs. For that reason, I will start off with ray tracing shadows, and then I will eventually modify my algorithm into a path tracer
+But even then, path tacer and even just shadows are a ways off. IF anything, I need to optimize before moving on (that's excluding the massive refactoring of variable names and cleaning up code that I still need to do)
+But as I type, I wonder if optimizations are really that important. I don't want to spend all summer sitting on this project at the basic stuff, nor do I want impatience to blind me
+
+By the way, code rewrites can always be postponed, it is given that I will eventually rewrite the portions that I am working on (which actually matter) so as I code I can also refactor
+
+Here's what I will do: 
+- Thursday and Friday are reading days for efficent BVH traversal
+- Saturday and Sunday are implementing them
+
+On Monday I will move on to shadow ray tracing and may go for whitted style ray tacing via path tracing
+
+
+=================================================================
 Haha, time flies, right? Since I'm visiting this project after a year, everything below the line goes in the garbage until I can clear my mind about what to do.
 
 TODO LIST:
