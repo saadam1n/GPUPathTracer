@@ -193,6 +193,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     closestHit.LoadAtomicBuffer(0, rayCounter);
 
     presentShader.CreateBinding();
+    presentShader.LoadFloat("exposure", 0.76);
     presentShader.LoadInteger("ColorTexture", 1);
 
 

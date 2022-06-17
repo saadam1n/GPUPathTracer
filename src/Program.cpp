@@ -17,7 +17,7 @@ uint32_t Height = 720;
 
 // Camera params 
 
-constexpr float CameraSpeed = 2000.000f * 0.001f;
+constexpr float CameraSpeed = 2000.000f;// * 0.001f;
 constexpr float CameraSensitivity = 0.001f;
 glm::vec2 LastCursorPosition;
 

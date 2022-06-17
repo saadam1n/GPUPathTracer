@@ -93,14 +93,28 @@ vec3 ComputeColor(out uvec2 PixelCoordinates, out bool HitResult){
     //vec3 debugColor = vec3(0.0);
 
     if(HitResult = TraverseBVH(ray, IntersectionInfo)) {
-        Vertex InterpolatedVertex = GetInterpolatedVertex(IntersectionInfo);
-        Color = texture(sampler2D(Handles[InterpolatedVertex.MatID]), InterpolatedVertex.TextureCoordinate).rgb;
+        Vertex currVertex = GetInterpolatedVertex(IntersectionInfo);
+        vec3 lightPos = vec3(0.0, 300.0, 0.0);
+        float lightDist = distance(lightPos, currVertex.Position);
+        vec3 lightDir = normalize(lightPos - currVertex.Position);
+
+        Ray shadowRay;
+        shadowRay.Origin = currVertex.Position + currVertex.Normal * 1.0;
+        shadowRay.Direction = lightDir;
+
+        HitInfo tmp;
+        tmp.Depth = 1e20;
+
+        bool shadowRes = TraverseBVH(shadowRay, tmp);
+
+        Color = texture(sampler2D(Handles[currVertex.MatID]), currVertex.TextureCoordinate).rgb;
+
+        Color *= 0.1 + max(dot(lightDir, currVertex.Normal), 0.0) * (lightDist > tmp.Depth ? 0.0 : 100000.3) / (lightDist * lightDist);
     }
 
     //Color = debugColor;
 
-    // TODO: More accurate sRGB conversion
-    Color = pow(Color, vec3(1.0f / 2.2f));
+    
 
 	return Color;
 }
