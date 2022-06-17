@@ -3,28 +3,28 @@
 
 #include "Triangle.glsl"
 
-layout(std430) buffer vertexBuf {
-	PackedVertex vertices[];
-};
-
-layout(std430) buffer indexBuf {
-	uvec4 indices[];
-};
+samplerBuffer vertexTex;
+isamplerBuffer indexTex;
 
 uint GetTriangleCount() {
-	return indices.length();
+	return textureSize(indexTex);
 }
 
-TriangleIndexData FetchIndexData(uint TriangleIndex) {
+TriangleIndexData FetchIndexData(uint uidx) {
 	TriangleIndexData TriangleIDX;
 
-	TriangleIDX.Indices = indices[TriangleIndex].xyz;
+	TriangleIDX.Indices = texelFetch(indexTex, int(uidx)).xyz;
 
 	return TriangleIDX;
 }
 
-Vertex FetchVertex(uint IDX){
-	PackedVertex PV = vertices[IDX];
+Vertex FetchVertex(uint uidx){
+	PackedVertex PV;
+
+	int idx = 3 * int(uidx);
+	PV.PN = texelFetch(vertexTex, idx    );
+	PV.NT = texelFetch(vertexTex, idx + 1);
+	PV.MP = texelFetch(vertexTex, idx + 2);
 
 	return UnpackVertex(PV);
 } 

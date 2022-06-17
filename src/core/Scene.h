@@ -11,7 +11,10 @@ public:
 	void LoadScene(const std::string& Path);
 private:
 	Buffer vertexBuf;
+	TextureBuffer vertexTex;
+
 	Buffer indexBuf;
+	TextureBuffer indexTex;
 
 	BoundingVolumeHierarchy bvh;
 

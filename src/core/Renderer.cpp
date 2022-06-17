@@ -177,6 +177,11 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(DebugMessageCallback, NULL);
 
+    genRays.CompileFile("kernel/raygen/FiniteAperture.comp");
+    closestHit.CompileFile("kernel/intersect/Closest.comp");
+    shadow.CompileFile("kernel/intersect/Shadow.comp");
+    presentShader.CompileFiles("present/Present.vert", "present/Present.frag");
+
     scene.LoadScene(scenePath);
 
     float quad[] = {
@@ -194,9 +199,6 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
 
     screenQuad.CreateBinding();
     screenQuad.CreateStream(0, 2, 2 * sizeof(float));
-    //
-
-    presentShader.CompileFiles("present/Present.vert", "present/Present.frag");
 
     colorTexture.CreateBinding();
     colorTexture.LoadData(GL_RGBA16F, GL_RGBA, GL_FLOAT, viewportWidth, viewportHeight, nullptr);
@@ -209,36 +211,30 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     rayCounter.CreateBlockBinding(BUFFER_TARGET_ATOMIC_COUNTER, 0);
 
     rayBuffer.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 1);
-    scene.vertexBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 2);
-    scene.indexBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 3);
     scene.bvh.nodes.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 4);
     scene.textureHandlesBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 6);
-    
-
-    genRays.CompileFile("kernel/raygen/FiniteAperture.comp");
-    closestHit.CompileFile("kernel/intersect/Closest.comp");
-    shadow.CompileFile("kernel/intersect/Shadow.comp");
 
     colorTexture.BindImageUnit(0, GL_RGBA16F);
     colorTexture.BindTextureUnit(0, GL_TEXTURE_2D);
+    scene.vertexTex.BindTextureUnit(1, GL_TEXTURE_BUFFER);
+    scene.indexTex.BindTextureUnit(2, GL_TEXTURE_BUFFER);
 
     genRays.CreateBinding();
     genRays.LoadShaderStorageBuffer("RayBuffer", rayBuffer);
     genRays.LoadAtomicBuffer(0, rayCounter);
 
     closestHit.CreateBinding();
-
-    closestHit.LoadShaderStorageBuffer("vertexBuf", scene.vertexBuf);
-    closestHit.LoadShaderStorageBuffer("indexBuf", scene.indexBuf);
+    closestHit.LoadInteger("vertexTex", 1);
+    closestHit.LoadInteger("indexTex", 2);
     closestHit.LoadShaderStorageBuffer("nodes", scene.bvh.nodes);
     closestHit.LoadShaderStorageBuffer("RayBuffer", rayBuffer);
     closestHit.LoadAtomicBuffer(0, rayCounter);
 
     shadow.CreateBinding();
     shadow.LoadInteger("ColorOutput", 0);
+    shadow.LoadInteger("vertexTex", 1);
+    shadow.LoadInteger("indexTex", 2);
     shadow.LoadShaderStorageBuffer("Samplers", scene.textureHandlesBuf);
-    shadow.LoadShaderStorageBuffer("vertexBuf", scene.vertexBuf);
-    shadow.LoadShaderStorageBuffer("indexBuf", scene.indexBuf);
     shadow.LoadShaderStorageBuffer("nodes", scene.bvh.nodes);
     shadow.LoadShaderStorageBuffer("RayBuffer", rayBuffer);
     shadow.LoadAtomicBuffer(0, rayCounter);

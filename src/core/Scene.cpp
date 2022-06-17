@@ -150,11 +150,17 @@ void Scene::LoadScene(const std::string& Path) {
     textureHandlesBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
     textureHandlesBuf.UploadData(TexHandles, GL_STATIC_DRAW);
 
-    vertexBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
+    vertexBuf.CreateBinding(BUFFER_TARGET_ARRAY);
     vertexBuf.UploadData(Vertices, GL_STATIC_DRAW);
+
+    vertexTex.CreateBinding();
+    vertexTex.SelectBuffer(&vertexBuf, GL_RGBA32F);
 
     indexBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
     indexBuf.UploadData(Indices, GL_STATIC_DRAW);
+
+    indexTex.CreateBinding();
+    indexTex.SelectBuffer(&indexBuf, GL_RGBA32UI);
 
     
 }
