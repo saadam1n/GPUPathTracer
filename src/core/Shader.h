@@ -29,6 +29,7 @@ public:
 
 	void LoadCamera             (const char* Name, const Camera& Value   );
 
+	void LoadShaderStorageBuffer(const char* Name, GLuint specifcBinding );
 	void LoadShaderStorageBuffer(const char* Name, Buffer& Value         );
 	void LoadAtomicBuffer(uint32_t index, Buffer& Value);
 protected:
@@ -56,6 +57,7 @@ protected:
 	uint32_t NextFreeBlockBinding;
 
 	std::map <std::string, GLint> locationCache;
+	std::string fileLocation;
 };
 
 class ShaderRasterization : public Shader {

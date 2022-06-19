@@ -1,204 +1,71 @@
 #version 430
 
-vec3 debugColor;
-
 #extension GL_ARB_bindless_texture : enable
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 uniform layout(rgba16f) image2D ColorOutput;
 
-//uniform sampler2D RayOrigin;
-//uniform sampler2D RayDirection;
-
 #include "common/BVH.glsl"
 
-// Sky by builderboy
-// Original coeffs: vec3(0.0625, 0.125, 0.25)
-vec3 ComputeIncomingRadiance(in vec3 Direction) {
-	float UpDot = Direction.y;
-	const vec3 Coefficients =vec3(0.0625, 0.125, 0.25); //  0.1686, 0.4, 0.8667
-	vec3 Color = Coefficients / (UpDot * UpDot + Coefficients);
-	return Color;
-}
-
-vec3 SunDir = normalize (vec3(-5.0f, 15.0f, 0.0f));
-vec3 SunCol = vec3(1.3f, 0.9f, 0.45f);
-vec3 Ambient = vec3(0.2);
-
-int NumSamples = 4;
-int NumBounces = 2;
-
-
-uniform int FrameNum;
-
-//RNG from code by Moroz Mykhailo (https://www.shadertoy.com/view/wltcRS)
-
-//internal RNG state 
-uvec4 seed;
-ivec2 pixel;
-
-void InitRNG(vec2 p, int frame)
-{
-    pixel = ivec2(p);
-    seed = uvec4(p, uint(frame), uint(p.x) + uint(p.y));
-}
-
-void pcg4d(inout uvec4 v)
-{
-    v = v * 1664525u + 1013904223u;
-    v.x += v.y * v.w; v.y += v.z * v.x; v.z += v.x * v.y; v.w += v.y * v.z;
-    v = v ^ (v >> 16u);
-    v.x += v.y * v.w; v.y += v.z * v.x; v.z += v.x * v.y; v.w += v.y * v.z;
-}
-
-float rand()
-{
-    pcg4d(seed); return float(seed.x) / float(0xffffffffu);
-}
-
-layout(std430) buffer RayBuffer {
-    vec4 rays[];
+layout(std430) buffer rayBufferW {
+    vec4 raysW[];
 };
 
+layout(std430) buffer rayBufferR {
+    vec4 raysR[];
+};
+
+layout(std430) readonly buffer samplers {
+    vec4 materialInstance[];
+};
+
+layout(binding = 0, offset = 0) uniform atomic_uint raysWritten;
 layout(binding = 0, offset = 4) uniform atomic_uint rayReadCounter;
 layout(binding = 0, offset = 8) uniform atomic_uint rayWriteCounter;
 
 void main(){
-    InitRNG(vec2(gl_GlobalInvocationID.xy), FrameNum);
+    uint idxR = atomicCounterIncrement(rayReadCounter);
+    if(idxR >= atomicCounter(raysWritten)) return;
+    idxR *= 5;
 
-	uvec2 PixelCoordinates;
-    bool HitResult;
-
+    uvec2 PixelCoordinates;
     Ray ray;
-    
-    uint idxR = atomicCounterIncrement(rayReadCounter) * 5;
-    
-    /*
-    rays[idx  ].x   = uintBitsToFloat(PixelCoordinates.x);
-    rays[idx  ].y   = uintBitsToFloat(PixelCoordinates.y);
-    rays[idx  ].zw  = initThroughPut.xy;
-    rays[idx+1].x   = initThroughPut.z;
-    rays[idx+1].yzw = initAccumulated;
-    rays[idx+2].xyz = ray.Origin;
-    rays[idx+3].xyz = ray.Direction;
-    */
+    vec3 throughPut, accum;
 
-    PixelCoordinates.x = floatBitsToUint( rays[idxR].x);
-    PixelCoordinates.y = floatBitsToUint( rays[idxR].y);
+    PixelCoordinates.x = floatBitsToUint( raysR[idxR].x);
+    PixelCoordinates.y = floatBitsToUint( raysR[idxR].y);
+    throughPut.xy      = raysR[idxR  ].zw;
+    throughPut.z       = raysR[idxR+1].x;
+    accum              = raysR[idxR+1].yzw;
+    ray.Origin    = raysR[idxR+2].xyz;
+    ray.Direction = raysR[idxR+3].xyz;
 
-    ray.Origin    = rays[idxR+2].xyz;
-    ray.Direction = rays[idxR+3].xyz;
-    
-
-    // Initialize our intersection data based off the last intersection test with the previous mesh within our scene
     HitInfo IntersectionInfo;
     IntersectionInfo.Depth = 1e20;
 
-    //vec3 debugColor = vec3(0.0);
-
-    if(HitResult = TraverseBVH(ray, IntersectionInfo)) {
-        uint idxW = atomicCounterIncrement(rayWriteCounter) * 5;
+    if(TraverseBVH(ray, IntersectionInfo)) {
         Vertex currVertex = GetInterpolatedVertex(IntersectionInfo);
-        // overwrite our ray with our vertex
-        rays[idxW].x   = uintBitsToFloat(PixelCoordinates.x);
-        rays[idxW].y   = uintBitsToFloat(PixelCoordinates.y);
-        rays[idxW+2].xyz = currVertex.Position;
-        rays[idxW+2].w = currVertex.Normal.x;
-        rays[idxW+3].xy = currVertex.Normal.yz;
-        rays[idxW+3].zw = currVertex.TextureCoordinate;
-        rays[idxW+4].x = intBitsToFloat(currVertex.MatID);
-    }
-
-}
-
-/*
-vec4 ComputeColor(in ivec2 PixelCoordinates){
-    vec3 Color = vec3(0.0f);
-
-    Ray PrimaryRay;
-    // I could use texelFetch here but whatever
-    PrimaryRay.Origin    = imageLoad(RayOrigin   , PixelCoordinates).rgb;
-    PrimaryRay.Direction = imageLoad(RayDirection, PixelCoordinates).rgb;
-
-    HitInfo IntersectionInfo;
-
-    IntersectionInfo.Depth = imageLoad(IntersectionDepth, PixelCoordinates).r;
-
-    bool HitResult = TraverseBVH(Mesh, BVH, PrimaryRay, IntersectionInfo);
-
-    if(HitResult) {
-        Vertex InterpolatedVertex = GetInterpolatedVertex(IntersectionInfo);
-
-        Color = vec3(1.0f);//texture(Material.Diffuse, InterpolatedVertex.TextureCoordinate).rgb;
-
-        // Reflection and refraction
-
-        vec3 RefractedRay = refract(PrimaryRay.Direction, InterpolatedVertex.Normal, 1.0 / 1.333f);
-        vec3 ReflectedRay = reflect(PrimaryRay.Direction, InterpolatedVertex.Normal);
-
-        Color *= (ComputeIncomingRadiance(RefractedRay) + ComputeIncomingRadiance(ReflectedRay)) / 2.0f;
-    } else {
-        Color = ComputeIncomingRadiance(PrimaryRay.Direction);
-    }
-
-    // TODO: More accurate sRGB conversion
-    Color = pow(Color, vec3(1.0f / 2.2f));
-
-	return vec4(Color, IntersectionInfo.Depth);
-}
-
-void main(){
-	uvec2 PixelCoordinates = gl_GlobalInvocationID.xy;
-    ivec2 StoreLocation = ivec2(PixelCoordinates);
-
-    vec4 Color = ComputeColor(StoreLocation);
-    
-    if(StoreLocation.x > 640)
-    imageStore(ColorOutput, StoreLocation, vec4(Color.w / 500.0f));
-    imageStore(IntersectionDepth, StoreLocation, vec4(Color.w));
-}
-
-        uint seed0 = gl_GlobalInvocationID.x * 3;
-        uint seed1 = gl_GlobalInvocationID.y* 2;
-
-        
-        vec3 Accum = vec3(0.0f);
-
-        for(int i = 0; i < NumSamples; i++) {
-            vec3 ThroughPut = vec3(1.0);
-            Ray RandomRay;
-
-            Vertex CurrentVertex = InterpolatedVertex;
-            for(int j = 0; j < NumBounces; j++) {
-                RandomRay.Origin = CurrentVertex.Position;
-
-                float r0 = getrandom(seed0, seed1);
-                float r1 = getrandom(seed0, seed1);
-
-                float r = sqrt(r0);
-                float theta = 2 * 3.1412529 * r1;
-                float x = r * cos(theta);
-                float y = r * sin(theta);
-                
-                RandomRay.Direction = vec3(x, y, sqrt(1 - r0));
-                vec3 tangent = normalize(cross(vec3(0.15, 0.15, 0.34f), CurrentVertex.Normal));
-                vec3 bitangent = cross(tangent, CurrentVertex.Normal);
-
-                RandomRay.Direction = mat3(tangent, bitangent, CurrentVertex.Normal) * RandomRay.Direction;
-
-                HitInfo NextIsect;
-                NextIsect.Depth = 1e20;
-                bool HitWorld = TraverseBVH(Mesh, BVH, RandomRay, NextIsect);
-
-                if(HitWorld) {
-                    CurrentVertex = GetInterpolatedVertex(NextIsect);
-                    ThroughPut *= texture(sampler2D(Handles[CurrentVertex.MatID]), CurrentVertex.TextureCoordinate).rgb;
-                } else {
-                    Accum += ThroughPut * ComputeIncomingRadiance(RandomRay.Direction);
-                    break;
-                }
-
-            }
+        int matIdx = currVertex.MatID * 2;
+        if(floatBitsToInt(materialInstance[matIdx + 1].w) == 1) {
+            imageStore(ColorOutput, ivec2(PixelCoordinates), vec4(throughPut * materialInstance[matIdx + 1].xyz, 1.0));
+        } else {
+            uint idxW = atomicCounterIncrement(rayWriteCounter) * 5;
+            // overwrite our ray with our vertex
+            raysW[idxW].x   = uintBitsToFloat(PixelCoordinates.x);
+            raysW[idxW].y   = uintBitsToFloat(PixelCoordinates.y);
+            raysW[idxW  ].zw  = throughPut.xy;
+            raysW[idxW+1].x   = throughPut.z;
+            raysW[idxW+1].yzw = accum;
+            raysW[idxW+2].xyz = currVertex.Position;
+            raysW[idxW+2].w = currVertex.Normal.x;
+            raysW[idxW+3].xy = currVertex.Normal.yz;
+            raysW[idxW+3].zw = currVertex.TextureCoordinate;
+            raysW[idxW+4].x = intBitsToFloat(currVertex.MatID);
         }
-*/
+        
+    }
+    
+            //imageStore(ColorOutput, ivec2(PixelCoordinates), vec4(ray.Origin , 1.0));
+
+}

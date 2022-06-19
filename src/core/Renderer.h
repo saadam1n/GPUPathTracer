@@ -28,13 +28,17 @@ private:
 	Buffer rayBuffer;
 	Buffer rayCounter;
 
-	ShaderCompute genRays;
-	ShaderCompute closestHit;
-	ShaderCompute shadow;
+	ShaderCompute generate;
+	ShaderCompute extend;
+	ShaderCompute shade;
 
 	Scene scene;
 
 	int frameCounter;
+	int* atomicCounterClear;
+
+	bool swapOrder;
+	void SwapRayBuffers();
 };
 
 #endif

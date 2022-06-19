@@ -53,11 +53,13 @@ struct RayInfo {
             vec3 normal;
             vec2 texcoord;
             uint32_t matID;
-            uint32_t padding[3];
+            vec3 viewDir;
         };
     };
 
 };
+
+constexpr int kNumAtomicCounters = 1024;
 
 void DebugMessageCallback(GLenum source, GLenum type, GLuint id,
     GLenum severity, GLsizei length,
@@ -177,9 +179,9 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(DebugMessageCallback, NULL);
 
-    genRays.CompileFile("Generate.comp");
-    closestHit.CompileFile("Extend.comp");
-    shadow.CompileFile("Shade.comp");
+    generate.CompileFile("Generate.comp");
+    extend.CompileFile("Extend.comp");
+    shade.CompileFile("Shade.comp");
     presentShader.CompileFiles("Present.vert", "Present.frag");
 
     scene.LoadScene(scenePath);
@@ -204,43 +206,50 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     colorTexture.LoadData(GL_RGBA16F, GL_RGBA, GL_FLOAT, viewportWidth, viewportHeight, nullptr);
 
     rayBuffer.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
-    rayBuffer.UploadData(sizeof(RayInfo) * viewportWidth * viewportHeight, nullptr, GL_DYNAMIC_DRAW);
+    rayBuffer.UploadData(sizeof(RayInfo) * viewportWidth * viewportHeight * 2, nullptr, GL_DYNAMIC_DRAW);
+    swapOrder = false;
+    SwapRayBuffers();
 
+    atomicCounterClear = new int[kNumAtomicCounters];
+    for (int i = 0; i < kNumAtomicCounters; i++) {
+        atomicCounterClear[i] = 0;
+    }
     rayCounter.CreateBinding(BUFFER_TARGET_ATOMIC_COUNTER);
-    rayCounter.UploadData(sizeof(int) * 4, nullptr, GL_DYNAMIC_DRAW);
+    rayCounter.UploadData(sizeof(int) * kNumAtomicCounters, atomicCounterClear, GL_DYNAMIC_DRAW);
     rayCounter.CreateBlockBinding(BUFFER_TARGET_ATOMIC_COUNTER, 0);
 
-    rayBuffer.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 1);
-    scene.bvh.nodes.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 4);
-    scene.textureHandlesBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 6);
+
+    scene.bvh.nodes.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 3);
+    scene.materialsBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 4);
 
     colorTexture.BindImageUnit(0, GL_RGBA16F);
     colorTexture.BindTextureUnit(0, GL_TEXTURE_2D);
     scene.vertexTex.BindTextureUnit(1, GL_TEXTURE_BUFFER);
     scene.indexTex.BindTextureUnit(2, GL_TEXTURE_BUFFER);
 
-    genRays.CreateBinding();
-    genRays.LoadShaderStorageBuffer("RayBuffer", rayBuffer);
-    genRays.LoadAtomicBuffer(0, rayCounter);
+    generate.CreateBinding();
+    generate.LoadShaderStorageBuffer("rayBufferW", 1);
+    generate.LoadAtomicBuffer(0, rayCounter);
 
-    closestHit.CreateBinding();
-    closestHit.LoadInteger("vertexTex", 1);
-    closestHit.LoadInteger("indexTex", 2);
-    closestHit.LoadShaderStorageBuffer("nodes", scene.bvh.nodes);
-    closestHit.LoadShaderStorageBuffer("RayBuffer", rayBuffer);
-    closestHit.LoadAtomicBuffer(0, rayCounter);
+    extend.CreateBinding();
+    extend.LoadInteger("ColorOutput", 0);
+    extend.LoadInteger("vertexTex", 1);
+    extend.LoadInteger("indexTex", 2);
+    extend.LoadShaderStorageBuffer("rayBufferW", 1);
+    extend.LoadShaderStorageBuffer("rayBufferR", 2);
+    extend.LoadShaderStorageBuffer("nodes", scene.bvh.nodes);
+    extend.LoadShaderStorageBuffer("samplers", scene.materialsBuf);
+    extend.LoadAtomicBuffer(0, rayCounter);
 
-    shadow.CreateBinding();
-    shadow.LoadInteger("ColorOutput", 0);
-    shadow.LoadInteger("vertexTex", 1);
-    shadow.LoadInteger("indexTex", 2);
-    shadow.LoadShaderStorageBuffer("Samplers", scene.textureHandlesBuf);
-    shadow.LoadShaderStorageBuffer("nodes", scene.bvh.nodes);
-    shadow.LoadShaderStorageBuffer("RayBuffer", rayBuffer);
-    shadow.LoadAtomicBuffer(0, rayCounter);
+    shade.CreateBinding();
+    shade.LoadInteger("ColorOutput", 0);
+    shade.LoadShaderStorageBuffer("rayBufferW", 1);
+    shade.LoadShaderStorageBuffer("rayBufferR", 2);
+    shade.LoadShaderStorageBuffer("samplers", scene.materialsBuf);
+    shade.LoadAtomicBuffer(0, rayCounter);
 
-    shadow.LoadVector3F32("lightPos", glm::vec3(0.0, 1.95, 0.0));
-    shadow.LoadVector3F32("lightCol", glm::vec3(1.2, 1.25, 1.3) * 100.0f); // 3000000.0f
+    shade.LoadVector3F32("lightPos", glm::vec3(0.0, 1.98, 0.0));
+    shade.LoadVector3F32("lightCol", glm::vec3(1.2, 1.25, 1.3) * 100.0f); // 3000000.0f
     //shadow.LoadVector3F32("ambient", glm::vec3(0.1));
 
     presentShader.CreateBinding();
@@ -253,42 +262,69 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
 
 void Renderer::CleanUp(void) {
     // I hope the scene destructor frees its resources
-    genRays.Free();
-    closestHit.Free();
+    generate.Free();
+    extend.Free();
     presentShader.Free();
 
     colorTexture.Free();
 
     screenQuad.Free();
     quadBuf.Free();
+
+    delete[] atomicCounterClear;
 }
 
 void Renderer::RenderFrame(const Camera& camera)  {
 
     // Begin by clearing our atomic counters
-    int empty[4] = { 0, 0, 0, 0 };
-    glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 0, sizeof(empty), empty);
-    float clearcol[4] = { 0.5, 0.5, 0.5, 1.0 };
+    glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 0, sizeof(int) * kNumAtomicCounters, atomicCounterClear);
+    float clearcol[4] = { 0.0, 0.0, 0.0, 1.0 };
     glClearTexSubImage(colorTexture.GetHandle(), 0, 0, 0, 0, viewportWidth, viewportHeight, 1, GL_RGBA, GL_FLOAT, clearcol);
 
-    genRays.CreateBinding();
-    genRays.LoadCamera("Camera", camera);
+    generate.CreateBinding();
+    generate.LoadCamera("Camera", camera);
 
     glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
-    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT | GL_ALL_BARRIER_BITS);
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT | GL_ALL_BARRIER_BITS | GL_ATOMIC_COUNTER_BARRIER_BIT);
+    SwapRayBuffers();
 
-
-    closestHit.CreateBinding();
-    closestHit.LoadInteger("Frame", frameCounter++);
+    extend.CreateBinding();
+    extend.LoadInteger("Frame", frameCounter++);
 
     glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
-    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT);
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT | GL_ATOMIC_COUNTER_BARRIER_BIT);
+    glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 0, sizeof(int), atomicCounterClear);
+    SwapRayBuffers();
 
-    shadow.CreateBinding();
+
+    shade.CreateBinding();
     //shadow.LoadInteger("Frame", frameCounter++);
 
+
+    
+    glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT | GL_ATOMIC_COUNTER_BARRIER_BIT);
+    glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 4, sizeof(int) * 2, atomicCounterClear);
+    SwapRayBuffers();
+
+    
+    extend.CreateBinding();
+    extend.LoadInteger("Frame", frameCounter++);
+
     glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
     glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT);
+
+}
+
+void Renderer::SwapRayBuffers() {
+    int writeBinding = 1, readBinding = 2;
+    if (swapOrder) {
+        std::swap(writeBinding, readBinding);
+    }
+    swapOrder = !swapOrder;
+
+    rayBuffer.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, writeBinding, 0, rayBuffer.GetSize() / 2);
+    rayBuffer.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, readBinding, rayBuffer.GetSize() / 2, rayBuffer.GetSize());
 }
 
 void Renderer::Present() {

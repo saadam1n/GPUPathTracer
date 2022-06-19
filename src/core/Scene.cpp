@@ -19,6 +19,17 @@
 
 #include <glm/gtx/matrix_transform_2d.hpp>
 
+using namespace glm;
+
+// Mapped to by material ID
+struct MaterialInstance {
+    GLuint64 samplerHandle;
+    float ior;
+    float padding0;
+    vec3 emission;
+    int isEmissive;
+};
+
 void Scene::LoadScene(const std::string& Path) {
     std::string Folder = Path.substr(0, Path.find_last_of('/') + 1);
 
@@ -51,77 +62,92 @@ void Scene::LoadScene(const std::string& Path) {
     };
 
     std::map<std::string, int> TexCache;
+    std::vector<MaterialInstance> materialInstances;
 
     for (uint32_t i = 0; i < Scene->mNumMeshes; i++) {
-        const aiMesh* currmesh = Scene->mMeshes[i];
+        const aiMesh* currMesh = Scene->mMeshes[i];
 
-        int currmatid;
+        aiColor3D albedo, emission;
+
+        int currMatID;
 
         aiMaterial* mat = Scene->mMaterials[Scene->mMeshes[i]->mMaterialIndex];
-        if (mat->GetTextureCount(aiTextureType_DIFFUSE) != 0) {
+        bool hasTextures = (mat->GetTextureCount(aiTextureType_DIFFUSE) != 0);
+        
+        std::string textureKey;
+        if (hasTextures) {
             aiString localpath;
             mat->GetTexture(aiTextureType_DIFFUSE, 0, &localpath);
 
-            std::string location = Folder + localpath.C_Str();
-            
-            auto result = TexCache.find(location);
-            if (result == TexCache.end()) {
-                int j = (int)textures.size();
-                currmatid = j;
-                TexCache.insert({ location, j });
-                std::shared_ptr<Texture2D> currtex(new Texture2D);
-                currtex->CreateBinding();
-                currtex->LoadTexture(location.c_str());
-                textures.push_back(currtex);
-            }
-            else {
-                currmatid = result->second;
-            }
-        }
-        else {
-            aiColor3D diffcol;
-            mat->Get(AI_MATKEY_COLOR_DIFFUSE, diffcol);
+            textureKey = Folder + localpath.C_Str();
+        } else {
+            mat->Get(AI_MATKEY_COLOR_DIFFUSE , albedo  );
+            mat->Get(AI_MATKEY_COLOR_EMISSIVE, emission);
 
             std::stringstream triple;
-            triple << diffcol.r << ' ' << diffcol.g << ' ' << diffcol.b;
-
-            auto result = TexCache.find(triple.str());
-            if (result == TexCache.end()) {
-                int j = (int)textures.size();
-                currmatid = j;
-                TexCache.insert({ triple.str(), j });
-                std::shared_ptr<Texture2D> currtex(new Texture2D);
-                currtex->CreateBinding();
-                float coldata[3]{ diffcol.r, diffcol.g, diffcol.b };
-                currtex->LoadData(GL_RGBA32F, GL_RGB, GL_FLOAT, 1, 1, (void*)coldata);
-                textures.push_back(currtex);
-            }
-            else {
-                currmatid = result->second;
-            }
+            triple << albedo.r   << ' ' << albedo.g     << ' ' << albedo.b   << ';';
+            triple << emission.r << ' ' << emission.g   << ' ' << emission.b;
+            textureKey = triple.str();
         }
 
-        for (uint32_t j = 0; j < currmesh->mNumVertices; j++) {
+        auto result = TexCache.find(textureKey);
+        if (result != TexCache.end()) {
+            currMatID = result->second;
+        }
+        else {
+            currMatID = (int)textures.size();
+            TexCache.insert({ textureKey, currMatID });
+
+            std::shared_ptr<Texture2D> currtex(new Texture2D);
+            currtex->CreateBinding();
+
+            if (hasTextures) {
+                currtex->LoadTexture(textureKey.c_str());
+            }
+            else {
+                float coldata[3]{ albedo.r, albedo.g, albedo.b };
+                currtex->LoadData(GL_RGBA32F, GL_RGB, GL_FLOAT, 1, 1, (void*)coldata);
+            }
+
+            textures.push_back(currtex);
+
+            MaterialInstance newInstance;
+            newInstance.isEmissive = 0;
+
+            newInstance.samplerHandle = glGetTextureHandleARB(currtex->GetHandle());
+            glMakeTextureHandleResidentARB(newInstance.samplerHandle);
+
+            if (!hasTextures) {
+                if (emission.r + emission.g + emission.b > 0.00001f) {
+                    newInstance.isEmissive = 1;
+                    newInstance.emission = vec3(emission.r, emission.g, emission.b);
+                }
+            }
+
+            materialInstances.push_back(newInstance);
+        }
+
+        for (uint32_t j = 0; j < currMesh->mNumVertices; j++) {
             Vertex CurrentVertex;
 
-            aiVector3D& Position = currmesh->mVertices[j];
-            aiVector3D& Normal = currmesh->mNormals[j];
+            aiVector3D& Position = currMesh->mVertices[j];
+            aiVector3D& Normal = currMesh->mNormals[j];
 
             CurrentVertex.Position = glm::vec3(Position.x, Position.y, Position.z);
             CurrentVertex.Normal = glm::vec3(Normal.x, Normal.y, Normal.z);
 
-            if (currmesh->mTextureCoords[0])
-                CurrentVertex.TextureCoordinates = glm::vec2(currmesh->mTextureCoords[0][j].x, currmesh->mTextureCoords[0][j].y);
+            if (currMesh->mTextureCoords[0])
+                CurrentVertex.TextureCoordinates = glm::vec2(currMesh->mTextureCoords[0][j].x, currMesh->mTextureCoords[0][j].y);
             else
                 CurrentVertex.TextureCoordinates = glm::vec2(0.0f);
 
-            CurrentVertex.MatID = currmatid;
+            CurrentVertex.MatID = currMatID;
 
             Vertices.push_back(CurrentVertex);
         }
 
-        for (uint32_t j = 0; j < currmesh->mNumFaces; j++) {
-            const aiFace& Face = currmesh->mFaces[j];
+        for (uint32_t j = 0; j < currMesh->mNumFaces; j++) {
+            const aiFace& Face = currMesh->mFaces[j];
 
             TriangleIndexData CurrentIndexData;
             for (uint32_t k = 0; k < Face.mNumIndices; k++) {
@@ -131,24 +157,16 @@ void Scene::LoadScene(const std::string& Path) {
             Indices.push_back(CurrentIndexData);
         }
 
-        BaseVertex += currmesh->mNumVertices;
+        BaseVertex += currMesh->mNumVertices;
     }
 
     // As soon as we are done loading we should ignore it
     importer.FreeScene();
 
-    // Now we create handles and whatnot
-    std::vector<GLuint64> TexHandles(textures.size());
-    for (int i = 0; i < TexHandles.size(); i++) {
-        GLuint64 handle = glGetTextureHandleARB(textures[i]->GetHandle());
-        glMakeTextureHandleResidentARB(handle);
-        TexHandles[i] = handle;
-    }
-
     bvh.ConstructAccelerationStructure(Vertices, Indices);
 
-    textureHandlesBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
-    textureHandlesBuf.UploadData(TexHandles, GL_STATIC_DRAW);
+    materialsBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
+    materialsBuf.UploadData(materialInstances, GL_STATIC_DRAW);
 
     vertexBuf.CreateBinding(BUFFER_TARGET_ARRAY);
     vertexBuf.UploadData(Vertices, GL_STATIC_DRAW);

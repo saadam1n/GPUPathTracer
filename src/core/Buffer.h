@@ -26,13 +26,16 @@ public:
 	void Free(void);
 
 	void CreateBlockBinding(BufferTarget Target, uint32_t Binding);
+	void CreateBlockBinding(BufferTarget Target, uint32_t Binding, size_t offset, size_t length);
 	GLuint GetBlockBinding();
+
+	size_t GetSize();
 private:
 	friend class TextureBuffer;
 
 	GLuint BufferHandle;
-
 	BufferTarget CurrentTarget;
-
+	size_t size;
+	
 	GLuint blockBinding;
 };

@@ -76,13 +76,17 @@ void Shader::LoadCamera(const char* Name, const Camera& Value) {
 	LoadVector3F32(GetStructureMemberLocation(Name, "Position"    ), Value.GetPosition()               );
 }
 
-void Shader::LoadShaderStorageBuffer(const char* Name, Buffer& Value) {
-	uint32_t BlockBinding = Value.GetBlockBinding(); // initially 0 
+void Shader::LoadShaderStorageBuffer(const char* Name, GLuint specificBinding) {
+	uint32_t BlockBinding = specificBinding;// Value.GetBlockBinding(); // initially 0 
 
 	GLuint Location = glGetProgramResourceIndex(ProgramHandle, GL_SHADER_STORAGE_BLOCK, Name);
 	std::cout << Name << ' ' << BlockBinding << '\n';
 
 	glShaderStorageBlockBinding(ProgramHandle, Location, BlockBinding);
+}
+
+void Shader::LoadShaderStorageBuffer(const char* Name, Buffer& Value) {
+	LoadShaderStorageBuffer(Name, Value.GetBlockBinding());
 }
 
 void Shader::LoadAtomicBuffer(uint32_t index, Buffer& Value) {
@@ -103,7 +107,7 @@ GLint Shader::GetUniformLocation(const char* name) {
 	if (result == locationCache.end()) {
 		GLint location = glGetUniformLocation(ProgramHandle, name);
 		if (location == -1) {
-			printf("Warning: unable to find location for variable \"%s\". This message will only appear once\n", name); 
+			printf("Warning: unable to find location for variable \"%s\" in shader \"%s\". This message will only appear once\n", name, fileLocation.c_str());
 		}
 		locationCache.insert({ name, location });
 		return location;
@@ -310,7 +314,7 @@ GLuint CompileShader(const char* ShaderPath, GLenum Type) {
 
 
 void ShaderRasterization::CompileFiles(const char* VertexShaderPath, const char* FragmentShaderPath) {
-
+	fileLocation = VertexShaderPath;
 	GLuint VertexShader   = CompileShader(VertexShaderPath,   GL_VERTEX_SHADER  );
 	GLuint FragmentShader = CompileShader(FragmentShaderPath, GL_FRAGMENT_SHADER);
 
@@ -329,6 +333,7 @@ void ShaderRasterization::CompileFiles(const char* VertexShaderPath, const char*
 }
 
 void ShaderCompute::CompileFile(const char* ComputeShaderPath) {
+	fileLocation = ComputeShaderPath;
 	GLuint ComputeShader  = CompileShader(ComputeShaderPath, GL_COMPUTE_SHADER);
 
 	CreateProgramHandle();

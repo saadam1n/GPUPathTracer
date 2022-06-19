@@ -1,4 +1,4 @@
-file(GLOB_RECURSE OpenGL_LightTransport_Sources "*.h" "*.cpp" "*.vert" "*.frag" "*.comp" "*.txt")
+file(GLOB_RECURSE OpenGL_LightTransport_Sources "*.h" "*.cpp" "*.vert" "*.frag" "*.comp" "*.glsl" "*.txt")
 
 add_executable("OpenGL_LightTransport" "${OpenGL_LightTransport_Sources}")
 

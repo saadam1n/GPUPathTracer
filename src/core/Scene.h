@@ -20,7 +20,7 @@ private:
 
 	// We never actually use the texture names after initialization but I keep them anyway
 	std::vector<std::shared_ptr<Texture2D>> textures;
-	Buffer textureHandlesBuf;
+	Buffer materialsBuf;
 
 	friend class Shader;
 	friend class Renderer;
