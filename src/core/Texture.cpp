@@ -115,7 +115,7 @@ void Texture2D::CreateBinding(void) {
 }
 
 void Texture::BindImageUnit(uint32_t Unit, GLenum Format) {
-	glBindImageTexture(Unit, texture, 0, GL_FALSE, 0, GL_WRITE_ONLY, Format);
+	glBindImageTexture(Unit, texture, 0, GL_FALSE, 0, GL_READ_WRITE, Format);
 }
 
 void Texture::BindTextureUnit(uint32_t unit, GLenum target) {

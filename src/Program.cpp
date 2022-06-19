@@ -61,9 +61,11 @@ int main(int argc, char** argv) {
 
 		if (Window.GetKey(GLFW_KEY_W)) {
 			camera.Move(CameraSpeed * (float)FrameTimer.Delta);
+			renderer->ResetSamples();
 		}
 		else if (Window.GetKey(GLFW_KEY_S)) {
 			camera.Move(-CameraSpeed * (float)FrameTimer.Delta);
+			renderer->ResetSamples();
 		}
 
 		camera.GenerateViewTransform();

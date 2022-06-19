@@ -15,6 +15,8 @@ public:
 
 	void RenderFrame(const Camera& camera);
 	void Present();
+
+	void ResetSamples();
 private:
 	uint32_t viewportWidth, viewportHeight;
 	Window* bindedWindow;
@@ -37,8 +39,8 @@ private:
 	int frameCounter;
 	int* atomicCounterClear;
 
-	bool swapOrder;
-	void SwapRayBuffers();
+	int numCurrSamples;
+
 };
 
 #endif

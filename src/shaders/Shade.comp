@@ -7,6 +7,7 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 uniform layout(rgba16f) image2D ColorOutput;
 
 #include "common/BVH.glsl"
+#include "common/Random.glsl"
 
 layout(std430) readonly buffer samplers {
     vec4 materialInstance[];
@@ -24,21 +25,28 @@ layout(binding = 0, offset = 0) uniform atomic_uint rayWriteCounter;
 layout(binding = 0, offset = 4) uniform atomic_uint rayReadCounter;
 layout(binding = 0, offset = 12) uniform atomic_uint raysWritten;
 
-uniform vec3 lightPos;
+uniform int rngSeed;
+uniform int numCurrSamples;
 
 #define M_PI 3.141529
+
+vec3 CosineWeightedDirection() {
+    float r0 = rand(), r1 = rand();
+    float r = sqrt(r0);
+    float phi = 2 * M_PI * r1;
+    return vec3(r * vec2(sin(phi), cos(phi)), sqrt(1.0 - r0));
+}
 
 void main(){
     uint idxR = atomicCounterIncrement(rayReadCounter);
     if(idxR >= atomicCounter(raysWritten)) return;
     idxR *= 5;
 
-	uvec2 PixelCoordinates;
+	ivec2 PixelCoordinates;
     Vertex currVertex;
     vec3 throughPut, accum;
 
-    PixelCoordinates.x = floatBitsToUint( raysR[idxR].x);
-    PixelCoordinates.y = floatBitsToUint( raysR[idxR].y);
+    PixelCoordinates.xy= floatBitsToInt( raysR[idxR].xy);
     throughPut.xy      = raysR[idxR  ].zw;
     throughPut.z       = raysR[idxR+1].x;
     accum              = raysR[idxR+1].yzw;
@@ -49,22 +57,33 @@ void main(){
     currVertex.MatID             = floatBitsToInt(raysR[idxR+4].x) ;
 
     if(floatBitsToInt(materialInstance[currVertex.MatID + 1].w) == 1) {
-        imageStore(ColorOutput, ivec2(PixelCoordinates), vec4(throughPut * materialInstance[currVertex.MatID + 1].xyz, 1.0));
+        vec3 currRadiance = throughPut * materialInstance[currVertex.MatID + 1].xyz;
+        vec3 accumRadiance = imageLoad(ColorOutput, PixelCoordinates).xyz * numCurrSamples;
+        accumRadiance = (accumRadiance + currRadiance) / (numCurrSamples + 1);
+
+        imageStore(ColorOutput, PixelCoordinates, vec4(accumRadiance, 1.0));
     }
 
         //imageStore(ColorOutput, ivec2(gl_GlobalInvocationID.xy), vec4(currVertex.Position, 1.0));
 
-    vec3 albedo = texture(sampler2D(floatBitsToUint(materialInstance[currVertex.MatID].xy)), currVertex.TextureCoordinate).xyz;
-    float lightDist = distance(lightPos, currVertex.Position);
 
 
-    Ray shadowRay;
-    shadowRay.Origin = currVertex.Position + 0.001 * currVertex.Normal;
-    shadowRay.Direction = (lightPos - currVertex.Position) / lightDist;
+    InitRNG(PixelCoordinates, rngSeed);
+
+
+    vec3 normcrs = (abs(currVertex.Normal.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0));
+    vec3 tangent = normalize(cross(normcrs, currVertex.Normal));
+    vec3 bitangent = cross(tangent, currVertex.Normal);
+
+    Ray sampleRay;
+    sampleRay.Origin = currVertex.Position + 0.001 * currVertex.Normal;
+    sampleRay.Direction = mat3(tangent, bitangent, currVertex.Normal) * CosineWeightedDirection();
     
-    float attenuation = 1.0 / (4.0 * M_PI * lightDist * lightDist);
-    float ndotl = max(0.0, dot(currVertex.Normal, shadowRay.Direction));
-    vec3 brdf = albedo / M_PI * ndotl * attenuation;
+    vec3 albedo = texture(sampler2D(floatBitsToUint(materialInstance[currVertex.MatID].xy)), currVertex.TextureCoordinate).xyz;
+    float pdf = 1.0 / (2 * M_PI);
+    float ndotl = max(0.0, dot(currVertex.Normal, sampleRay.Direction));
+    vec3 brdf = albedo / M_PI;
+    vec3 reflectedIrradiance = brdf;// * ndotl / pdf;
 
     uint idxW        = atomicCounterIncrement(rayWriteCounter);
     idxW *= 5;
@@ -73,11 +92,11 @@ void main(){
     // PixelCoordinates = uvec2(idxR, idxW);
 
     raysW[idxW  ].xy  = uintBitsToFloat(PixelCoordinates);
-    raysW[idxW  ].zw  = throughPut.xy * brdf.xy;
-    raysW[idxW+1].x   = throughPut.z * brdf.z;
+    raysW[idxW  ].zw  = throughPut.xy * reflectedIrradiance.xy;
+    raysW[idxW+1].x   = throughPut.z * reflectedIrradiance.z;
     raysW[idxW+2].yzw = accum;
-    raysW[idxW+2].xyz = shadowRay.Origin;
-    raysW[idxW+3].xyz = shadowRay.Direction;
+    raysW[idxW+2].xyz = sampleRay.Origin;
+    raysW[idxW+3].xyz = sampleRay.Direction;
 
 
 

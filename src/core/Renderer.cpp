@@ -207,8 +207,6 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
 
     rayBuffer.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
     rayBuffer.UploadData(sizeof(RayInfo) * viewportWidth * viewportHeight * 2, nullptr, GL_DYNAMIC_DRAW);
-    swapOrder = false;
-    SwapRayBuffers();
 
     atomicCounterClear = new int[kNumAtomicCounters];
     for (int i = 0; i < kNumAtomicCounters; i++) {
@@ -218,7 +216,8 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     rayCounter.UploadData(sizeof(int) * kNumAtomicCounters, atomicCounterClear, GL_DYNAMIC_DRAW);
     rayCounter.CreateBlockBinding(BUFFER_TARGET_ATOMIC_COUNTER, 0);
 
-
+    rayBuffer.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 1, 0, rayBuffer.GetSize() / 2);
+    rayBuffer.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 2, rayBuffer.GetSize() / 2, rayBuffer.GetSize());
     scene.bvh.nodes.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 3);
     scene.materialsBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 4);
 
@@ -235,8 +234,8 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     extend.LoadInteger("ColorOutput", 0);
     extend.LoadInteger("vertexTex", 1);
     extend.LoadInteger("indexTex", 2);
-    extend.LoadShaderStorageBuffer("rayBufferW", 1);
-    extend.LoadShaderStorageBuffer("rayBufferR", 2);
+    extend.LoadShaderStorageBuffer("rayBufferW", 2);
+    extend.LoadShaderStorageBuffer("rayBufferR", 1);
     extend.LoadShaderStorageBuffer("nodes", scene.bvh.nodes);
     extend.LoadShaderStorageBuffer("samplers", scene.materialsBuf);
     extend.LoadAtomicBuffer(0, rayCounter);
@@ -258,6 +257,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
 
 
     frameCounter = 0;
+    numCurrSamples = 0;
 }
 
 void Renderer::CleanUp(void) {
@@ -274,48 +274,41 @@ void Renderer::CleanUp(void) {
     delete[] atomicCounterClear;
 }
 
-constexpr int kMaxPathLength = 2;
+constexpr int kMaxPathLength = 10;
 #define MEMORY_BARRIER_RT GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT | GL_ATOMIC_COUNTER_BARRIER_BIT
 
 void Renderer::RenderFrame(const Camera& camera)  {
-    float clearcol[4] = { 0.0, 0.0, 0.0, 1.0 };
-    glClearTexSubImage(colorTexture.GetHandle(), 0, 0, 0, 0, viewportWidth, viewportHeight, 1, GL_RGBA, GL_FLOAT, clearcol);
-
     glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 0, sizeof(int), atomicCounterClear);
     generate.CreateBinding();
     generate.LoadCamera("Camera", camera);
     glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
     glMemoryBarrier(MEMORY_BARRIER_RT);
-    SwapRayBuffers();
 
     for (int i = 0; i < kMaxPathLength; i++) {
         glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 8, sizeof(int) * 2, atomicCounterClear);
         extend.CreateBinding();
         glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
         glMemoryBarrier(MEMORY_BARRIER_RT);
-        SwapRayBuffers();
 
 
         glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 0, sizeof(int) * 2, atomicCounterClear);
         shade.CreateBinding();
+        shade.LoadInteger("rngSeed", frameCounter++);
+        shade.LoadInteger("numCurrSamples", numCurrSamples);
         glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
         glMemoryBarrier(MEMORY_BARRIER_RT);
-        SwapRayBuffers();
     }
-}
 
-void Renderer::SwapRayBuffers() {
-    int writeBinding = 1, readBinding = 2;
-    if (swapOrder) {
-        std::swap(writeBinding, readBinding);
-    }
-    swapOrder = !swapOrder;
-
-    rayBuffer.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, writeBinding, 0, rayBuffer.GetSize() / 2);
-    rayBuffer.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, readBinding, rayBuffer.GetSize() / 2, rayBuffer.GetSize());
+    numCurrSamples++;
 }
 
 void Renderer::Present() {
     presentShader.CreateBinding();
     glDrawArrays(GL_TRIANGLES, 0, 6);
+}
+
+void Renderer::ResetSamples() {
+    numCurrSamples = 0;
+    float clearcol[4] = { 0.0, 0.0, 0.0, 1.0 };
+    glClearTexSubImage(colorTexture.GetHandle(), 0, 0, 0, 0, viewportWidth, viewportHeight, 1, GL_RGBA, GL_FLOAT, clearcol);
 }
