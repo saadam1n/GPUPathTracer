@@ -3,6 +3,8 @@
 
 #include <stdio.h>
 #include <iostream>
+#include <random>
+#include <ctime>
 #include <glm/glm.hpp>
 
 using namespace glm;
@@ -165,6 +167,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     bindedWindow = Window;
     viewportWidth = bindedWindow->Width;
     viewportHeight = bindedWindow->Height;
+    uint32_t numPixels = viewportWidth * viewportHeight;
 
     static bool OpenGLLoaded = false;
     if (!OpenGLLoaded) {
@@ -206,7 +209,19 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     colorTexture.LoadData(GL_RGBA16F, GL_RGBA, GL_FLOAT, viewportWidth, viewportHeight, nullptr);
 
     rayBuffer.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
-    rayBuffer.UploadData(sizeof(RayInfo) * viewportWidth * viewportHeight * 2, nullptr, GL_DYNAMIC_DRAW);
+    rayBuffer.UploadData(sizeof(RayInfo) * numPixels * 2, nullptr, GL_DYNAMIC_DRAW);
+
+    std::default_random_engine stateGenerator;
+    std::uniform_int_distribution initalRange(129, INT32_MAX);
+    std::vector<uvec4> threadRandomState(numPixels);
+    for (ivec4 currState : threadRandomState) {
+        currState.x = initalRange(stateGenerator);
+        currState.y = initalRange(stateGenerator);
+        currState.z = initalRange(stateGenerator);
+        currState.w = initalRange(stateGenerator);
+    }
+    randomState.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
+    randomState.UploadData(threadRandomState, GL_DYNAMIC_DRAW);
 
     atomicCounterClear = new int[kNumAtomicCounters];
     for (int i = 0; i < kNumAtomicCounters; i++) {
@@ -216,10 +231,13 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     rayCounter.UploadData(sizeof(int) * kNumAtomicCounters, atomicCounterClear, GL_DYNAMIC_DRAW);
     rayCounter.CreateBlockBinding(BUFFER_TARGET_ATOMIC_COUNTER, 0);
 
+
+    
     rayBuffer.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 1, 0, rayBuffer.GetSize() / 2);
     rayBuffer.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 2, rayBuffer.GetSize() / 2, rayBuffer.GetSize());
     scene.bvh.nodes.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 3);
     scene.materialsBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 4);
+    randomState.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 5);
 
     colorTexture.BindImageUnit(0, GL_RGBA16F);
     colorTexture.BindTextureUnit(0, GL_TEXTURE_2D);
@@ -245,6 +263,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     shade.LoadShaderStorageBuffer("rayBufferW", 1);
     shade.LoadShaderStorageBuffer("rayBufferR", 2);
     shade.LoadShaderStorageBuffer("samplers", scene.materialsBuf);
+    shade.LoadShaderStorageBuffer("randomState", randomState);
     shade.LoadAtomicBuffer(0, rayCounter);
 
     shade.LoadVector3F32("lightPos", glm::vec3(0.0, 1.98, 0.0));
@@ -289,7 +308,6 @@ void Renderer::RenderFrame(const Camera& camera)  {
         extend.CreateBinding();
         glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
         glMemoryBarrier(MEMORY_BARRIER_RT);
-
 
         glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 0, sizeof(int) * 2, atomicCounterClear);
         shade.CreateBinding();

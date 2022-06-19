@@ -30,6 +30,8 @@ private:
 	Buffer rayBuffer;
 	Buffer rayCounter;
 
+	Buffer randomState;
+
 	ShaderCompute generate;
 	ShaderCompute extend;
 	ShaderCompute shade;
