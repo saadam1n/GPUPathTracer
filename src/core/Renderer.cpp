@@ -245,6 +245,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const char* env
 
     generate.CreateBinding();
     generate.LoadShaderStorageBuffer("rayBufferW", 1);
+    generate.LoadShaderStorageBuffer("randomState", randomState);
     generate.LoadAtomicBuffer(0, rayCounter);
 
     extend.CreateBinding();
@@ -289,13 +290,13 @@ void Renderer::CleanUp(void) {
     delete[] atomicCounterClear;
 }
 
-constexpr int kMaxPathLength = 10;
+constexpr int kMaxPathLength = 16;
 #define MEMORY_BARRIER_RT GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT | GL_ATOMIC_COUNTER_BARRIER_BIT
 
 void Renderer::RenderFrame(const Camera& camera)  {
     glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 0, sizeof(int), atomicCounterClear);
     generate.CreateBinding();
-    generate.LoadCamera("Camera", camera);
+    generate.LoadCamera("Camera", camera, viewportWidth, viewportHeight);
     glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
     glMemoryBarrier(MEMORY_BARRIER_RT);
 

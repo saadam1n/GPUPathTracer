@@ -27,3 +27,7 @@ Acheived Jun 16, 2022
 
 Acheived Jun 19, 2022
 ![Per-frame Accumulative Path Tracing. Image result after 5 minutes of rendering @ 45 FPS with 1 sample accumulated per frame](images/7PathTracing.png)
+
+Acheived June 19, 2022
+![Ray traced Depth of Field and Russian Roulette](images/8.1RayTracedDOF.png)
+![Ray traced Depth of Field and Russian Roulette](images/8.2RayTracedDOF.png)

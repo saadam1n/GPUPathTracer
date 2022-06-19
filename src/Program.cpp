@@ -22,7 +22,7 @@ constexpr float CameraSensitivity = 0.001f;
 glm::vec2 LastCursorPosition;
 
 // I need class here because Intellisense is not detecting the camera type
-Camera camera;
+Camera camera((float)Width / Height, glm::radians(45.0f), 100.0, 5.0);
 
 bool needResetSamples = false;
 
@@ -53,8 +53,6 @@ int main(int argc, char** argv) {
 
 	Renderer* renderer = new Renderer;
 	renderer->Initialize(&Window, "res/crytek/sponza.obj", "res/sky/logl/cubemap.txt");
-
-	camera.UpdateImagePlaneParameters((float)Width / (float)Height, glm::radians(45.0f));
 	camera.SetPosition(glm::vec3(0.0f, 0.15f, 0.5f) * 6.0f);
 
 	Timer FrameTimer;
@@ -76,10 +74,7 @@ int main(int argc, char** argv) {
 			needResetSamples = false;
 		}
 
-
-		camera.GenerateViewTransform();
 		camera.GenerateImagePlane();
-
 
 		renderer->RenderFrame(camera);
 		renderer->Present();

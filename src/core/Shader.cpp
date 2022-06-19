@@ -67,13 +67,16 @@ void Shader::LoadVector3F32(GLint Location, const glm::vec3& Value) {
 	glUniform3fv(Location, 1, glm::value_ptr(Value));
 }
 
-void Shader::LoadCamera(const char* Name, const Camera& Value) {
-	LoadVector3F32(GetStructureMemberLocation(Name, "Corner[0][0]"), Value.GetImagePlane().Corner[0][0]);
-	LoadVector3F32(GetStructureMemberLocation(Name, "Corner[0][1]"), Value.GetImagePlane().Corner[0][1]);
-	LoadVector3F32(GetStructureMemberLocation(Name, "Corner[1][0]"), Value.GetImagePlane().Corner[1][0]);
-	LoadVector3F32(GetStructureMemberLocation(Name, "Corner[1][1]"), Value.GetImagePlane().Corner[1][1]);
-
-	LoadVector3F32(GetStructureMemberLocation(Name, "Position"    ), Value.GetPosition()               );
+void Shader::LoadCamera(const char* Name, const Camera& camera, uint32_t width, uint32_t height) {
+	LoadVector3F32("lower_left", camera.lower_left);
+	LoadVector3F32("horizontal", camera.horizontal);
+	LoadVector3F32("vertical", camera.vertical);
+	LoadVector3F32("position", camera.position);
+	LoadVector3F32("u", camera.u);
+	LoadVector3F32("v", camera.v);
+	LoadFloat("lens_radius", camera.lens_radius);
+	LoadInteger("width", width);
+	LoadInteger("height", height);
 }
 
 void Shader::LoadShaderStorageBuffer(const char* Name, GLuint specificBinding) {

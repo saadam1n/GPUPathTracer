@@ -8,6 +8,7 @@ uniform layout(rgba32f) image2D colorOutput;
 
 #include "common/BVH.glsl"
 #include "common/Random.glsl"
+#include "common/Constants.glsl"
 
 layout(std430) readonly buffer samplers {
     vec4 materialInstance[];
@@ -27,11 +28,9 @@ layout(binding = 0, offset = 12) uniform atomic_uint raysWritten;
 
 uniform int width, height;
 
-#define M_PI 3.141529
-
 vec3 CosineWeightedDirection() {
     float r0 = rand(), r1 = rand();
-    float r = sqrt(r0);
+    float r = sqrt(r0); 
     float phi = 2 * M_PI * r1;
     return vec3(r * vec2(sin(phi), cos(phi)), sqrt(1.0 - r0));
 }
