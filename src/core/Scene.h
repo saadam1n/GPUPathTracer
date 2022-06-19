@@ -8,7 +8,7 @@
 
 class Scene {
 public:
-	void LoadScene(const std::string& Path);
+	void LoadScene(const std::string& path, const std::string& env_path);
 private:
 	Buffer vertexBuf;
 	TextureBuffer vertexTex;
@@ -19,7 +19,7 @@ private:
 	BoundingVolumeHierarchy bvh;
 
 	// We never actually use the texture names after initialization but I keep them anyway
-	std::vector<std::shared_ptr<Texture2D>> textures;
+	std::vector<Texture*> textures;
 	Buffer materialsBuf;
 
 	friend class Shader;

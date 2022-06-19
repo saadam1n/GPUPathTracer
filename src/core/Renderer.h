@@ -10,7 +10,7 @@
 
 class Renderer {
 public:
-	void Initialize(Window* ptr, const char* scenePath);
+	void Initialize(Window* ptr, const char* scenePath, const char* env_path);
 	void CleanUp();
 
 	void RenderFrame(const Camera& camera);
@@ -41,7 +41,7 @@ private:
 	int frameCounter;
 	int* atomicCounterClear;
 
-	int numCurrSamples;
+	int numSamples;
 
 };
 

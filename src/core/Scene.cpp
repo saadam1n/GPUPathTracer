@@ -30,13 +30,28 @@ struct MaterialInstance {
     int isEmissive;
 };
 
-void Scene::LoadScene(const std::string& Path) {
-    std::string Folder = Path.substr(0, Path.find_last_of('/') + 1);
+void Scene::LoadScene(const std::string& path, const std::string& env_path) {
+    std::vector<MaterialInstance> materialInstances;
+
+    
+
+    TextureCubemap* environment = new TextureCubemap;
+    environment->LoadTexture(env_path);
+    textures.push_back(environment);
+
+    MaterialInstance sky;
+    sky.isEmissive = true;
+    sky.emission = glm::vec3(1.0);
+    sky.samplerHandle = glGetTextureHandleARB(environment->GetHandle());
+    glMakeTextureHandleResidentARB(sky.samplerHandle);
+    materialInstances.push_back(sky);
+
+    std::string Folder = path.substr(0, path.find_last_of('/') + 1);
 
     Assimp::Importer importer;
 
     // Turn off smooth normals for path tracing to prevent "broken" BRDFs and energy loss.
-    const aiScene* Scene = importer.ReadFile(Path, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenNormals | aiProcess_GenUVCoords);
+    const aiScene* Scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenNormals | aiProcess_GenUVCoords);
 
     
     // Third order of business: load vertices into a megabuffer and transform texcoords to location on atlas
@@ -62,7 +77,7 @@ void Scene::LoadScene(const std::string& Path) {
     };
 
     std::map<std::string, int> TexCache;
-    std::vector<MaterialInstance> materialInstances;
+    
 
     for (uint32_t i = 0; i < Scene->mNumMeshes; i++) {
         const aiMesh* currMesh = Scene->mMeshes[i];
@@ -98,7 +113,7 @@ void Scene::LoadScene(const std::string& Path) {
             currMatID = (int)textures.size();
             TexCache.insert({ textureKey, currMatID });
 
-            std::shared_ptr<Texture2D> currtex(new Texture2D);
+            Texture2D* currtex = new Texture2D;
             currtex->CreateBinding();
 
             if (hasTextures) {

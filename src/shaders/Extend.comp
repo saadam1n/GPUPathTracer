@@ -41,24 +41,25 @@ void main(){
     HitInfo IntersectionInfo;
     IntersectionInfo.Depth = 1e20;
 
+    uint idxW = atomicCounterIncrement(rayWriteCounter) * 5;
+    raysW[idxW].xy    = intBitsToFloat(PixelCoordinates.xy);
+    raysW[idxW  ].zw  = throughPut.xy;
+    raysW[idxW+1].x   = throughPut.z;
+    raysW[idxW+1].yzw = accum;
     if(TraverseBVH(ray, IntersectionInfo)) {
         Vertex currVertex = GetInterpolatedVertex(IntersectionInfo);
         int matIdx = currVertex.MatID * 2;
-        uint idxW = atomicCounterIncrement(rayWriteCounter) * 5;
         // overwrite our ray with our vertex
-        raysW[idxW].xy    = intBitsToFloat(PixelCoordinates.xy);
-        raysW[idxW  ].zw  = throughPut.xy;
-        raysW[idxW+1].x   = throughPut.z;
-        raysW[idxW+1].yzw = accum;
         raysW[idxW+2].xyz = currVertex.Position;
         raysW[idxW+2].w = currVertex.Normal.x;
         raysW[idxW+3].xy = currVertex.Normal.yz;
         raysW[idxW+3].zw = currVertex.TextureCoordinate;
         raysW[idxW+4].x = intBitsToFloat(currVertex.MatID * 2);
-        
+    } else {
+        raysW[idxW+4].x = intBitsToFloat(0);
     }
-    
+
+    raysW[idxW+4].yzw = ray.Direction;
             //imageStore(ColorOutput, ivec2(PixelCoordinates), vec4(ray.Origin , 1.0));
-        //imageStore(ColorOutput, ivec2(PixelCoordinates), vec4(vec3(0.5), 1.0));
 
 }

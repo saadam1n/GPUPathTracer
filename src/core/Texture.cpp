@@ -9,6 +9,7 @@
 #include <iostream>
 #include <map>
 #include <filesystem>
+#include <fstream>
 
 // perhaps I should use a proper system for taking into account already loaded textures but this will do fine, just for now
 //std::map<std::string, GLuint> PreloadedTextureList;
@@ -86,25 +87,25 @@ CacheLoad LoadFromCache(std::string Path, int& Width, int& Height, int& Channels
 	return NewLoad;
 }
 
-Texture::Texture(void) : texture(UINT32_MAX) {
+Texture::Texture() : texture(UINT32_MAX) {
 
 }
 
-GLuint Texture::GetHandle(void) {
+GLuint Texture::GetHandle() {
 	return texture;
 }
 
-void Texture::EnsureGeneratedHandle(void) {
+void Texture::EnsureGeneratedHandle() {
 	if (texture == UINT32_MAX) {
 		glGenTextures(1, &texture);
 	}
 }
 
-void Texture::Free(void) {
+void Texture::Free() {
 	glDeleteTextures(1, &texture);
 }
 
-void Texture2D::CreateBinding(void) {
+void Texture2D::CreateBinding() {
 	EnsureGeneratedHandle();
 	glBindTexture(GL_TEXTURE_2D, texture);
 
@@ -123,7 +124,7 @@ void Texture::BindTextureUnit(uint32_t unit, GLenum target) {
 	glBindTexture(target, texture);
 }
 
-void Texture2D::FreeBinding(void) {
+void Texture2D::FreeBinding() {
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
@@ -147,13 +148,13 @@ void Texture2D::LoadData(GLenum DestinationFormat, GLenum SourceFormat, GLenum S
 	glTexImage2D(GL_TEXTURE_2D, 0, DestinationFormat, X, Y, 0, SourceFormat, SourceType, Data);
 }
 
-void TextureBuffer::CreateBinding(void) {
+void TextureBuffer::CreateBinding() {
 	EnsureGeneratedHandle();
 
 	glBindTexture(GL_TEXTURE_BUFFER, texture);
 }
 
-void TextureBuffer::FreeBinding(void) {
+void TextureBuffer::FreeBinding() {
 	glBindTexture(GL_TEXTURE_BUFFER, 0);
 }
 
@@ -170,4 +171,48 @@ void TextureBuffer::SelectBuffer(Buffer* Buf, GLenum Format) {
 	ReferencedBuffer = Buf;
 
 	glTexBuffer(GL_TEXTURE_BUFFER, Format, ReferencedBuffer->BufferHandle);
+}
+
+void TextureCubemap::CreateBinding() {
+	EnsureGeneratedHandle();
+	glBindTexture(GL_TEXTURE_CUBE_MAP, texture);
+}
+
+void TextureCubemap::FreeBinding() {
+	glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+}
+
+void TextureCubemap::LoadTexture(const std::string& wpath) {
+	std::string path = wpath;
+	for (char& c : path)
+		if (c == '\\')
+			c = '/';
+
+	std::string folder = path.substr(0, path.find_last_of('/') + 1);;
+	std::ifstream locations(path);
+
+	CreateBinding();
+	for (int i = 0; i < 6; i++) {
+		std::string facePath;
+		std::getline(locations, facePath);
+		if (facePath.front() == '#') {
+			i--;
+			continue;
+		}
+
+		facePath = folder + facePath;
+
+		int width, height, nrChannels;
+		unsigned char* face = SOIL_load_image(facePath.c_str(), &width, &height, &nrChannels, SOIL_LOAD_RGBA);
+
+
+		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, face);
+		SOIL_free_image_data(face);
+	}
+
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 }

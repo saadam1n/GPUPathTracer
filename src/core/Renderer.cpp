@@ -163,7 +163,7 @@ void DebugMessageCallback(GLenum source, GLenum type, GLuint id,
         id, _type, _severity, _source, msg);
 }
 
-void Renderer::Initialize(Window* Window, const char* scenePath) {
+void Renderer::Initialize(Window* Window, const char* scenePath, const char* env_path) {
     bindedWindow = Window;
     viewportWidth = bindedWindow->Width;
     viewportHeight = bindedWindow->Height;
@@ -187,7 +187,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     shade.CompileFile("Shade.comp");
     present.CompileFiles("Present.vert", "Present.frag");
 
-    scene.LoadScene(scenePath);
+    scene.LoadScene(scenePath, env_path);
 
     float quad[] = {
     -1.0f,  1.0f,
@@ -231,8 +231,6 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     rayCounter.CreateBinding(BUFFER_TARGET_ATOMIC_COUNTER);
     rayCounter.UploadData(sizeof(int) * kNumAtomicCounters, atomicCounterClear, GL_DYNAMIC_DRAW);
     rayCounter.CreateBlockBinding(BUFFER_TARGET_ATOMIC_COUNTER, 0);
-
-
     
     rayBuffer.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 1, 0, rayBuffer.GetSize() / 2);
     rayBuffer.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 2, rayBuffer.GetSize() / 2, rayBuffer.GetSize());
@@ -274,7 +272,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
 
 
     frameCounter = 0;
-    numCurrSamples = 0;
+    numSamples = 0;
 }
 
 void Renderer::CleanUp(void) {
@@ -313,7 +311,7 @@ void Renderer::RenderFrame(const Camera& camera)  {
         glMemoryBarrier(MEMORY_BARRIER_RT);
     }
 
-    numCurrSamples++;
+    numSamples++;
 }
 
 
@@ -321,12 +319,12 @@ void Renderer::RenderFrame(const Camera& camera)  {
 
 void Renderer::Present() {
     present.CreateBinding();
-    present.LoadInteger("numSamples", numCurrSamples);
+    present.LoadInteger("numSamples", numSamples);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
 void Renderer::ResetSamples() {
-    numCurrSamples = 0;
+    numSamples = 0;
     float clearcol[4] = { 0.0, 0.0, 0.0, 1.0 };
     glClearTexSubImage(colorTexture.GetHandle(), 0, 0, 0, 0, viewportWidth, viewportHeight, 1, GL_RGBA, GL_FLOAT, clearcol);
 }
