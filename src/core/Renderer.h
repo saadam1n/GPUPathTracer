@@ -18,12 +18,12 @@ public:
 
 	void ResetSamples();
 private:
-	uint32_t viewportWidth, viewportHeight;
+	uint32_t viewportWidth, viewportHeight, numPixels;
 	Window* bindedWindow;
 
 	Buffer quadBuf;
 	VertexArray screenQuad;
-	ShaderRasterization presentShader;
+	ShaderRasterization present;
 	Texture2D colorTexture;
 
 	// Wavefront path tracing

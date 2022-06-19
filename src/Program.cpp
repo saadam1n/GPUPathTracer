@@ -24,6 +24,8 @@ glm::vec2 LastCursorPosition;
 // I need class here because Intellisense is not detecting the camera type
 Camera camera;
 
+bool needResetSamples = false;
+
 void MouseCallback(GLFWwindow* Window, double X, double Y) {
 	glm::vec2 CurrentCursorPosition = glm::vec2(X, Y);
 
@@ -37,6 +39,7 @@ void MouseCallback(GLFWwindow* Window, double X, double Y) {
 	camera.AddRotation(glm::vec3(DeltaPosition, 0.0f));
 
 	LastCursorPosition = CurrentCursorPosition;
+	needResetSamples = true;
 }
 
 int main(int argc, char** argv) {
@@ -61,12 +64,18 @@ int main(int argc, char** argv) {
 
 		if (Window.GetKey(GLFW_KEY_W)) {
 			camera.Move(CameraSpeed * (float)FrameTimer.Delta);
-			renderer->ResetSamples();
+			needResetSamples = true;
 		}
 		else if (Window.GetKey(GLFW_KEY_S)) {
 			camera.Move(-CameraSpeed * (float)FrameTimer.Delta);
-			renderer->ResetSamples();
+			needResetSamples = true;
 		}
+
+		if (needResetSamples) {
+			renderer->ResetSamples();
+			needResetSamples = false;
+		}
+
 
 		camera.GenerateViewTransform();
 		camera.GenerateImagePlane();

@@ -62,7 +62,7 @@ float HybridTaus() {
 
 void initRNG(uint ridx) {
     stateIdx = ridx;
-    states[ridx] = state;
+    state = states[ridx];
 }
 
 void freeRNG() {

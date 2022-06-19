@@ -167,7 +167,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     bindedWindow = Window;
     viewportWidth = bindedWindow->Width;
     viewportHeight = bindedWindow->Height;
-    uint32_t numPixels = viewportWidth * viewportHeight;
+    numPixels = viewportWidth * viewportHeight;
 
     static bool OpenGLLoaded = false;
     if (!OpenGLLoaded) {
@@ -185,7 +185,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     generate.CompileFile("Generate.comp");
     extend.CompileFile("Extend.comp");
     shade.CompileFile("Shade.comp");
-    presentShader.CompileFiles("Present.vert", "Present.frag");
+    present.CompileFiles("Present.vert", "Present.frag");
 
     scene.LoadScene(scenePath);
 
@@ -206,15 +206,16 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     screenQuad.CreateStream(0, 2, 2 * sizeof(float));
 
     colorTexture.CreateBinding();
-    colorTexture.LoadData(GL_RGBA16F, GL_RGBA, GL_FLOAT, viewportWidth, viewportHeight, nullptr);
+    colorTexture.LoadData(GL_RGBA32F, GL_RGBA, GL_FLOAT, viewportWidth, viewportHeight, nullptr);
+
 
     rayBuffer.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
     rayBuffer.UploadData(sizeof(RayInfo) * numPixels * 2, nullptr, GL_DYNAMIC_DRAW);
 
     std::default_random_engine stateGenerator;
-    std::uniform_int_distribution initalRange(129, INT32_MAX);
+    std::uniform_int_distribution<uint32_t> initalRange(129, UINT32_MAX);
     std::vector<uvec4> threadRandomState(numPixels);
-    for (ivec4 currState : threadRandomState) {
+    for (uvec4& currState : threadRandomState) {
         currState.x = initalRange(stateGenerator);
         currState.y = initalRange(stateGenerator);
         currState.z = initalRange(stateGenerator);
@@ -239,7 +240,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     scene.materialsBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 4);
     randomState.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 5);
 
-    colorTexture.BindImageUnit(0, GL_RGBA16F);
+    colorTexture.BindImageUnit(0, GL_RGBA32F);
     colorTexture.BindTextureUnit(0, GL_TEXTURE_2D);
     scene.vertexTex.BindTextureUnit(1, GL_TEXTURE_BUFFER);
     scene.indexTex.BindTextureUnit(2, GL_TEXTURE_BUFFER);
@@ -249,7 +250,6 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     generate.LoadAtomicBuffer(0, rayCounter);
 
     extend.CreateBinding();
-    extend.LoadInteger("ColorOutput", 0);
     extend.LoadInteger("vertexTex", 1);
     extend.LoadInteger("indexTex", 2);
     extend.LoadShaderStorageBuffer("rayBufferW", 2);
@@ -259,20 +259,18 @@ void Renderer::Initialize(Window* Window, const char* scenePath) {
     extend.LoadAtomicBuffer(0, rayCounter);
 
     shade.CreateBinding();
-    shade.LoadInteger("ColorOutput", 0);
+    shade.LoadInteger("colorOutput", 0);
     shade.LoadShaderStorageBuffer("rayBufferW", 1);
     shade.LoadShaderStorageBuffer("rayBufferR", 2);
     shade.LoadShaderStorageBuffer("samplers", scene.materialsBuf);
     shade.LoadShaderStorageBuffer("randomState", randomState);
     shade.LoadAtomicBuffer(0, rayCounter);
+    shade.LoadInteger("width", viewportWidth);
+    shade.LoadInteger("height", viewportHeight);
 
-    shade.LoadVector3F32("lightPos", glm::vec3(0.0, 1.98, 0.0));
-    shade.LoadVector3F32("lightCol", glm::vec3(1.2, 1.25, 1.3) * 100.0f); // 3000000.0f
-    //shadow.LoadVector3F32("ambient", glm::vec3(0.1));
-
-    presentShader.CreateBinding();
-    presentShader.LoadFloat("exposure", 0.66f);
-    presentShader.LoadInteger("ColorTexture", 0);
+    present.CreateBinding();
+    present.LoadFloat("exposure", 3.66f);
+    present.LoadInteger("colorTexture", 0);
 
 
     frameCounter = 0;
@@ -283,7 +281,7 @@ void Renderer::CleanUp(void) {
     // I hope the scene destructor frees its resources
     generate.Free();
     extend.Free();
-    presentShader.Free();
+    present.Free();
 
     colorTexture.Free();
 
@@ -306,22 +304,24 @@ void Renderer::RenderFrame(const Camera& camera)  {
     for (int i = 0; i < kMaxPathLength; i++) {
         glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 8, sizeof(int) * 2, atomicCounterClear);
         extend.CreateBinding();
-        glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
+        glDispatchCompute(numPixels / 64, 1, 1);
         glMemoryBarrier(MEMORY_BARRIER_RT);
 
         glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 0, sizeof(int) * 2, atomicCounterClear);
         shade.CreateBinding();
-        shade.LoadInteger("rngSeed", frameCounter++);
-        shade.LoadInteger("numCurrSamples", numCurrSamples);
-        glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
+        glDispatchCompute(numPixels / 64, 1, 1);
         glMemoryBarrier(MEMORY_BARRIER_RT);
     }
 
     numCurrSamples++;
 }
 
+
+// glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
+
 void Renderer::Present() {
-    presentShader.CreateBinding();
+    present.CreateBinding();
+    present.LoadInteger("numSamples", numCurrSamples);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 

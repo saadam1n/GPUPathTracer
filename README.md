@@ -24,3 +24,6 @@ Acheived June 13, 2022
 
 Acheived Jun 16, 2022
 ![Shadows Using Wavefront Ray-Tracing Rendered 60 FPS on my GTX 980](images/6WavefrontShadows.png)
+
+Acheived Jun 19, 2022
+![Per-frame Accumulative Path Tracing. Image result after 5 minutes of rendering @ 45 FPS with 1 sample accumulated per frame](images/7PathTracing.png)
