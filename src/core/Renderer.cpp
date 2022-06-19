@@ -274,46 +274,34 @@ void Renderer::CleanUp(void) {
     delete[] atomicCounterClear;
 }
 
-void Renderer::RenderFrame(const Camera& camera)  {
+constexpr int kMaxPathLength = 2;
+#define MEMORY_BARRIER_RT GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT | GL_ATOMIC_COUNTER_BARRIER_BIT
 
-    // Begin by clearing our atomic counters
-    glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 0, sizeof(int) * kNumAtomicCounters, atomicCounterClear);
+void Renderer::RenderFrame(const Camera& camera)  {
     float clearcol[4] = { 0.0, 0.0, 0.0, 1.0 };
     glClearTexSubImage(colorTexture.GetHandle(), 0, 0, 0, 0, viewportWidth, viewportHeight, 1, GL_RGBA, GL_FLOAT, clearcol);
 
+    glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 0, sizeof(int), atomicCounterClear);
     generate.CreateBinding();
     generate.LoadCamera("Camera", camera);
-
     glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
-    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT | GL_ALL_BARRIER_BITS | GL_ATOMIC_COUNTER_BARRIER_BIT);
+    glMemoryBarrier(MEMORY_BARRIER_RT);
     SwapRayBuffers();
 
-    extend.CreateBinding();
-    extend.LoadInteger("Frame", frameCounter++);
-
-    glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
-    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT | GL_ATOMIC_COUNTER_BARRIER_BIT);
-    glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 0, sizeof(int), atomicCounterClear);
-    SwapRayBuffers();
-
-
-    shade.CreateBinding();
-    //shadow.LoadInteger("Frame", frameCounter++);
+    for (int i = 0; i < kMaxPathLength; i++) {
+        glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 8, sizeof(int) * 2, atomicCounterClear);
+        extend.CreateBinding();
+        glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
+        glMemoryBarrier(MEMORY_BARRIER_RT);
+        SwapRayBuffers();
 
 
-    
-    glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
-    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT | GL_ATOMIC_COUNTER_BARRIER_BIT);
-    glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 4, sizeof(int) * 2, atomicCounterClear);
-    SwapRayBuffers();
-
-    
-    extend.CreateBinding();
-    extend.LoadInteger("Frame", frameCounter++);
-
-    glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
-    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT);
-
+        glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 0, sizeof(int) * 2, atomicCounterClear);
+        shade.CreateBinding();
+        glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
+        glMemoryBarrier(MEMORY_BARRIER_RT);
+        SwapRayBuffers();
+    }
 }
 
 void Renderer::SwapRayBuffers() {

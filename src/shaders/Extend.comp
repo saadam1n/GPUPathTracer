@@ -21,8 +21,8 @@ layout(std430) readonly buffer samplers {
 };
 
 layout(binding = 0, offset = 0) uniform atomic_uint raysWritten;
-layout(binding = 0, offset = 4) uniform atomic_uint rayReadCounter;
-layout(binding = 0, offset = 8) uniform atomic_uint rayWriteCounter;
+layout(binding = 0, offset = 8) uniform atomic_uint rayReadCounter;
+layout(binding = 0, offset = 12) uniform atomic_uint rayWriteCounter;
 
 void main(){
     uint idxR = atomicCounterIncrement(rayReadCounter);
@@ -47,25 +47,22 @@ void main(){
     if(TraverseBVH(ray, IntersectionInfo)) {
         Vertex currVertex = GetInterpolatedVertex(IntersectionInfo);
         int matIdx = currVertex.MatID * 2;
-        if(floatBitsToInt(materialInstance[matIdx + 1].w) == 1) {
-            imageStore(ColorOutput, ivec2(PixelCoordinates), vec4(throughPut * materialInstance[matIdx + 1].xyz, 1.0));
-        } else {
-            uint idxW = atomicCounterIncrement(rayWriteCounter) * 5;
-            // overwrite our ray with our vertex
-            raysW[idxW].x   = uintBitsToFloat(PixelCoordinates.x);
-            raysW[idxW].y   = uintBitsToFloat(PixelCoordinates.y);
-            raysW[idxW  ].zw  = throughPut.xy;
-            raysW[idxW+1].x   = throughPut.z;
-            raysW[idxW+1].yzw = accum;
-            raysW[idxW+2].xyz = currVertex.Position;
-            raysW[idxW+2].w = currVertex.Normal.x;
-            raysW[idxW+3].xy = currVertex.Normal.yz;
-            raysW[idxW+3].zw = currVertex.TextureCoordinate;
-            raysW[idxW+4].x = intBitsToFloat(currVertex.MatID);
-        }
+        uint idxW = atomicCounterIncrement(rayWriteCounter) * 5;
+        // overwrite our ray with our vertex
+        raysW[idxW].x   = uintBitsToFloat(PixelCoordinates.x);
+        raysW[idxW].y   = uintBitsToFloat(PixelCoordinates.y);
+        raysW[idxW  ].zw  = throughPut.xy;
+        raysW[idxW+1].x   = throughPut.z;
+        raysW[idxW+1].yzw = accum;
+        raysW[idxW+2].xyz = currVertex.Position;
+        raysW[idxW+2].w = currVertex.Normal.x;
+        raysW[idxW+3].xy = currVertex.Normal.yz;
+        raysW[idxW+3].zw = currVertex.TextureCoordinate;
+        raysW[idxW+4].x = intBitsToFloat(currVertex.MatID * 2);
         
     }
     
             //imageStore(ColorOutput, ivec2(PixelCoordinates), vec4(ray.Origin , 1.0));
+        //imageStore(ColorOutput, ivec2(PixelCoordinates), vec4(vec3(0.5), 1.0));
 
 }
