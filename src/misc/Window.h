@@ -6,7 +6,7 @@
 
 class Window {
 public:
-	void Open(const char* Title, uint32_t Width, uint32_t Height);
+	void Open(const char* Title, uint32_t Width, uint32_t Height, bool fullscreen);
 	void Close(void);
 
 	bool ShouldClose(void);
@@ -19,8 +19,8 @@ public:
 private:
 	GLFWwindow* WindowHandle;
 
-	uint32_t Width;
-	uint32_t Height;
+	int32_t Width;
+	int32_t Height;
 
 	friend class Renderer;
 };

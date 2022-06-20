@@ -9,11 +9,18 @@ static struct GLFW_Init_Struct_T {
 	}
 } GLFW_Init;
 
-void Window::Open(const char* Title, uint32_t X, uint32_t Y) {
+void Window::Open(const char* Title, uint32_t X, uint32_t Y, bool fullscreen) {
 	Width = X;
 	Height = Y;
+	GLFWmonitor* monitor = nullptr;
+	if (fullscreen) {
+		monitor = glfwGetPrimaryMonitor();
+		const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+		Width = mode->width;
+		Height = mode->height;
+	}
 
-	WindowHandle = glfwCreateWindow(Width, Height, Title, nullptr, nullptr);
+	WindowHandle = glfwCreateWindow(Width, Height, Title, monitor, nullptr);
 	glfwMakeContextCurrent(WindowHandle);
 }
 
