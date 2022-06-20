@@ -17,12 +17,12 @@ uint32_t Height = 720;
 
 // Camera params 
 
-constexpr float CameraSpeed = 2000.000f * 0.1f;
+constexpr float CameraSpeed = 2000.000f * 0.01f;
 constexpr float CameraSensitivity = 0.001f;
 glm::vec2 LastCursorPosition;
 
 // I need class here because Intellisense is not detecting the camera type
-Camera camera((float)Width / Height, glm::radians(45.0f), 100.0, 5.0);
+Camera camera((float)Width / Height, glm::radians(45.0f), 5.0, 0.1);
 
 bool needResetSamples = false;
 
@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
 	Window.SetInputCallback(MouseCallback);
 
 	Renderer* renderer = new Renderer;
-	renderer->Initialize(&Window, "res/crytek/sponza.obj", "res/sky/logl/cubemap.txt");
+	renderer->Initialize(&Window, "res/office/casa2.obj", "res/sky/ibl/Topanga_Forest_B_3k.hdr");
 	camera.SetPosition(glm::vec3(0.0f, 0.15f, 0.5f) * 6.0f);
 
 	Timer FrameTimer;

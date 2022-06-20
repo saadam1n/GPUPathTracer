@@ -1,3 +1,4 @@
+# Taken from learnopengl.com
 right.jpg
 left.jpg
 top.jpg

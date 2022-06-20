@@ -6,6 +6,11 @@
 #include <random>
 #include <ctime>
 #include <glm/glm.hpp>
+#include <SOIL2.h>
+#include <stb_image.h>
+#include <glm/gtc/matrix_transform.hpp>
+
+
 
 using namespace glm;
 
@@ -163,7 +168,7 @@ void DebugMessageCallback(GLenum source, GLenum type, GLuint id,
         id, _type, _severity, _source, msg);
 }
 
-void Renderer::Initialize(Window* Window, const char* scenePath, const char* env_path) {
+void Renderer::Initialize(Window* Window, const char* scenePath, const std::string& env_path) {
     bindedWindow = Window;
     viewportWidth = bindedWindow->Width;
     viewportHeight = bindedWindow->Height;
@@ -182,12 +187,129 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const char* env
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(DebugMessageCallback, NULL);
 
+
+
+    float cube[] = {
+        // back face
+        -1.0f, -1.0f, -1.0f, 
+         1.0f,  1.0f, -1.0f, 
+         1.0f, -1.0f, -1.0f,        
+         1.0f,  1.0f, -1.0f, 
+        -1.0f, -1.0f, -1.0f, 
+        -1.0f,  1.0f, -1.0f, 
+        // front face
+        -1.0f, -1.0f,  1.0f, 
+         1.0f, -1.0f,  1.0f, 
+         1.0f,  1.0f,  1.0f, 
+         1.0f,  1.0f,  1.0f, 
+        -1.0f,  1.0f,  1.0f, 
+        -1.0f, -1.0f,  1.0f, 
+        // left face
+        -1.0f,  1.0f,  1.0f, 
+        -1.0f,  1.0f, -1.0f, 
+        -1.0f, -1.0f, -1.0f, 
+        -1.0f, -1.0f, -1.0f, 
+        -1.0f, -1.0f,  1.0f, 
+        -1.0f,  1.0f,  1.0f, 
+        // right face
+         1.0f,  1.0f,  1.0f, 
+         1.0f, -1.0f, -1.0f, 
+         1.0f,  1.0f, -1.0f,        
+         1.0f, -1.0f, -1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f, -1.0f,  1.0f,    
+        // bottom face
+        -1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f, 
+         1.0f, -1.0f,  1.0f, 
+         1.0f, -1.0f,  1.0f, 
+        -1.0f, -1.0f,  1.0f, 
+        -1.0f, -1.0f, -1.0f, 
+        // top face
+        -1.0f,  1.0f, -1.0f, 
+         1.0f,  1.0f , 1.0f, 
+         1.0f,  1.0f, -1.0f,    
+         1.0f,  1.0f,  1.0f, 
+        -1.0f,  1.0f, -1.0f, 
+        -1.0f,  1.0f,  1.0f,        
+    };
+
+    Buffer cubeBuf;
+    VertexArray cubeArr;
+
+    cubeBuf.CreateBinding(BUFFER_TARGET_ARRAY);
+    cubeBuf.UploadData(sizeof(cube), cube, GL_STATIC_DRAW);
+
+    cubeArr.CreateBinding();
+    cubeArr.CreateStream(0, 3, 3 * sizeof(float));
+
+
+
     generate.CompileFile("Generate.comp");
     extend.CompileFile("Extend.comp");
     shade.CompileFile("Shade.comp");
     present.CompileFiles("Present.vert", "Present.frag");
 
-    scene.LoadScene(scenePath, env_path);
+    TextureCubemap* environment = new TextureCubemap;
+
+    if (env_path.substr(env_path.find_last_of('.') + 1) == "hdr") {
+        int width, height, channels;
+        float* hdrData = stbi_loadf(env_path.c_str(), &width, &height, &channels, SOIL_LOAD_RGBA);
+        if (hdrData == nullptr) exit(-1);
+        Texture2D hdrTex;
+        hdrTex.CreateBinding();
+        hdrTex.LoadData(GL_RGBA32F, GL_RGBA, GL_FLOAT, width, height, hdrData);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        hdrTex.BindTextureUnit(0, GL_TEXTURE_2D);
+        stbi_image_free(hdrData);
+
+        ShaderRasterization equirectangularConverter;
+        equirectangularConverter.CompileFiles("EquirectangularConverter.vert", "EquirectangularConverter.frag");
+        equirectangularConverter.CreateBinding();
+        equirectangularConverter.LoadInteger("hdrTex", 0);
+        equirectangularConverter.LoadMat4x4F32("captureProjection", glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f));
+
+
+        constexpr uint32_t cubemapSize = 1024;
+        environment->CreateBinding();
+        glTexStorage2D(GL_TEXTURE_CUBE_MAP, 1, GL_RGBA32F, cubemapSize, cubemapSize);
+        glViewport(0, 0, cubemapSize, cubemapSize);
+
+        GLuint fbo;
+        glGenFramebuffers(1, &fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+        mat4 captureViews[] =
+        {
+           lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+           lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(-1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+           lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  1.0f,  0.0f), glm::vec3(0.0f,  0.0f,  1.0f)),
+           lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f,  0.0f), glm::vec3(0.0f,  0.0f, -1.0f)),
+           lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f,  1.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+           lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f, -1.0f), glm::vec3(0.0f, -1.0f,  0.0f))
+        };
+
+        for (int i = 0; i < 6; i++) {
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, environment->GetHandle(), 0);
+            equirectangularConverter.LoadMat4x4F32("captureView", captureViews[i]);
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+        }
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glDeleteFramebuffers(1, &fbo);
+        glViewport(0, 0, viewportWidth, viewportHeight);
+    } else environment->LoadTexture(env_path); // Load TXT file
+
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    scene.LoadScene(scenePath, environment);
 
     float quad[] = {
     -1.0f,  1.0f,
@@ -268,7 +390,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const char* env
     shade.LoadInteger("height", viewportHeight);
 
     present.CreateBinding();
-    present.LoadFloat("exposure", 3.66f);
+    present.LoadFloat("exposure", 1.6f);
     present.LoadInteger("colorTexture", 0);
 
 

@@ -8,7 +8,7 @@
 
 class Scene {
 public:
-	void LoadScene(const std::string& path, const std::string& env_path);
+	void LoadScene(const std::string& path, TextureCubemap* env_path);
 private:
 	Buffer vertexBuf;
 	TextureBuffer vertexTex;

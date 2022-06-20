@@ -10,6 +10,7 @@
 #include <map>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 
 // perhaps I should use a proper system for taking into account already loaded textures but this will do fine, just for now
 //std::map<std::string, GLuint> PreloadedTextureList;
@@ -183,6 +184,8 @@ void TextureCubemap::FreeBinding() {
 }
 
 void TextureCubemap::LoadTexture(const std::string& wpath) {
+	CreateBinding();
+
 	std::string path = wpath;
 	for (char& c : path)
 		if (c == '\\')
@@ -191,7 +194,6 @@ void TextureCubemap::LoadTexture(const std::string& wpath) {
 	std::string folder = path.substr(0, path.find_last_of('/') + 1);;
 	std::ifstream locations(path);
 
-	CreateBinding();
 	for (int i = 0; i < 6; i++) {
 		std::string facePath;
 		std::getline(locations, facePath);
@@ -209,10 +211,6 @@ void TextureCubemap::LoadTexture(const std::string& wpath) {
 		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, face);
 		SOIL_free_image_data(face);
 	}
+	
 
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 }

@@ -30,13 +30,9 @@ struct MaterialInstance {
     int isEmissive;
 };
 
-void Scene::LoadScene(const std::string& path, const std::string& env_path) {
+void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     std::vector<MaterialInstance> materialInstances;
-
     
-
-    TextureCubemap* environment = new TextureCubemap;
-    environment->LoadTexture(env_path);
     textures.push_back(environment);
 
     MaterialInstance sky;

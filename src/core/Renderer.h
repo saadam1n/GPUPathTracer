@@ -10,7 +10,7 @@
 
 class Renderer {
 public:
-	void Initialize(Window* ptr, const char* scenePath, const char* env_path);
+	void Initialize(Window* ptr, const char* scenePath, const std::string& env_path);
 	void CleanUp();
 
 	void RenderFrame(const Camera& camera);
