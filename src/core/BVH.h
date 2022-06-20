@@ -85,7 +85,8 @@ private:
 	friend class Shader;
 	friend class Renderer;
 
-	Buffer nodes;
+	Buffer nodesBuf;
+	TextureBuffer nodesTex;
 	
 	//AABB CreateBoundingBox(const std::vector<TriangleCentroid>& Centroids, const std::vector<AABB>& TriangleBoundingBoxes);
 

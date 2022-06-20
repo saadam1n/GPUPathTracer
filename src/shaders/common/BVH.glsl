@@ -298,29 +298,26 @@ struct BVHLeaf {
 
 // Generic node wit ha bounding box
 struct BVHNode {
-	AABB BoundingBox;
+	vec4 data[2];
 };
 
 // Node to represent a generic node
 
 struct BVHNodeGeneric {
-	BVHNode Node;
-
-	int Data[2];
+	AABB Box;
+	ivec2 Data;
 };
 
 // Node to represent a node that refrences other nodes
 struct BVHNodeRecursive {
-	BVHNode Node;
-
-	int ChildrenNodes[2];
+	AABB Box;
+	ivec2 ChildrenNodes;
 };
 
 // Node to represent a node that contains (or more correctly, is) a leaf
 struct BVHNodeLeaf {
-	BVHNode Node;
-
-	BVHLeaf Leaf;
+	AABB Box;
+	ivec2 Indices;
 };
 
 /*
@@ -328,8 +325,6 @@ BVH stack
 
 We store depth as well just in case with don't hit other nodes
 */
-
-
 
 
 #endif
@@ -355,228 +350,125 @@ struct BVHStackItem {
 	int Children[2];
 };
 
-// BVH_Stack_Item BVH_Stack[64];
+uniform samplerBuffer nodesTex;
 
-// For some reason, directly setting the type to generic node seems to have alignment issues
-// I have heard that GPUs align structs and whatnot to 16-byte alignments
-// That might have something to do here but I do not want to find the optimal solution to a trivial task like sampling from memory
-layout(std430) buffer nodes {
-	vec4 tree[];
-};
+BVHNode GetNode(int idx) {
+	BVHNode node;
 
-BVHNodeRecursive GetNodeGenericAsRecursive(BVHNodeGeneric Generic) {
-	BVHNodeRecursive Recursive;
+	idx *= 2;
+	node.data[0] = texelFetch(nodesTex, idx);
+	node.data[1] = texelFetch(nodesTex, idx + 1);
 
-	Recursive.Node = Generic.Node;
-
-	Recursive.ChildrenNodes[0] = Generic.Data[0];
-	Recursive.ChildrenNodes[1] = Generic.Data[1];
-
-	return Recursive;
-}
-
-BVHNodeLeaf GetNodeGenericAsLeaf(BVHNodeGeneric Generic) {
-	BVHNodeLeaf Leaf;
-
-	Leaf.Node = Generic.Node;
-
-	// Negate the data so we remove the differentiation marker
-	Leaf.Leaf.Index      =  Generic.Data[0];
-	Leaf.Leaf.IndexCount = -Generic.Data[1];
-
-	return Leaf;
-}
-
-BVHNodeGeneric GetNode(uint Index) {
-	BVHNodeGeneric Node;
-
-	vec4 TextureData[2];
-
-	Index *= 2;
-	TextureData[0] = tree[Index];
-	TextureData[1] = tree[Index + 1];
-
-	Node.Node.BoundingBox.Min    = TextureData[0].xyz;
-
-	Node.Node.BoundingBox.Max.x  = TextureData[0].w  ;
-	Node.Node.BoundingBox.Max.yz = TextureData[1].xy ;
-
-	Node.Data[0] = floatBitsToInt(TextureData[1].z);
-	Node.Data[1] = floatBitsToInt(TextureData[1].w);
-
-	return Node;
-}
-
-BVHNodeRecursive GetRootNode() {
-	BVHNodeRecursive Root = GetNodeGenericAsRecursive(GetNode(0));
-
-	return Root;
-}
-
-BVHNodeGeneric GetChildNode(in BVHNodeRecursive ParentNode, in uint Index) {
-	BVHNodeGeneric Child;
-
-	Child = GetNode(ParentNode.ChildrenNodes[Index]);
-
-	return Child;
-}
-
-BVHNodeGeneric GetRecursiveNodeAsGeneric(in BVHNodeRecursive R){
-	BVHNodeGeneric G;
-
-	G.Node = R.Node;
-
-	G.Data[0] = R.ChildrenNodes[0];
-	G.Data[1] = R.ChildrenNodes[1];
-
-	return G;
+	return node;
 }
 
 // AABB intersection test by madmann
-vec2 IntersectNode(in BVHNodeGeneric Node, in Ray InverseRay, in HitInfo Intersection) {
-	vec3 t_node_min = Node.Node.BoundingBox.Min * InverseRay.Direction + InverseRay.Origin;
-	vec3 t_node_max = Node.Node.BoundingBox.Max * InverseRay.Direction + InverseRay.Origin;
+vec2 IntersectNode(in BVHNode node, in Ray iray, in HitInfo intersect) {
+	vec3 t_node_min = node.data[0].xyz * iray.Direction + iray.Origin;
+	vec3 t_node_max = node.data[1].xyz * iray.Direction + iray.Origin;
 
 	vec3 t_min = min(t_node_min, t_node_max);
 	vec3 t_max = max(t_node_min, t_node_max);
 
-	float t_entry = max(t_min.x, max(t_min.y,     t_min.z                     ));
-	float t_exit  = min(t_max.x, min(t_max.y, min(t_max.z, Intersection.Depth )));
+	float t_entry = max(t_min.x, max(t_min.y,     t_min.z                   ));
+	float t_exit  = min(t_max.x, min(t_max.y, min(t_max.z, intersect.di.x  )));
 	return vec2(t_entry, t_exit);
 }
 
 // assert intersection
-bool ValidateIntersection(vec2 Distances) {
-	return Distances.x <= Distances.y && Distances.y > 0.0f;
+bool ValidateIntersection(in vec2 distances) {
+	return distances.x <= distances.y && distances.y > 0.0f;
 }
 
 // Go to the next avaible node on the stack if there is any
 //#define TRAVERSE_STACK()  if (StackIndex == -1) {break;} else {CurrentNode = Stack[StackIndex--];}
 
-void IntersectLeaf(in BVHNodeGeneric Generic, in Ray Ray, inout HitInfo Intersection, inout bool Result) {
-	BVHNodeLeaf Leaf = GetNodeGenericAsLeaf(Generic);
+void IntersectLeaf(in BVHNode leaf, in Ray ray, inout HitInfo intersection, inout bool result) {
+	int i = fbs(leaf.data[0].w);
+	int j = i - fbs(leaf.data[1].w);
 
-	int IterStart = Leaf.Leaf.Index;
-	int IterEnd = IterStart + Leaf.Leaf.IndexCount;
-
-	for(int Iter = IterStart; Iter < IterEnd; Iter++){
-		TriangleIndexData currTriIdx = FetchIndexData(Iter);
-
-		bool TriRes = IntersectTriangle(FetchTriangle(currTriIdx), Ray, Intersection);
-
-		Result = Result || TriRes;
+	for(int k = i; k < j; k++){
+		bool hit = IntersectTriangle(FetchTriangle(FetchIndexData(k)), ray, intersection);
+		result = result || hit;
 	}
-	//return Result;
 }
 
 // Go with 48 for lower memory usage. I would consider 32 to be the minimum for generally all meshes
 #define BVH_STACK_SIZE 64
 
-uint GetStackIndex(in BVHNodeRecursive BNR){
-	return BNR.ChildrenNodes[0];
-}
+bool TraverseBVH(in Ray ray, inout HitInfo intersection) {
+	Ray iray;
 
-uint GetStackIndex(in BVHNodeGeneric BNG){
-	// A bit inefficent since I cast isntead of using the values directly but whatever...
-	BVHNodeRecursive BNR = GetNodeGenericAsRecursive(BNG);
-	return GetStackIndex(BNR);
-}
+	iray.Direction = 1.0f / ray.Direction;
+	iray.Origin    = -ray.Origin * iray.Direction;
 
-bool TraverseBVH(in Ray IntersectionRay, inout HitInfo Intersection) {
-	int HeatMap = 0;
+	BVHNode root = GetNode(0);
 
-	Ray InverseRay;
-
-	InverseRay.Direction = 1.0f / IntersectionRay.Direction;
-	InverseRay.Origin    = -IntersectionRay.Origin * InverseRay.Direction;
-
-	BVHNodeRecursive RootNode = GetRootNode();
-
-	uint CurrentNode = GetStackIndex(RootNode);
-
-	if(!ValidateIntersection(IntersectNode(GetRecursiveNodeAsGeneric(RootNode), InverseRay, Intersection))){
-		//imageStore(ColorOutput, ivec2(gl_GlobalInvocationID.xy), vec4(vec3(0.0f), 1.0f));
+	if(!ValidateIntersection(IntersectNode(root, iray, intersection))){
 		return false;
 	} 
-	else{
-		HeatMap++;
-	}
 
-	bool Result = false;
+	bool result = false;
 
-	uint Stack[BVH_STACK_SIZE];
-	int StackIndex = -1;
+	int currentNode = fbs(root.data[0].w);
+	int stack[BVH_STACK_SIZE];
+	int index = -1;
 
 	while (true) {
-		BVHNodeGeneric Children[2];
+		BVHNode child0 = GetNode(currentNode);
+		BVHNode child1 = GetNode(currentNode + 1);
 
-		Children[0] = GetNode(CurrentNode    );
-		Children[1] = GetNode(CurrentNode + 1);
+		vec2 distance0 = IntersectNode(child0, iray, intersection);
+		vec2 distance1 = IntersectNode(child1, iray, intersection);
 
-		vec2 ChildrenIntersectionDistances[2];
+		bool hit0 = ValidateIntersection(distance0);
+		bool hit1 = ValidateIntersection(distance1);
 
-		ChildrenIntersectionDistances[0] = IntersectNode(Children[0], InverseRay, Intersection);
-		ChildrenIntersectionDistances[1] = IntersectNode(Children[1], InverseRay, Intersection);
+		// If the second node was hit but not the first, swap them to make sure all threads that just need to intersect one child don't branch 
+		if (!hit0 && hit1) {
+			hit0 = true;
+			hit1 = false;
 
-		bool ChildrenIntersectionSuccess[2];
-
-		ChildrenIntersectionSuccess[0] = ValidateIntersection(ChildrenIntersectionDistances[0]);
-		ChildrenIntersectionSuccess[1] = ValidateIntersection(ChildrenIntersectionDistances[1]);
-
-		if (ChildrenIntersectionSuccess[0] && Children[0].Data[1] < 0) {
-			IntersectLeaf(Children[0], IntersectionRay, Intersection, Result);
-			ChildrenIntersectionSuccess[0] = false;
+			BVHNode temp = child0;
+			child0 = child1;
+			child1 = temp;
 		}
 
-		if (ChildrenIntersectionSuccess[1] && Children[1].Data[1] < 0) {
-			IntersectLeaf(Children[1], IntersectionRay, Intersection, Result);
-			ChildrenIntersectionSuccess[1] = false;
+		if (hit0 && fbs(child0.data[1].w) < 0) {
+			IntersectLeaf(child0, ray, intersection, result);
+			hit0 = false;
 		}
 
-		// At least one node was intersected
-		if(ChildrenIntersectionSuccess[0] || ChildrenIntersectionSuccess[1]) {
-			if(ChildrenIntersectionSuccess[0] && ChildrenIntersectionSuccess[1]) {
-				// Both children were intersected. We need to sort by distance. Child 1 should be the one pushed on to the stack
-				if(ChildrenIntersectionDistances[0].x > ChildrenIntersectionDistances[1].x){
-					// Swap nodes
-					BVHNodeGeneric Temp = Children[0];
+		if (hit1 && fbs(child1.data[1].w) < 0) {
+			IntersectLeaf(child1, ray, intersection, result);
+			hit1 = false;
+		}
 
-					Children[0] = Children[1];
-					Children[1] = Temp       ;
-				}
-
-				// Debug safety feature
-				#if 0
-				if(StackIndex == BVH_STACK_SIZE){
-					break;
-				}
-				#endif
-
-				Stack[++StackIndex] = GetStackIndex(Children[1]);
-
-				CurrentNode = GetStackIndex(Children[0]);
-			} else if(ChildrenIntersectionSuccess[0]) {
-				// Child 0 was only intersected
-				CurrentNode = GetStackIndex(Children[0]);
-			} else {
-				// Child 1 was only intersected
-				CurrentNode = GetStackIndex(Children[1]);
+		if (hit0 && hit1) {
+			if(distance0.x > distance1.x) {
+				BVHNode tmpn = child0;
+				child0 = child1;
+				child1 = tmpn;
 			}
-		} else {
-			//TRAVERSE_STACK();
-			if (StackIndex == -1) {
+			stack[++index] = fbs(child1.data[0].w);
+			currentNode = fbs(child0.data[0].w);
+		}
+		else if (hit0)
+			currentNode = fbs(child0.data[0].w);
+		else if(hit1)
+			currentNode = fbs(child1.data[0].w);
+		else
+			if (index == -1)
 				 break;
-			} else {
-				CurrentNode = Stack[StackIndex--];
-			}
-		}
+			else 
+				currentNode = stack[index--];
 
 	}
 
-	//imageStore(ColorOutput, ivec2(gl_GlobalInvocationID.xy), vec4(vec3(HeatMap) / 128.0f, 1.0f));
-
-	return Result;
+	return result;
 }
+
+/*
 
 bool TraverseMesh(in Ray R, inout HitInfo I){
 	bool Res = false; 
@@ -648,6 +540,8 @@ while true
 
 */
 
+/*
+
 // cause of numerical instability (line when camera flat)
 vec2 IntersectNode(in BVHNodeGeneric Node, in Ray InverseRay) {
 	vec3 t_node_min = Node.Node.BoundingBox.Min * InverseRay.Direction + InverseRay.Origin;
@@ -683,6 +577,8 @@ When I removed depth, my FPS skyrocketed to 70-80
 My explanation for this is that such a small difference in structure size can mess up cache sizes a lot
 It is probably rounding up both to 16 bytes
 */
+
+/*
 struct NextNode {
 	ivec2 data;
 };
@@ -760,5 +656,5 @@ bool TraverseBVH2(in Ray currRay, inout HitInfo intersection) {
 	//debugColor /= ;
 	return hitResult;
 }
-
+*/
 #endif

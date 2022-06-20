@@ -356,7 +356,6 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     
     rayBuffer.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 1, 0, rayBuffer.GetSize() / 2);
     rayBuffer.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 2, rayBuffer.GetSize() / 2, rayBuffer.GetSize());
-    scene.bvh.nodes.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 3);
     scene.materialsBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 4);
     randomState.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 5);
 
@@ -364,6 +363,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     colorTexture.BindTextureUnit(0, GL_TEXTURE_2D);
     scene.vertexTex.BindTextureUnit(1, GL_TEXTURE_BUFFER);
     scene.indexTex.BindTextureUnit(2, GL_TEXTURE_BUFFER);
+    scene.bvh.nodesTex.BindTextureUnit(3, GL_TEXTURE_BUFFER);
 
     generate.CreateBinding();
     generate.LoadShaderStorageBuffer("rayBufferW", 1);
@@ -371,23 +371,23 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     generate.LoadAtomicBuffer(0, rayCounter);
 
     extend.CreateBinding();
-    extend.LoadInteger("vertexTex", 1);
-    extend.LoadInteger("indexTex", 2);
+    extend.LoadAtomicBuffer(0, rayCounter);
     extend.LoadShaderStorageBuffer("rayBufferW", 2);
     extend.LoadShaderStorageBuffer("rayBufferR", 1);
-    extend.LoadShaderStorageBuffer("nodes", scene.bvh.nodes);
-    extend.LoadShaderStorageBuffer("samplers", scene.materialsBuf);
-    extend.LoadAtomicBuffer(0, rayCounter);
+    extend.LoadInteger("vertexTex", 1);
+    extend.LoadInteger("indexTex", 2);
+    extend.LoadInteger("nodesTex", 3);
+
 
     shade.CreateBinding();
-    shade.LoadInteger("colorOutput", 0);
+    shade.LoadAtomicBuffer(0, rayCounter);
     shade.LoadShaderStorageBuffer("rayBufferW", 1);
     shade.LoadShaderStorageBuffer("rayBufferR", 2);
     shade.LoadShaderStorageBuffer("samplers", scene.materialsBuf);
     shade.LoadShaderStorageBuffer("randomState", randomState);
-    shade.LoadAtomicBuffer(0, rayCounter);
     shade.LoadInteger("width", viewportWidth);
     shade.LoadInteger("height", viewportHeight);
+    shade.LoadInteger("colorOutput", 0);
 
     present.CreateBinding();
     present.LoadFloat("exposure", 1.6f);

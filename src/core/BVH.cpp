@@ -10,6 +10,8 @@
 #include <future>
 #include <condition_variable>
 
+using namespace glm;
+
 void DebugPrintBVH(const std::vector<NodeSerialized>& Nodes, const std::vector<int32_t>& LeafContents);
 
 using BVH = BoundingVolumeHierarchy;
@@ -515,8 +517,29 @@ void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<V
 	}
 	Indices = directTriangleIndices;
 
-	nodes.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
-	nodes.UploadData(ProcessedNodes, GL_STATIC_DRAW);
+	// This is very unsafe and super bad according to some C++ programmers but we live on the edge and we want the edge of performance
+	for (NodeSerialized& node : ProcessedNodes) {
+		struct NewLayout {
+			vec3 min;
+			int data0;
+			vec3 max;
+			int data1;
+		} temp;
+
+		temp.min = node.BoundingBox.Min;
+		temp.data0 = node.ChildrenNodes[0];
+		temp.max = node.BoundingBox.Max;
+		temp.data1 = node.ChildrenNodes[1];
+
+		NewLayout* ptr = (NewLayout*)&node;
+		*ptr = temp;
+	}
+
+	nodesBuf.CreateBinding(BUFFER_TARGET_ARRAY);
+	nodesBuf.UploadData(ProcessedNodes, GL_STATIC_DRAW);
+
+	nodesTex.CreateBinding();
+	nodesTex.SelectBuffer(&nodesBuf, GL_RGBA32F);
 
 	ConstructionTimer.End();
 	ConstructionTimer.DebugTime();

@@ -104,7 +104,7 @@ struct PackedVertex {
     vec4 PN;
     // Normal yz, tex coord xy
     vec4 NT;
-    // Material ID and 3 ints of padding
+    // Material ID and 3 ints of padding (a tangent in the future, maybe?)
     vec4 MP;
 };
 
@@ -126,7 +126,7 @@ Vertex UnpackVertex(in PackedVertex PV) {
 }
 
 struct Triangle {
-    Vertex[3] Vertices;
+    PackedVertex[3] Vertices;
 };
 
 struct VertexInterpolationInfo {
@@ -139,133 +139,97 @@ struct TriangleHitInfo {
 };
 
 struct HitInfo {
-    float Depth;
-    TriangleHitInfo TriangleHitInfo;
-};
-
-struct TriangleIndexData {
-    uvec3 Indices;
+    vec4 di;
+    Triangle intersected;
 };
 
 
-bool IntersectTriangle(in Triangle Triangle, in Ray Ray, inout HitInfo Hit) {
+bool IntersectTriangle(in Triangle tri, in Ray ray, inout HitInfo closestHit) {
     // this is mostly a copy paste from scratchapixel's code that has been refitted to work with GLSL
+    HitInfo attemptHit;
+    attemptHit.intersected = tri;
 
-    TriangleHitInfo TentativeTriangleHitInfo;
-    TentativeTriangleHitInfo.IntersectedTriangle = Triangle;
+    vec3 v01 = tri.Vertices[1].PN.xyz - tri.Vertices[0].PN.xyz;
+    vec3 v02 = tri.Vertices[2].PN.xyz - tri.Vertices[0].PN.xyz;
 
-    vec3 V01 = Triangle.Vertices[1].Position.xyz - Triangle.Vertices[0].Position.xyz;
-    vec3 V02 = Triangle.Vertices[2].Position.xyz - Triangle.Vertices[0].Position.xyz;
+    vec3 p = cross(ray.Direction, v02);
 
-    vec3 Pvec = cross(Ray.Direction, V02);
-
-    float Det = dot(V01, Pvec);
+    float det = dot(v01, p);
 
     //#define AVOID_DIV_BY_0
-
 #ifdef AVOID_DIV_BY_0
-    const float Epsilon = 1e-6f;
-
-    //#define BACK_FACE_CULLING
-
-    float CompareVal =
-#ifdef BACK_FACE_CULLING
-        Det
-#else
-        abs(Det)
-#endif
-        ;
-
-    if (CompareVal < Epsilon) {
+    if (abs(det) < 1e-6f) {
         return false;
     }
 #endif
 
-    float InverseDet = 1.0f / Det;
+    float idet = 1.0f / det;
 
-    vec3 Tvec = Ray.Origin - Triangle.Vertices[0].Position;
-    TentativeTriangleHitInfo.InterpolationInfo.U = dot(Tvec, Pvec) * InverseDet;
+    vec3 t = ray.Origin - tri.Vertices[0].PN.xyz;
+    attemptHit.di.y = dot(t, p) * idet;
 
-    if (TentativeTriangleHitInfo.InterpolationInfo.U < 0.0f || TentativeTriangleHitInfo.InterpolationInfo.U > 1.0f) {
+    if (attemptHit.di.y < 0.0f || attemptHit.di.y > 1.0f) {
         return false;
     }
 
-    vec3 Qvec = cross(Tvec, V01);
-    TentativeTriangleHitInfo.InterpolationInfo.V = dot(Ray.Direction, Qvec) * InverseDet;
+    vec3 q = cross(t, v01);
+    attemptHit.di.z = dot(ray.Direction, q) * idet;
 
-    if (TentativeTriangleHitInfo.InterpolationInfo.V < 0.0f || TentativeTriangleHitInfo.InterpolationInfo.U + TentativeTriangleHitInfo.InterpolationInfo.V  > 1.0f) {
+    if (attemptHit.di.z < 0.0f || attemptHit.di.y + attemptHit.di.z  > 1.0f) {
         return false;
     }
 
-    float t = dot(V02, Qvec) * InverseDet;
+    attemptHit.di.x = dot(v02, q) * idet;
 
-    if (t < Hit.Depth && t > 0.0f) {
-        Hit.Depth = t;
-        Hit.TriangleHitInfo = TentativeTriangleHitInfo;
+    if (attemptHit.di.x < closestHit.di.x && attemptHit.di.x > 0.0f) {
+        closestHit = attemptHit;
         return true;
     }
-    else {
+    else
         return false;
-    }
 }
 
-Vertex GetInterpolatedVertex(in HitInfo Intersection) {
-    Vertex InterpolatedVertex;
+#include "Util.glsl"
+
+Vertex GetInterpolatedVertex(in Ray ray, inout HitInfo intersection) {
+    Vertex interpolated;
 
     // I should probably precompute 1 - U - V
+    intersection.di.w = 1.0 - intersection.di.y - intersection.di.z;
+    
 
-    vec3 Interpolation = vec3(
-        (1.0f - Intersection.TriangleHitInfo.InterpolationInfo.U - Intersection.TriangleHitInfo.InterpolationInfo.V),
-        Intersection.TriangleHitInfo.InterpolationInfo.U,
-        Intersection.TriangleHitInfo.InterpolationInfo.V
-    );
+    interpolated.Position = ray.Origin + ray.Direction * intersection.di.x;
 
-    InterpolatedVertex.Position =
+    /*
+    interpolated.Normal = normalize(
 
-        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[1].Position * Interpolation[1] +
-        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[2].Position * Interpolation[2] +
-        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[0].Position * Interpolation[0]
+        vec3(intersection.intersected.Vertices[1].PN.w, intersection.intersected.Vertices[1].NT.xy) * intersection.di.y +
+        vec3(intersection.intersected.Vertices[2].PN.w, intersection.intersected.Vertices[2].NT.xy) * intersection.di.z +
+        vec3(intersection.intersected.Vertices[0].PN.w, intersection.intersected.Vertices[0].NT.xy) * intersection.di.w);
+        */
 
-        ;
+    // It is better to use this since in path tracing, the normal MUST be perpendicular to the triangle face to conserve energy
+    interpolated.Normal = vec3(intersection.intersected.Vertices[0].PN.w, intersection.intersected.Vertices[0].NT.xy);
 
-    InterpolatedVertex.Normal =
+    
+    interpolated.TextureCoordinate =
 
-        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[1].Normal * Interpolation[1] +
-        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[2].Normal * Interpolation[2] +
-        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[0].Normal * Interpolation[0]
+        intersection.intersected.Vertices[1].NT.zw * intersection.di.y +
+        intersection.intersected.Vertices[2].NT.zw * intersection.di.z +
+        intersection.intersected.Vertices[0].NT.zw * intersection.di.w;
 
-        ;
 
-    InterpolatedVertex.TextureCoordinate =
+    interpolated.MatID = fbs(intersection.intersected.Vertices[0].MP.x);
 
-        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[1].TextureCoordinate * Interpolation[1] +
-        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[2].TextureCoordinate * Interpolation[2] +
-        Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[0].TextureCoordinate * Interpolation[0]
-
-        ;
-
-    InterpolatedVertex.Normal = normalize(InterpolatedVertex.Normal);
-    InterpolatedVertex.MatID = Intersection.TriangleHitInfo.IntersectedTriangle.Vertices[0].MatID;
-
-    return InterpolatedVertex;
+    return interpolated;
 }
 
 uniform samplerBuffer vertexTex;
 uniform isamplerBuffer indexTex;
 
-uint GetTriangleCount() {
-    return textureSize(indexTex);
-}
+#define FetchIndexData(idx) texelFetch(indexTex, idx).xyz
 
-TriangleIndexData FetchIndexData(uint uidx) {
-    TriangleIndexData TriangleIDX;
-
-    TriangleIDX.Indices = texelFetch(indexTex, int(uidx)).xyz;
-
-    return TriangleIDX;
-}
-
-Vertex FetchVertex(uint uidx) {
+PackedVertex FetchVertex(uint uidx) {
     PackedVertex PV;
 
     int idx = 3 * int(uidx);
@@ -273,21 +237,17 @@ Vertex FetchVertex(uint uidx) {
     PV.NT = texelFetch(vertexTex, idx + 1);
     PV.MP = texelFetch(vertexTex, idx + 2);
 
-    return UnpackVertex(PV);
+    return PV;
 }
 
-Triangle FetchTriangle(TriangleIndexData TriIDX) {
+Triangle FetchTriangle(ivec3 indices) {
     Triangle CurrentTriangle;
 
-    CurrentTriangle.Vertices[0] = FetchVertex(TriIDX.Indices[0]);
-    CurrentTriangle.Vertices[1] = FetchVertex(TriIDX.Indices[1]);
-    CurrentTriangle.Vertices[2] = FetchVertex(TriIDX.Indices[2]);
+    CurrentTriangle.Vertices[0] = FetchVertex(indices[0]);
+    CurrentTriangle.Vertices[1] = FetchVertex(indices[1]);
+    CurrentTriangle.Vertices[2] = FetchVertex(indices[2]);
 
     return CurrentTriangle;
-}
-
-Triangle FetchTriangle(uint IDX) {
-    return FetchTriangle(FetchIndexData(IDX));
 }
 
 #endif

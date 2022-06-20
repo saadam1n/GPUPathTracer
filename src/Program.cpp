@@ -22,7 +22,7 @@ constexpr float CameraSensitivity = 0.001f;
 glm::vec2 LastCursorPosition;
 
 // I need class here because Intellisense is not detecting the camera type
-Camera camera((float)Width / Height, glm::radians(45.0f), 900.0, 2.0);
+Camera camera((float)Width / Height, glm::radians(45.0f), 900.0, 5.0);
 
 bool needResetSamples = false;
 
