@@ -54,8 +54,8 @@ int main(int argc, char** argv) {
 	Window.SetInputCallback(MouseCallback);
 
 	Renderer* renderer = new Renderer;
-	renderer->Initialize(&Window, "res/objects/bunny_plane.obj", "GENERATE COLOR WHITE");
-	camera.SetPosition(glm::vec3(0.0f, 0.15f, 0.5f) * 6.0f);
+	renderer->Initialize(&Window, "res/objects/sphere_light.obj", "GENERATE COLOR BLACK");
+	camera.SetPosition(glm::vec3(-0.25f, 2.79f, 6.0));
 
 	Timer FrameTimer;
 

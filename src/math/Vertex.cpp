@@ -4,9 +4,9 @@
 Vertex Vertex::operator*(float Value) {
 	Vertex NewVertex;
 
-	NewVertex.Position = Position * Value;
-	NewVertex.Normal = Normal * Value;
-	NewVertex.TextureCoordinates = TextureCoordinates * Value;
+	NewVertex.position = position * Value;
+	NewVertex.normal = normal * Value;
+	NewVertex.texcoords = texcoords * Value;
 
 	return NewVertex;
 }
@@ -14,9 +14,9 @@ Vertex Vertex::operator*(float Value) {
 Vertex Vertex::operator+(const Vertex& Value) {
 	Vertex NewVertex;
 
-	NewVertex.Position = Position + Value.Position;
-	NewVertex.Normal = Normal + Value.Normal;
-	NewVertex.TextureCoordinates = TextureCoordinates + Value.TextureCoordinates;
+	NewVertex.position = position + Value.position;
+	NewVertex.normal = normal + Value.normal;
+	NewVertex.texcoords = texcoords + Value.texcoords;
 
 	return NewVertex;
 }

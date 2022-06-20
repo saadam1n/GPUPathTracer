@@ -22,6 +22,10 @@ private:
 	std::vector<Texture*> textures;
 	Buffer materialsBuf;
 
+	float totalLightArea;
+	Buffer lightBuf;
+	TextureBuffer lightTex;
+
 	friend class Shader;
 	friend class Renderer;
 };

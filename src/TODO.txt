@@ -35,6 +35,44 @@ NEW TODO 6/19:
 - Add NEE support (and maybe shader preprocessing args to turn on/off direction lights)
 - Add support for a wider variety of materials (reflection, refraction, PBR, etc)
 
+NEE implmentation
+First of all, I will start with a small implementation, and then work my way up to the paper devsh suggested (https://github.com/Devsh-Graphics-Programming/Nabla/pull/340)
+The current way I will do, I will uniformally distribute a point over all surfaces within a scene
+To find this point, I will iterate over all triangles and sum their areas until I have an area larger than rand() * totalSurfaceArea (I could use binary search but too many bugs and points of failure when implemented atm)
+Then, I will generate a random point within the triangle and use that as my sampling point
+
+Now this comes to part I really wish I would be able to delay in it's implementaton because it would mean a lot of debugging and frustration
+I will need to implement a seperate kernel just for visibility, since NEE doesn't use closest intersection, it uses any intersection (in between p and p_l)
+
+To implement as bug free as possible, I will start off with hardcoding the cornell box light, and picking a point that way
+
+Then, I will implement the shadow kernel (connect as it was called in the wavefront path tracing blog article)
+
+The actual information specifcs:
+We will need to spawn 2 rays, one that is NEE and the other one that samples indirect light
+Since the NEE ray will have a seperate kernel, we do not need to have two light accumulation buffers
+
+Scratch that, one kernel for now since this is getting complicated (and there is one light anyway)
+That means we will need 2 accumulation buffers, and an indicator to tell us which one
+For each ray we spawn, we need to give a flag that it is either NEE or indirect, so when we actually hit a light, we can access the radiance buffer without a data race
+In the present stage, we collect these back and average our results 
+
+Now that I know how NEE works, the accum part becomes useless, and I just need to store an integer flag
+
+In the shade stage, we issue two new rays, one that is NEE and one that isn't (the sample type is 0)
+NEE chooses a path on the light, and we do the pdf and whatnot, and then do russian roulette
+Indirect chooses a cosine weighted path, do stuff and roulette again
+
+However, with NEE we set sample type to 1, and indirect to 0
+Then, the extend stage moves this value over back to the shade stage
+
+If we hit a light, we know which image to write to based on this integer
+
+UPDATE: did I actually implement NEE? no convergance gain
+TODO: reorganize code, reorganize overything, rewrite, etc.
+I need to restruct my pipeline so I can actually do NEE easily and all that jazz
+I also need to read up on materials on how to actually do NEE with specular so I can structure my pipeline properly
+
 =================================================================
 Haha, time flies, right? Since I'm visiting this project after a year, everything below the line goes in the garbage until I can clear my mind about what to do.
 

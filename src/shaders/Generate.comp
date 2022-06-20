@@ -5,6 +5,7 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 #include "common/Geometry.glsl"
 #include "common/Random.glsl"
 #include "common/Constants.glsl"
+#include "common/Util.glsl"
 
 layout(binding = 0, offset = 0) uniform atomic_uint rayCounter;
 
@@ -44,9 +45,8 @@ void main() {
     const vec3 initAccumulated = vec3(0.0);
     
     raysW[idx  ].xy  = uintBitsToFloat(PixelCoordinates.xy);
-    raysW[idx  ].zw  = initThroughPut.xy;
-    raysW[idx+1].x   = initThroughPut.z;
-    raysW[idx+1].yzw = initAccumulated;
+    raysW[idx+1].xyz = initThroughPut;
+    raysW[idx+1].w   = intBitsToFloat(0);
     raysW[idx+2].xyz = ray.Origin;
     raysW[idx+3].xyz = ray.Direction;
     

@@ -26,7 +26,7 @@ private:
 	Buffer cubeBuf;
 	VertexArray cubeArr;
 	ShaderRasterization present;
-	Texture2D colorTexture;
+	Texture2D directAccum;
 
 	// Wavefront path tracing
 	Buffer rayBuffer;

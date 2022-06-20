@@ -4,13 +4,20 @@ in vec2 SampleCoords;
 
 out vec3 color;
 
-uniform sampler2D colorTexture;
+uniform sampler2D directAccum;
 uniform float exposure;
 uniform int numSamples;
 
 void main(){
-	color = texelFetch(colorTexture, ivec2(gl_FragCoord.xy), 0).rgb / numSamples;
+	color =  texelFetch(directAccum, ivec2(gl_FragCoord.xy), 0).rgb / (numSamples);
 	color = 1.0 - exp(-exposure * color);
 	// TODO: More accurate sRGB conversion
     color = pow(color, vec3(1.0f / 2.2f));
 }
+
+/*
+	if(gl_FragCoord.x < 1280 / 2)
+		color = texelFetch(indirectAccum, ivec2(gl_FragCoord.xy), 0).rgb / numSamples;
+	else	
+		color = texelFetch(directAccum, ivec2(gl_FragCoord.xy), 0).rgb / numSamples;
+*/

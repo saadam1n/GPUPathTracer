@@ -46,8 +46,11 @@ Now, let's code
 */
 struct RayInfo {
     ivec2 pixel;
+    int padding0;
+    int padding1;
     vec3 throughput;
-    vec3 accumulated;
+    int sampleType; // bool/index, 0 = indirect, 1 = direct
+
     
     union {
         struct {
@@ -350,11 +353,11 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     quadArr.CreateBinding();
     quadArr.CreateStream(0, 2, 2 * sizeof(float));
 
-    colorTexture.CreateBinding();
-    colorTexture.LoadData(GL_RGBA32F, GL_RGBA, GL_FLOAT, viewportWidth, viewportHeight, nullptr);
+    directAccum.CreateBinding();
+    directAccum.LoadData(GL_RGBA32F, GL_RGBA, GL_FLOAT, viewportWidth, viewportHeight, nullptr);
 
     rayBuffer.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
-    rayBuffer.UploadData(sizeof(RayInfo) * numPixels * 2, nullptr, GL_DYNAMIC_DRAW);
+    rayBuffer.UploadData(sizeof(RayInfo) * numPixels * 2 * 2, nullptr, GL_DYNAMIC_DRAW);
 
     std::default_random_engine stateGenerator;
     std::uniform_int_distribution<uint32_t> initalRange(129, UINT32_MAX);
@@ -381,11 +384,12 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     scene.materialsBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 4);
     randomState.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 5);
 
-    colorTexture.BindImageUnit(0, GL_RGBA32F);
-    colorTexture.BindTextureUnit(0, GL_TEXTURE_2D);
+    directAccum.BindImageUnit(0, GL_RGBA32F);
+    directAccum.BindTextureUnit(0, GL_TEXTURE_2D);
     scene.vertexTex.BindTextureUnit(1, GL_TEXTURE_BUFFER);
     scene.indexTex.BindTextureUnit(2, GL_TEXTURE_BUFFER);
     scene.bvh.nodesTex.BindTextureUnit(3, GL_TEXTURE_BUFFER);
+    scene.lightTex.BindTextureUnit(4, GL_TEXTURE_BUFFER);
 
     generate.CreateBinding();
     generate.LoadShaderStorageBuffer("rayBufferW", 1);
@@ -409,11 +413,13 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     shade.LoadShaderStorageBuffer("randomState", randomState);
     shade.LoadInteger("width", viewportWidth);
     shade.LoadInteger("height", viewportHeight);
-    shade.LoadInteger("colorOutput", 0);
+    shade.LoadInteger("directAccum", 0);
+    shade.LoadInteger("lightTex", 4);
+    shade.LoadFloat("totalLightArea", scene.totalLightArea);
 
     present.CreateBinding();
     present.LoadFloat("exposure", 1.6f);
-    present.LoadInteger("colorTexture", 0);
+    present.LoadInteger("directAccum", 0);
 
 
     frameCounter = 0;
@@ -426,7 +432,7 @@ void Renderer::CleanUp(void) {
     extend.Free();
     present.Free();
 
-    colorTexture.Free();
+    directAccum.Free();
 
     quadArr.Free();
     quadBuf.Free();
@@ -444,7 +450,7 @@ void Renderer::RenderFrame(const Camera& camera)  {
     glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
     glMemoryBarrier(MEMORY_BARRIER_RT);
 
-    for (int i = 0; i < kMaxPathLength; i++) {
+    for (int bounce = 0; bounce < kMaxPathLength; bounce++) {
         glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 8, sizeof(int) * 2, atomicCounterClear);
         extend.CreateBinding();
         glDispatchCompute(numPixels / 64, 1, 1);
@@ -452,6 +458,7 @@ void Renderer::RenderFrame(const Camera& camera)  {
 
         glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 0, sizeof(int) * 2, atomicCounterClear);
         shade.CreateBinding();
+        shade.LoadInteger("bounce", bounce);
         glDispatchCompute(numPixels / 64, 1, 1);
         glMemoryBarrier(MEMORY_BARRIER_RT);
     }
@@ -471,5 +478,5 @@ void Renderer::Present() {
 void Renderer::ResetSamples() {
     numSamples = 0;
     float clearcol[4] = { 0.0, 0.0, 0.0, 1.0 };
-    glClearTexSubImage(colorTexture.GetHandle(), 0, 0, 0, 0, viewportWidth, viewportHeight, 1, GL_RGBA, GL_FLOAT, clearcol);
+    glClearTexSubImage(directAccum.GetHandle(), 0, 0, 0, 0, viewportWidth, viewportHeight, 1, GL_RGBA, GL_FLOAT, clearcol);
 }

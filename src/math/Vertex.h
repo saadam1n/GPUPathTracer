@@ -5,12 +5,13 @@
 struct Vertex {
 	Vertex(void) = default;
 
-	glm::vec3 Position;
-	glm::vec3 Normal;
-	glm::vec2 TextureCoordinates;
-	int MatID;
+	glm::vec3 position;
+	glm::vec3 normal;
+	glm::vec2 texcoords;
+	int matId;
+	float area;
 
-	int Padding[3];
+	int Padding[2];
 
 	Vertex operator*(float Value);
 	Vertex operator+(const Vertex& Value);

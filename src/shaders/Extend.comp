@@ -25,12 +25,12 @@ void main(){
 
     ivec2 PixelCoordinates;
     Ray ray;
-    vec3 throughPut, accum;
+    vec3 throughPut;
+    int sampleType;
 
     PixelCoordinates.xy = floatBitsToInt( raysR[idxR].xy);
-    throughPut.xy      = raysR[idxR  ].zw;
-    throughPut.z       = raysR[idxR+1].x;
-    accum              = raysR[idxR+1].yzw;
+    throughPut         = raysR[idxR+1].xyz;
+    sampleType         = fbs(raysR[idxR+1].w);
     ray.Origin    = raysR[idxR+2].xyz;
     ray.Direction = raysR[idxR+3].xyz;
 
@@ -39,9 +39,8 @@ void main(){
 
     uint idxW = atomicCounterIncrement(rayWriteCounter) * 5;
     raysW[idxW].xy    = intBitsToFloat(PixelCoordinates.xy);
-    raysW[idxW  ].zw  = throughPut.xy;
-    raysW[idxW+1].x   = throughPut.z;
-    raysW[idxW+1].yzw = accum;
+    raysW[idxW+1].xyz = throughPut;
+    raysW[idxW+1].w   = intBitsToFloat(sampleType);
     if(TraverseBVH(ray, IntersectionInfo)) {
         Vertex currVertex = GetInterpolatedVertex(ray, IntersectionInfo);
         int matIdx = currVertex.MatID * 2; 

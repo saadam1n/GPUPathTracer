@@ -373,9 +373,9 @@ void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<V
 		Centroid.Index = TriIdx;
 
 		Centroid.Position =
-			CurrentTriangle.Vertices[0].Position +
-			CurrentTriangle.Vertices[1].Position +
-			CurrentTriangle.Vertices[2].Position ;
+			CurrentTriangle.Vertices[0].position +
+			CurrentTriangle.Vertices[1].position +
+			CurrentTriangle.Vertices[2].position ;
 
 		Centroid.Position /= 3.0f;
 
@@ -383,9 +383,9 @@ void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<V
 
 		AABB Box;
 
-		Box.Extend(CurrentTriangle.Vertices[0].Position);
-		Box.Extend(CurrentTriangle.Vertices[1].Position);
-		Box.Extend(CurrentTriangle.Vertices[2].Position);
+		Box.Extend(CurrentTriangle.Vertices[0].position);
+		Box.Extend(CurrentTriangle.Vertices[1].position);
+		Box.Extend(CurrentTriangle.Vertices[2].position);
 
 		TriangleBoundingBoxes.push_back(Box);
 	}

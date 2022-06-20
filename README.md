@@ -31,3 +31,6 @@ Acheived Jun 19, 2022
 Acheived June 19, 2022
 ![Ray traced Depth of Field and Russian Roulette](images/8.1RayTracedDOF.png)
 ![Ray traced Depth of Field and Russian Roulette](images/8.2RayTracedDOF.png)
+
+Acheived June 20, 2022
+![Next Event Estimation on the GPU](images/9NextEventEstimation.png)

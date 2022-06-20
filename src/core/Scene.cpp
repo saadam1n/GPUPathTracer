@@ -31,6 +31,7 @@ struct MaterialInstance {
 };
 
 void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
+    totalLightArea = 0;
     std::vector<MaterialInstance> materialInstances;
     
     textures.push_back(environment);
@@ -74,7 +75,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     };
 
     std::map<std::string, int> TexCache;
-    
+    std::vector<Triangle> lightTriangles;
 
     for (uint32_t i = 0; i < Scene->mNumMeshes; i++) {
         const aiMesh* currMesh = Scene->mMeshes[i];
@@ -145,15 +146,15 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
             aiVector3D& Position = currMesh->mVertices[j];
             aiVector3D& Normal = currMesh->mNormals[j];
 
-            CurrentVertex.Position = glm::vec3(Position.x, Position.y, Position.z);
-            CurrentVertex.Normal = glm::vec3(Normal.x, Normal.y, Normal.z);
+            CurrentVertex.position = glm::vec3(Position.x, Position.y, Position.z);
+            CurrentVertex.normal = glm::vec3(Normal.x, Normal.y, Normal.z);
 
             if (currMesh->mTextureCoords[0])
-                CurrentVertex.TextureCoordinates = glm::vec2(currMesh->mTextureCoords[0][j].x, currMesh->mTextureCoords[0][j].y);
+                CurrentVertex.texcoords = glm::vec2(currMesh->mTextureCoords[0][j].x, currMesh->mTextureCoords[0][j].y);
             else
-                CurrentVertex.TextureCoordinates = glm::vec2(0.0f);
+                CurrentVertex.texcoords = glm::vec2(0.0f);
 
-            CurrentVertex.MatID = currMatID;
+            CurrentVertex.matId = currMatID;
 
             Vertices.push_back(CurrentVertex);
         }
@@ -167,7 +168,27 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
             }
 
             Indices.push_back(CurrentIndexData);
+
+            if (materialInstances[currMatID].isEmissive) {
+                Triangle lightTriangle;
+                lightTriangle.Vertices[0] = Vertices[CurrentIndexData[0]];
+                lightTriangle.Vertices[1] = Vertices[CurrentIndexData[1]];
+                lightTriangle.Vertices[2] = Vertices[CurrentIndexData[2]];
+
+                float a = distance(lightTriangle.Vertices[0].position, lightTriangle.Vertices[1].position);
+                float b = distance(lightTriangle.Vertices[0].position, lightTriangle.Vertices[2].position);
+                float c = distance(lightTriangle.Vertices[2].position, lightTriangle.Vertices[1].position);
+
+                float s = (a + b + c) / 2;
+                totalLightArea += sqrtf(s * (s - a) * (s - b) * (s - c));
+                lightTriangle.Vertices[0].area = totalLightArea;
+                lightTriangle.Vertices[1].area = totalLightArea;
+                lightTriangle.Vertices[2].area = totalLightArea;
+                lightTriangles.push_back(lightTriangle);
+            }
         }
+
+        
 
         BaseVertex += currMesh->mNumVertices;
     }
@@ -192,7 +213,11 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     indexTex.CreateBinding();
     indexTex.SelectBuffer(&indexBuf, GL_RGBA32UI);
 
-    
+    lightBuf.CreateBinding(BUFFER_TARGET_ARRAY);
+    lightBuf.UploadData(lightTriangles, GL_STATIC_DRAW);
+
+    lightTex.CreateBinding();
+    lightTex.SelectBuffer(&lightBuf, GL_RGBA32F);
 }
 
 /*
