@@ -394,7 +394,7 @@ void IntersectLeaf(in BVHNode leaf, in Ray ray, inout HitInfo intersection, inou
 }
 
 // Go with 48 for lower memory usage. I would consider 32 to be the minimum for generally all meshes
-#define BVH_STACK_SIZE 64
+#define BVH_STACK_SIZE 27
 
 bool TraverseBVH(in Ray ray, inout HitInfo intersection) {
 	Ray iray;
@@ -657,4 +657,40 @@ bool TraverseBVH2(in Ray currRay, inout HitInfo intersection) {
 	return hitResult;
 }
 */
+
+
+/*
+
+FOR THE READER
+
+rough code of the traversal algorithm
+
+// 32-byte node, which is nicely aligned to 16-bytes
+struct Node {
+	vec3 min, max // Bounds of AABB
+	int first_child_node_or_first_triangle // In memory, my nodes are organized so child nodes are consective. This way we know the second child will always be located at first_child_node_or_first_triangle + 1, making traversal a lot easier
+	int num_triangles_to_intersect // A leaf must contain a subarray of triangles that need to be intersected, which can be done by keeping track of the first triangle index and number of triangles. To know what is a leaf and what is a parent node, I set the number of leaves to its negative
+}
+
+void TraverseBVH(Ray ray) {
+	// Get the first node to begin traversal
+	Node root = get root node();
+	if(did not intersect root node)
+		return
+
+	int current_node = root.first_child_node_or_first_triangle
+
+	int stack[26]; // The size of your stack for a binary bvh is the log2 of the number of maximum number of triangles you expect
+	int stackIndex = -1
+	while(true) {
+		child0 = get node(current_node);
+		child1 = get node(current_node + 1);
+
+
+	}
+}
+
+*/
+
+
 #endif

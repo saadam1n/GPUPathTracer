@@ -16,13 +16,15 @@ uint32_t Width = 1280;
 uint32_t Height = 720;
 
 // Camera params 
+constexpr float kCameraSetting = 0.01;
 
-constexpr float CameraSpeed = 2000.000f * 0.5f;
+constexpr float CameraSpeed = 2000.000f * 0.5f * kCameraSetting;
 constexpr float CameraSensitivity = 0.001f;
 glm::vec2 LastCursorPosition;
 
+
 // I need class here because Intellisense is not detecting the camera type
-Camera camera((float)Width / Height, glm::radians(45.0f), 900.0, 5.0);
+Camera camera((float)Width / Height, glm::radians(45.0f), 900.0 * kCameraSetting, 5.0 * kCameraSetting);
 
 bool needResetSamples = false;
 
@@ -52,7 +54,7 @@ int main(int argc, char** argv) {
 	Window.SetInputCallback(MouseCallback);
 
 	Renderer* renderer = new Renderer;
-	renderer->Initialize(&Window, "res/glTF/Sponza.gltf", "res/sky/ibl/Topanga_Forest_B_3k.hdr");
+	renderer->Initialize(&Window, "res/objects/bunny_plane.obj", "GENERATE COLOR WHITE");
 	camera.SetPosition(glm::vec3(0.0f, 0.15f, 0.5f) * 6.0f);
 
 	Timer FrameTimer;

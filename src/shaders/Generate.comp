@@ -23,7 +23,7 @@ void main() {
 
     Ray ray;
 
-    vec2 interpolation = vec2(PixelCoordinates + vec2(rand(), rand())) / (vec2(width, height) - 1);
+    vec2 interpolation = vec2(PixelCoordinates + vec2(rand(), rand())) / (vec2(width, height));
 
     float phi = 2 * M_PI * rand(); 
     float r = sqrt(rand());

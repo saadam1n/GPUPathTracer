@@ -22,7 +22,9 @@ private:
 	Window* bindedWindow;
 
 	Buffer quadBuf;
-	VertexArray screenQuad;
+	VertexArray quadArr;
+	Buffer cubeBuf;
+	VertexArray cubeArr;
 	ShaderRasterization present;
 	Texture2D colorTexture;
 

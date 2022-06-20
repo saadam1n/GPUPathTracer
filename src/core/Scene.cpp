@@ -42,6 +42,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     glMakeTextureHandleResidentARB(sky.samplerHandle);
     materialInstances.push_back(sky);
 
+
     std::string Folder = path.substr(0, path.find_last_of('/') + 1);
 
     Assimp::Importer importer;

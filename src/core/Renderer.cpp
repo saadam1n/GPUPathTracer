@@ -9,7 +9,7 @@
 #include <SOIL2.h>
 #include <stb_image.h>
 #include <glm/gtc/matrix_transform.hpp>
-
+#include <sstream>
 
 
 using namespace glm;
@@ -168,6 +168,90 @@ void DebugMessageCallback(GLenum source, GLenum type, GLuint id,
         id, _type, _severity, _source, msg);
 }
 
+void LoadEnvironmnet(TextureCubemap* environment, const std::string& args, VertexArray& arr) {
+    std::string extension = args.substr(args.find_last_of('.') + 1);
+    if (args.find_first_of("GENERATE") == 0) {
+        std::stringstream parser(args);
+        std::string cmd, arg0, arg1;
+        parser >> cmd >> arg0 >> arg1;
+        if (arg0 == "COLOR") {
+            vec4 color;
+            if (arg1 == "BLACK") {
+                color = vec4(0.0, 0.0, 0.0, 1.0);
+            }
+            else if (arg1 == "WHITE") {
+                color = vec4(1.0, 1.0, 1.0, 1.0);
+            }
+            else {
+                color = vec4(1.0, 0.0, 0.0, 1.0); // RED for error
+            }
+
+            environment->CreateBinding();
+
+            for (int i = 0; i < 6; i++) {
+                glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA32F, 1, 1, 0, GL_RGBA, GL_FLOAT, &color.r);
+            }
+        }
+    }
+    else if (extension == "hdr" || extension == "jpg") {
+        arr.CreateBinding();
+        int width, height, channels;
+        float* hdrData = stbi_loadf(args.c_str(), &width, &height, &channels, SOIL_LOAD_RGBA);
+        if (hdrData == nullptr) exit(-1);
+        Texture2D hdrTex;
+        hdrTex.CreateBinding();
+        hdrTex.LoadData(GL_RGBA32F, GL_RGBA, GL_FLOAT, width, height, hdrData);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        hdrTex.BindTextureUnit(0, GL_TEXTURE_2D);
+        stbi_image_free(hdrData);
+
+        ShaderRasterization equirectangularConverter;
+        equirectangularConverter.CompileFiles("EquirectangularConverter.vert", "EquirectangularConverter.frag");
+        equirectangularConverter.CreateBinding();
+        equirectangularConverter.LoadInteger("hdrTex", 0);
+        equirectangularConverter.LoadMat4x4F32("captureProjection", glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f));
+
+
+        constexpr uint32_t cubemapSize = 1024;
+        environment->CreateBinding();
+        glTexStorage2D(GL_TEXTURE_CUBE_MAP, 1, GL_RGBA32F, cubemapSize, cubemapSize);
+        glViewport(0, 0, cubemapSize, cubemapSize);
+
+        GLuint fbo;
+        glGenFramebuffers(1, &fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+        mat4 captureViews[] =
+        {
+           lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+           lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(-1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+           lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  1.0f,  0.0f), glm::vec3(0.0f,  0.0f,  1.0f)),
+           lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f,  0.0f), glm::vec3(0.0f,  0.0f, -1.0f)),
+           lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f,  1.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
+           lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f, -1.0f), glm::vec3(0.0f, -1.0f,  0.0f))
+        };
+
+        for (int i = 0; i < 6; i++) {
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, environment->GetHandle(), 0);
+            equirectangularConverter.LoadMat4x4F32("captureView", captureViews[i]);
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+        }
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glDeleteFramebuffers(1, &fbo);
+    }
+    else environment->LoadTexture(args); // Load TXT file
+
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+}
+
 void Renderer::Initialize(Window* Window, const char* scenePath, const std::string& env_path) {
     bindedWindow = Window;
     viewportWidth = bindedWindow->Width;
@@ -186,8 +270,6 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
 
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(DebugMessageCallback, NULL);
-
-
 
     float cube[] = {
         // back face
@@ -234,9 +316,6 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
         -1.0f,  1.0f,  1.0f,        
     };
 
-    Buffer cubeBuf;
-    VertexArray cubeArr;
-
     cubeBuf.CreateBinding(BUFFER_TARGET_ARRAY);
     cubeBuf.UploadData(sizeof(cube), cube, GL_STATIC_DRAW);
 
@@ -251,66 +330,10 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     present.CompileFiles("Present.vert", "Present.frag");
 
     TextureCubemap* environment = new TextureCubemap;
-
-    if (env_path.substr(env_path.find_last_of('.') + 1) == "hdr") {
-        int width, height, channels;
-        float* hdrData = stbi_loadf(env_path.c_str(), &width, &height, &channels, SOIL_LOAD_RGBA);
-        if (hdrData == nullptr) exit(-1);
-        Texture2D hdrTex;
-        hdrTex.CreateBinding();
-        hdrTex.LoadData(GL_RGBA32F, GL_RGBA, GL_FLOAT, width, height, hdrData);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        hdrTex.BindTextureUnit(0, GL_TEXTURE_2D);
-        stbi_image_free(hdrData);
-
-        ShaderRasterization equirectangularConverter;
-        equirectangularConverter.CompileFiles("EquirectangularConverter.vert", "EquirectangularConverter.frag");
-        equirectangularConverter.CreateBinding();
-        equirectangularConverter.LoadInteger("hdrTex", 0);
-        equirectangularConverter.LoadMat4x4F32("captureProjection", glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 10.0f));
-
-
-        constexpr uint32_t cubemapSize = 1024;
-        environment->CreateBinding();
-        glTexStorage2D(GL_TEXTURE_CUBE_MAP, 1, GL_RGBA32F, cubemapSize, cubemapSize);
-        glViewport(0, 0, cubemapSize, cubemapSize);
-
-        GLuint fbo;
-        glGenFramebuffers(1, &fbo);
-        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-
-        mat4 captureViews[] =
-        {
-           lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
-           lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(-1.0f,  0.0f,  0.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
-           lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  1.0f,  0.0f), glm::vec3(0.0f,  0.0f,  1.0f)),
-           lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f,  0.0f), glm::vec3(0.0f,  0.0f, -1.0f)),
-           lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f,  1.0f), glm::vec3(0.0f, -1.0f,  0.0f)),
-           lookAt(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f,  0.0f, -1.0f), glm::vec3(0.0f, -1.0f,  0.0f))
-        };
-
-        for (int i = 0; i < 6; i++) {
-            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, environment->GetHandle(), 0);
-            equirectangularConverter.LoadMat4x4F32("captureView", captureViews[i]);
-            glDrawArrays(GL_TRIANGLES, 0, 36);
-        }
-
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glDeleteFramebuffers(1, &fbo);
-        glViewport(0, 0, viewportWidth, viewportHeight);
-    } else environment->LoadTexture(env_path); // Load TXT file
-
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-
+    LoadEnvironmnet(environment, env_path, cubeArr);
     scene.LoadScene(scenePath, environment);
 
+    glViewport(0, 0, viewportWidth, viewportHeight);
     float quad[] = {
     -1.0f,  1.0f,
     -1.0f, -1.0f,
@@ -324,12 +347,11 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     quadBuf.CreateBinding(BUFFER_TARGET_ARRAY);
     quadBuf.UploadData(sizeof(quad), quad, GL_STATIC_DRAW);
 
-    screenQuad.CreateBinding();
-    screenQuad.CreateStream(0, 2, 2 * sizeof(float));
+    quadArr.CreateBinding();
+    quadArr.CreateStream(0, 2, 2 * sizeof(float));
 
     colorTexture.CreateBinding();
     colorTexture.LoadData(GL_RGBA32F, GL_RGBA, GL_FLOAT, viewportWidth, viewportHeight, nullptr);
-
 
     rayBuffer.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
     rayBuffer.UploadData(sizeof(RayInfo) * numPixels * 2, nullptr, GL_DYNAMIC_DRAW);
@@ -406,7 +428,7 @@ void Renderer::CleanUp(void) {
 
     colorTexture.Free();
 
-    screenQuad.Free();
+    quadArr.Free();
     quadBuf.Free();
 
     delete[] atomicCounterClear;
