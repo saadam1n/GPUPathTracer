@@ -30,6 +30,16 @@ public:
 	GLuint GetBlockBinding();
 
 	size_t GetSize();
+	void DownloadBuffer(void** data, size_t* size);
+	template<typename T> std::vector<T> DownloadBuffer() {
+		T* ptr;
+		size_t count;
+		DownloadBuffer((void**)&ptr, &count);
+		std::vector<T> vectorized(count);
+		std::memcpy(vectorized.data(), ptr, count * sizeof(T));
+		delete[] ptr;
+		return vectorized;
+	}
 private:
 	friend class TextureBuffer;
 

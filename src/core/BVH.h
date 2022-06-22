@@ -11,6 +11,8 @@
 
 #include <glm/glm.hpp>
 
+using namespace glm;
+
 struct LeafContents {
 	std::vector<uint32_t> Indices;
 };
@@ -25,7 +27,7 @@ enum class NodeType {
 	NODE
 };
 
-struct NodeSerialized {
+struct NodeSerialized : public Hittable {
 
 	void MakeLeaf(void);
 	NodeType GetType(void);
@@ -36,6 +38,8 @@ struct NodeSerialized {
 		int32_t ChildrenNodes[2];
 		LeafPointer Leaf;
 	};
+
+	bool Intersect(const Ray& ray, HitInfo& hit, const std::vector<Vertex>& vertices, const std::vector<TriangleIndexData>& indices);
 };
 
 // BVH triangle
@@ -85,6 +89,7 @@ private:
 	friend class Shader;
 	friend class Renderer;
 
+	std::vector<NodeSerialized> nodesVec;
 	Buffer nodesBuf;
 	TextureBuffer nodesTex;
 	
@@ -101,3 +106,4 @@ private:
 
 	//void DebugPrintBVH(const std::vector<NodeSerialized>& Nodes, const std::vector<int32_t>& LeafContents);
 };
+

@@ -10,9 +10,11 @@
 #include <stb_image.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <sstream>
-
+#include <thread>
+#include <mutex>
 
 using namespace glm;
+constexpr float kExposure = 1.6f;
 
 /*
 When we trace a ray, we don't actually care about the ray, we care about the path
@@ -255,6 +257,7 @@ void LoadEnvironmnet(TextureCubemap* environment, const std::string& args, Verte
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 }
 
+std::vector<uvec4> threadRandomState;
 void Renderer::Initialize(Window* Window, const char* scenePath, const std::string& env_path) {
     bindedWindow = Window;
     viewportWidth = bindedWindow->Width;
@@ -361,7 +364,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
 
     std::default_random_engine stateGenerator;
     std::uniform_int_distribution<uint32_t> initalRange(129, UINT32_MAX);
-    std::vector<uvec4> threadRandomState(numPixels);
+    threadRandomState.resize(numPixels);
     for (uvec4& currState : threadRandomState) {
         currState.x = initalRange(stateGenerator);
         currState.y = initalRange(stateGenerator);
@@ -418,7 +421,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     shade.LoadFloat("totalLightArea", scene.totalLightArea);
 
     present.CreateBinding();
-    present.LoadFloat("exposure", 1.6f);
+    present.LoadFloat("exposure", kExposure);
     present.LoadInteger("directAccum", 0);
 
 
@@ -479,4 +482,205 @@ void Renderer::ResetSamples() {
     numSamples = 0;
     float clearcol[4] = { 0.0, 0.0, 0.0, 1.0 };
     glClearTexSubImage(directAccum.GetHandle(), 0, 0, 0, 0, viewportWidth, viewportHeight, 1, GL_RGBA, GL_FLOAT, clearcol);
+}
+
+void Renderer::SaveScreenshot(const std::string& filename) {
+    if (SOIL_save_screenshot(filename.c_str(), SOIL_SAVE_TYPE_PNG, 0, 0, 1280, 720)) {
+        std::cout << "File \"" << filename << "\" saved successfully\n";
+    }
+    else {
+        std::cout << "File \"" << filename << "\" failed to save!\n";
+        exit(-1);
+    }
+}
+
+
+#define BVH_STACK_SIZE 27
+bool TraverseBVH(Ray ray, HitInfo& intersection, const std::vector<Vertex>& vertices, const std::vector<TriangleIndexData>& indices, const std::vector<NodeSerialized>& nodes) {
+    Ray iray;
+
+    iray.direction = 1.0f / ray.direction;
+    iray.origin = -ray.origin * iray.direction;
+
+    NodeSerialized root = nodes.front();
+
+    if (!root.BoundingBox.Intersect(iray, intersection))
+        return false;
+
+    bool result = false;
+
+    int currentNode = root.ChildrenNodes[0];
+    int stack[BVH_STACK_SIZE];
+    int index = -1;
+
+    while (true) {
+        NodeSerialized child0 = nodes.at(currentNode);
+        NodeSerialized child1 = nodes.at(currentNode + 1);
+
+        vec2 distance0, distance1;
+        bool hit0 = child0.BoundingBox.Intersect(iray, intersection, distance0);
+        bool hit1 = child1.BoundingBox.Intersect(iray, intersection, distance1);
+
+        if (hit0 && child0.Leaf.Size < 0) {
+            result |= child0.Intersect(ray, intersection, vertices, indices);
+            hit0 = false;
+        }
+
+        if (hit1 && child1.Leaf.Size < 0) {
+            result |= child1.Intersect(ray, intersection, vertices, indices);
+            hit1 = false;
+        }
+
+        if (hit0 && hit1) {
+            if (distance0.x > distance1.x)
+                std::swap(child0, child1);
+            stack[++index] = child1.ChildrenNodes[0];
+            currentNode = child0.ChildrenNodes[0];
+        }
+        else if (hit0)
+            currentNode = child0.ChildrenNodes[0];
+        else if (hit1)
+            currentNode = child1.ChildrenNodes[0];
+        else
+            if (index == -1)
+                break;
+            else
+                currentNode = stack[index--];
+    }
+
+    return result;
+}
+
+uint32_t TausStep(uint32_t& z, uint32_t s1, uint32_t s2, uint32_t s3, uint32_t m) {
+    uint b = (((z << s1) ^ z) >> s2);
+    z = (((z & m) << s3) ^ b);
+    return z;
+}
+
+uint32_t LCGStep(uint32_t& z, uint32_t a, uint32_t c) {
+    z = a * z + c;
+    return z;
+}
+
+float HybridTaus(uvec4& state) {
+    return 2.3283064365387e-10f * float(
+        TausStep(state.x, 13, 19, 12, 4294967294U) ^
+        TausStep(state.y, 2, 25, 4, 4294967288U) ^
+        TausStep(state.z, 3, 11, 17, 4294967280U) ^
+        LCGStep(state.w, 1664525, 1013904223U)
+    );
+}
+
+#define M_PI 3.141529f
+
+constexpr uint32_t KNumRefSamples = 1024;
+constexpr uint32_t kMaxRefPathLength = 16;
+void PathTraceImage(
+    uint8_t* image, uint32_t x, uint32_t y, const uint32_t w, const uint32_t h, const Camera& camera,
+    const std::vector<Vertex>& vertices, const std::vector<TriangleIndexData>& indices, const std::vector<NodeSerialized>& nodes,
+    const std::vector<MaterialInstance>& materials, uvec4& state
+) {
+    vec3 pixel = vec3(0.0);
+
+    for (int i = 0; i < KNumRefSamples; i++) {
+        vec2 interpolation = vec2(x + HybridTaus(state), y + HybridTaus(state)) / vec2(w, h);
+        Ray ray = camera.GenRay(interpolation, HybridTaus(state), HybridTaus(state));
+        vec3 throughput = vec3(1.0);
+
+        for (int j = 0; j < kMaxRefPathLength; j++) {
+            HitInfo closest;
+
+            TraverseBVH(ray, closest, vertices, indices, nodes);
+
+            if (materials[closest.intersection.matId].isEmissive) {
+                pixel += throughput * materials[closest.intersection.matId].emission;
+                break;
+            }
+
+            throughput *= vec3(0.5f) / M_PI;
+            float rr = max(throughput.x, max(throughput.y, throughput.z));
+            if (HybridTaus(state) > rr)
+                break;
+            throughput /= rr;
+
+            ray.origin = closest.intersection.position + closest.intersection.normal * 0.001f;
+
+            vec3 normcrs = (abs(closest.intersection.normal.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0));
+            vec3 tangent = normalize(cross(normcrs, closest.intersection.normal));
+            vec3 bitangent = cross(tangent, closest.intersection.normal);
+
+            float r0 = HybridTaus(state), r1 = HybridTaus(state);
+            float r = sqrt(r0);
+            float phi = 2 * M_PI * r1;
+            ray.direction = mat3(tangent, bitangent, closest.intersection.normal) * vec3(r * vec2(sin(phi), cos(phi)), sqrt(1.0 - r0));
+        }
+    }
+
+    pixel /= KNumRefSamples;
+    pixel = 1.0f - exp(-kExposure * pixel);
+    pixel = pow(pixel, vec3(1.0f / 2.2f));
+
+    pixel = max(pixel, vec3(0.0));
+    uint64_t idx = 3ULL * ((uint64_t)(h - y - 1) * w + x); // Flip the y
+    image[idx    ] = (uint8_t)(255.0f * pixel.r);
+    image[idx + 1] = (uint8_t)(255.0f * pixel.g);
+    image[idx + 2] = (uint8_t)(255.0f * pixel.b);
+}
+
+// Render the ground truth of the image on the CPU
+void Renderer::RenderReference(const Camera& camera) {
+    auto filename = std::to_string(std::time(nullptr));
+    SaveScreenshot("res/screenshots/" + filename + "-RENDERED.png");
+
+    uint64_t numPixels = (uint64_t) viewportWidth * viewportHeight;
+    uint8_t* image = new uint8_t[3ULL * numPixels];
+
+    std::vector<ivec2> pixelTasks;
+
+    for (uint32_t y = 0; y < viewportHeight; y++) {
+        for (uint32_t x = 0; x < viewportWidth; x++) {
+            pixelTasks.emplace_back(x, y);
+        }
+    }
+
+    auto start = std::time(nullptr);
+    uint32_t nextTask = 0;
+    std::mutex taskMutex;
+    std::vector<std::thread> workers;
+    constexpr uint32_t kNumWorkers = 8;
+    for (uint32_t i = 0; i < kNumWorkers; i++) {
+        workers.emplace_back(
+            [](uint32_t& nextTask, std::mutex& taskMutex, uint8_t* image, const std::vector<ivec2>& pixelTasks, uint32_t w, uint32_t h, const Camera& camera, const std::vector<Vertex>& vertices, const std::vector<TriangleIndexData>& indices, const std::vector<NodeSerialized>& nodes, const std::vector<MaterialInstance>& materials) {
+                while (true) {
+                    taskMutex.lock();
+                    uint32_t currentTask = nextTask++;
+                    taskMutex.unlock();
+
+                    if (currentTask >= pixelTasks.size())
+                        return;
+
+                    PathTraceImage(image, pixelTasks[currentTask].x, pixelTasks[currentTask].y, w, h, camera, vertices, indices, nodes, materials, threadRandomState[currentTask]);
+                }
+            },
+            std::ref(nextTask), std::ref(taskMutex), image, std::ref(pixelTasks), viewportWidth, viewportHeight, std::ref(camera), std::ref(scene.vertexVec), std::ref(scene.indexVec), std::ref(scene.bvh.nodesVec), std::ref(scene.materialVec)
+        );
+    }
+
+    while (nextTask < pixelTasks.size()) {
+        for (int i = 0; i < 5000; i++) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            if (nextTask >= pixelTasks.size()) break;
+        }
+
+        std::cout << "Rendering " << 100.0f * nextTask / pixelTasks.size() << "% complete\tTime remaining: " << (std::time(nullptr) - start) * ((float)pixelTasks.size() - nextTask) / nextTask << " seconds\n";
+    }
+
+    for (std::thread& worker : workers)
+        worker.join();
+
+    SOIL_save_image(("res/screenshots/" + filename + "-REFERENCE.png").c_str(), SOIL_SAVE_TYPE_PNG, viewportWidth, viewportHeight, 3, image);
+
+    delete[] image;
+
+    std::cout << "Pssst? You still there? Rendering completed in " << std::time(nullptr) - start << " seconds\n";
 }

@@ -1,5 +1,6 @@
 #include "Vertex.h"
 
+Vertex::Vertex() : matId(0) {}
 
 Vertex Vertex::operator*(float Value) {
 	Vertex NewVertex;

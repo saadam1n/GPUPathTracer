@@ -54,3 +54,16 @@ void Camera::AddPosition(const vec3& val) {
 glm::vec3 Camera::GetDirection() const {
 	return direction;
 }
+
+Ray Camera::GenRay(vec2 interpolation, float random0, float random1) const {
+	float phi = 2.0f * 3.141529f * random0;
+	float r = sqrt(random1);
+
+	vec2 rd = lens_radius * r * vec2(cos(phi), sin(phi));
+	vec3 offset = u * rd.x + v * rd.y;
+
+	Ray ray;
+	ray.origin = position + offset;
+	ray.direction = lower_left + interpolation.x * horizontal + interpolation.y * vertical - offset;
+	return ray;
+}

@@ -1,8 +1,11 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include "Ray.h"
 
-struct AABB {
+using namespace glm;
+
+struct AABB : public Hittable {
 	AABB(void);
 	AABB(const glm::vec3& Mi, const glm::vec3& Ma);
 
@@ -17,4 +20,7 @@ struct AABB {
 
 	glm::vec3 Min;
 	glm::vec3 Max;
+
+	bool Intersect(const Ray& ray, HitInfo& hit);
+	bool Intersect(const Ray& ray, HitInfo& hit, vec2& distances);
 };

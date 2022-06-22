@@ -3,7 +3,7 @@
 #include <glm/glm.hpp>
 
 struct Vertex {
-	Vertex(void) = default;
+	Vertex();
 
 	glm::vec3 position;
 	glm::vec3 normal;

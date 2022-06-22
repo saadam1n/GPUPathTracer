@@ -47,3 +47,12 @@ GLuint Buffer::GetBlockBinding() {
 size_t Buffer::GetSize() {
 	return size;
 }
+
+void Buffer::DownloadBuffer(void** data, size_t* bytes) {
+	*bytes = size;
+	*data = (void*)new char[size];
+	CreateBinding(BUFFER_TARGET_ARRAY);
+	void* down = glMapBuffer(GL_ARRAY_BUFFER, GL_READ_ONLY);
+	std::memcpy(*data, down, size);
+	glUnmapBuffer(GL_ARRAY_BUFFER);
+}

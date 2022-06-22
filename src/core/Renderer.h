@@ -17,6 +17,9 @@ public:
 	void Present();
 
 	void ResetSamples();
+
+	void SaveScreenshot(const std::string& filename);
+	void RenderReference(const Camera& camera);
 private:
 	uint32_t viewportWidth, viewportHeight, numPixels;
 	Window* bindedWindow;

@@ -21,15 +21,6 @@
 
 using namespace glm;
 
-// Mapped to by material ID
-struct MaterialInstance {
-    GLuint64 samplerHandle;
-    float ior;
-    float padding0;
-    vec3 emission;
-    int isEmissive;
-};
-
 void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     totalLightArea = 0;
     std::vector<MaterialInstance> materialInstances;
@@ -42,7 +33,6 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     sky.samplerHandle = glGetTextureHandleARB(environment->GetHandle());
     glMakeTextureHandleResidentARB(sky.samplerHandle);
     materialInstances.push_back(sky);
-
 
     std::string Folder = path.substr(0, path.find_last_of('/') + 1);
 
@@ -201,6 +191,8 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     materialsBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
     materialsBuf.UploadData(materialInstances, GL_STATIC_DRAW);
 
+    materialVec = materialInstances;
+
     vertexBuf.CreateBinding(BUFFER_TARGET_ARRAY);
     vertexBuf.UploadData(Vertices, GL_STATIC_DRAW);
 
@@ -218,6 +210,9 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
 
     lightTex.CreateBinding();
     lightTex.SelectBuffer(&lightBuf, GL_RGBA32F);
+
+    vertexVec = Vertices;
+    indexVec = Indices;
 }
 
 /*

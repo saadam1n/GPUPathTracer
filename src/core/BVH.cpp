@@ -10,8 +10,6 @@
 #include <future>
 #include <condition_variable>
 
-using namespace glm;
-
 void DebugPrintBVH(const std::vector<NodeSerialized>& Nodes, const std::vector<int32_t>& LeafContents);
 
 using BVH = BoundingVolumeHierarchy;
@@ -517,6 +515,8 @@ void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<V
 	}
 	Indices = directTriangleIndices;
 
+	nodesVec = ProcessedNodes;
+
 	// This is very unsafe and super bad according to some C++ programmers but we live on the edge and we want the edge of performance
 	for (NodeSerialized& node : ProcessedNodes) {
 		struct NewLayout {
@@ -556,6 +556,25 @@ void NodeSerialized::MakeLeaf(void) {
 
 NodeType NodeSerialized::GetType(void) {
 	return Leaf.Size < 0 ? NodeType::LEAF : NodeType::NODE;
+}
+
+bool NodeSerialized::Intersect(const Ray& ray, HitInfo& hit, const std::vector<Vertex>& vertices, const std::vector<TriangleIndexData>& indices) {
+	int i = Leaf.Offset;
+	int j = i - Leaf.Size;
+
+	bool result = false;
+	for (int k = i; k < j; k++) {
+		auto elements = indices[k];
+
+		Triangle triangle;
+		triangle.Vertices[0] = vertices[elements[0]];
+		triangle.Vertices[1] = vertices[elements[1]];
+		triangle.Vertices[2] = vertices[elements[2]];
+
+		result |= triangle.Intersect(ray, hit);
+	}
+
+	return result;
 }
 
 void IndentDebugBVH(int32_t TabCount) {

@@ -92,3 +92,23 @@ Area =
 
 	float Area = 2.0f * glm::dot(SideLengths, Mult);
 */
+
+// AABB test by madmann
+bool AABB::Intersect(const Ray& iray, HitInfo& hit, vec2& distances) {
+	vec3 t_node_min = Min * iray.direction + iray.origin;
+	vec3 t_node_max = Max * iray.direction + iray.origin;
+
+	vec3 t_min = min(t_node_min, t_node_max);
+	vec3 t_max = max(t_node_min, t_node_max);
+
+	float t_entry = max(t_min.x, max(t_min.y, t_min.z));
+	float t_exit = min(t_max.x, min(t_max.y, min(t_max.z, hit.depth)));
+	distances =  vec2(t_entry, t_exit);
+	return distances.x <= distances.y && distances.y > 0.0f;
+}
+
+
+bool AABB::Intersect(const Ray& iray, HitInfo& hit) {
+	vec2 junk;
+	return Intersect(iray, hit, junk);
+}

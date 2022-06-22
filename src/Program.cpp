@@ -17,7 +17,7 @@ uint32_t Width = 1280;
 uint32_t Height = 720;
 
 // Camera params 
-constexpr float kCameraSetting = 0.01;
+constexpr float kCameraSetting = 0.01f;
 
 constexpr float CameraSpeed = 2000.000f * 0.5f * kCameraSetting;
 constexpr float CameraSensitivity = 0.001f;
@@ -25,7 +25,7 @@ glm::vec2 LastCursorPosition;
 
 
 // I need class here because Intellisense is not detecting the camera type
-Camera camera((float)Width / Height, glm::radians(45.0f), 900.0 * kCameraSetting, 30.0 * kCameraSetting);
+Camera camera((float)Width / Height, glm::radians(45.0f), 900.0f * kCameraSetting, 30.0f * kCameraSetting);
 
 bool needResetSamples = false;
 
@@ -73,16 +73,6 @@ int main(int argc, char** argv) {
 			camera.Move(-CameraSpeed * (float)FrameTimer.Delta);
 			needResetSamples = true;
 		}
-		else if (Window.GetKey(GLFW_KEY_F2)) {
-			std::string filename = "res/screenshots/" + std::to_string(std::time(nullptr)) + ".png";
-			if (SOIL_save_screenshot(filename.c_str(), SOIL_SAVE_TYPE_PNG, 0, 0, 1280, 720)) {
-				std::cout << "File saved successfully\n";
-			}
-			else {
-				std::cout << "File failed to save!\n";
-				exit(-1);
-			}
-		}
 
 		if (needResetSamples) {
 			renderer->ResetSamples();
@@ -96,6 +86,20 @@ int main(int argc, char** argv) {
 
 		Window.Update();
 
+		// Take screenshot at the end of rendering
+		if (Window.GetKey(GLFW_KEY_F2)) {
+			renderer->SaveScreenshot("res/screenshots/" + std::to_string(std::time(nullptr)) + ".png");
+		}
+		else if (Window.GetKey(GLFW_KEY_R)) {
+			std::cout << "RENDERING REFERENCE Go grab a cup of coffee. This is going to take a while.\n";
+			Timer referenceTimer;
+			referenceTimer.Begin();
+
+			renderer->RenderReference(camera);
+
+			referenceTimer.End();
+			referenceTimer.DebugTime();
+		}
 
 		FrameTimer.End();
 		FrameTimer.DebugTime();
