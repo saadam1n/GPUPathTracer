@@ -214,10 +214,11 @@ Vertex GetInterpolatedVertex(in Ray ray, inout HitInfo intersection) {
     
     interpolated.TextureCoordinate =
 
-        intersection.intersected.Vertices[1].NT.zw * intersection.di.y +
-        intersection.intersected.Vertices[2].NT.zw * intersection.di.z +
-        intersection.intersected.Vertices[0].NT.zw * intersection.di.w;
+        intersection.intersected.Vertices[1].NT.zw * intersection.di.y + // U
+        intersection.intersected.Vertices[2].NT.zw * intersection.di.z + // V
+        intersection.intersected.Vertices[0].NT.zw * intersection.di.w;  // T
 
+    // T  U  V
 
     interpolated.MatID = fbs(intersection.intersected.Vertices[0].MP.x);
 

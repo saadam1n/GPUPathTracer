@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
 	
 
 	Renderer* renderer = new Renderer;
-	renderer->Initialize(&Window, "res/objects/22323.obj", "res/sky/logl/cubemap.txt");
+	renderer->Initialize(&Window, "res/objects/22323.obj", "GENERATE COLOR BLACK");
 	camera.SetPosition(glm::vec3(-0.25f, 2.79f, 6.0));
 
 	Timer FrameTimer;

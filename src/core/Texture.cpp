@@ -138,6 +138,7 @@ void Texture2D::LoadTexture(const char* Path) {
 	CacheLoad TextureData = LoadFromCache(Path, Width, Height, Channels, SOIL_LOAD_RGBA);
 
 	LoadData(GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE, Width, Height, TextureData);
+	SaveData(GL_UNSIGNED_BYTE, Width, Height, TextureData);
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -147,6 +148,41 @@ void Texture2D::LoadTexture(const char* Path) {
 
 void Texture2D::LoadData(GLenum DestinationFormat, GLenum SourceFormat, GLenum SourceType, uint32_t X, uint32_t Y, void* Data) {
 	glTexImage2D(GL_TEXTURE_2D, 0, DestinationFormat, X, Y, 0, SourceFormat, SourceType, Data);
+}
+
+void Texture2D::SaveData(GLenum SourceType, uint32_t X, uint32_t Y, void* Data) {
+	width = X;
+	height = Y;
+
+	image = new vec4[1ULL * width * height];
+
+	for (uint32_t i = 0; i < height; i++) {
+		for (uint32_t j = 0; j < width; j++) {
+			int idx = i * width + j;
+			if (SourceType == GL_UNSIGNED_BYTE) {
+				unsigned char* source = (unsigned char*)Data;
+				int sidx = 4 * idx;
+
+				image[idx].r = source[sidx] / 255.0f;
+				image[idx].g = source[sidx + 1] / 255.0f;
+				image[idx].b = source[sidx + 2] / 255.0f;
+				image[idx].a = source[sidx + 3] / 255.0f;
+			}
+			else {
+				vec4* source = (vec4*)Data;
+				image[idx] = source[idx];
+			}
+		}
+	}
+}
+
+vec4 Texture2D::Sample(const vec2 texcoords) const {
+	// Cast to integer coordinates
+	ivec2 texelcoords = texcoords * vec2(width, height);
+	texelcoords.x %= width;
+	texelcoords.y %= height;
+	// Nearest neighbor sampling
+	return image[texelcoords.y * width + texelcoords.x];
 }
 
 void TextureBuffer::CreateBinding() {
@@ -209,8 +245,93 @@ void TextureCubemap::LoadTexture(const std::string& wpath) {
 
 
 		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, face);
+		faces[i].SaveData(GL_UNSIGNED_BYTE, width, height, face);
 		SOIL_free_image_data(face);
 	}
 	
 
+}
+
+vec4 TextureCubemap::Sample(vec3 texcoords) const {
+	// Taken from wikipedia https://en.wikipedia.org/wiki/Cube_mapping#Memory_addressing
+	texcoords.y = -texcoords.y;
+
+	int index;
+
+	float absX = fabs(texcoords.x);
+	float absY = fabs(texcoords.y);
+	float absZ = fabs(texcoords.z);
+
+	int isXPositive = texcoords.x > 0 ? 1 : 0;
+	int isYPositive = texcoords.y > 0 ? 1 : 0;
+	int isZPositive = texcoords.z > 0 ? 1 : 0;
+
+	float maxAxis, uc, vc;
+
+	// POSITIVE X
+	if (isXPositive && absX >= absY && absX >= absZ) {
+		// u (0 to 1) goes from +z to -z
+		// v (0 to 1) goes from -y to +y
+		maxAxis = absX;
+		uc = -texcoords.z;
+		vc = texcoords.y;
+		index = 0;
+	}
+	// NEGATIVE X
+	if (!isXPositive && absX >= absY && absX >= absZ) {
+		// u (0 to 1) goes from -z to +z
+		// v (0 to 1) goes from -y to +y
+		maxAxis = absX;
+		uc = texcoords.z;
+		vc = texcoords.y;
+		index = 1;
+	}
+	// POSITIVE Y
+	if (isYPositive && absY >= absX && absY >= absZ) {
+		// u (0 to 1) goes from -x to +x
+		// v (0 to 1) goes from +z to -z
+		maxAxis = absY;
+		uc = texcoords.x;
+		vc = -texcoords.z;
+		index = 2;
+	}
+	// NEGATIVE Y
+	if (!isYPositive && absY >= absX && absY >= absZ) {
+		// u (0 to 1) goes from -x to +x
+		// v (0 to 1) goes from -z to +z
+		maxAxis = absY;
+		uc = texcoords.x;
+		vc = texcoords.z;
+		index = 3;
+	}
+	// POSITIVE Z
+	if (isZPositive && absZ >= absX && absZ >= absY) {
+		// u (0 to 1) goes from -x to +x
+		// v (0 to 1) goes from -y to +y
+		maxAxis = absZ;
+		uc = texcoords.x;
+		vc = texcoords.y;
+		index = 4;
+	}
+	// NEGATIVE Z
+	if (!isZPositive && absZ >= absX && absZ >= absY) {
+		// u (0 to 1) goes from +x to -x
+		// v (0 to 1) goes from -y to +y
+		maxAxis = absZ;
+		uc = -texcoords.x;
+		vc = texcoords.y;
+		index = 5;
+	}
+
+	vec2 uv;
+
+	// Convert range from -1 to 1 to 0 to 1
+	uv.x = 0.5f * (uc / maxAxis + 1.0f);
+	uv.y = 0.5f * (vc / maxAxis + 1.0f);
+
+	return faces[index].Sample(uv);
+}
+
+Texture2D& TextureCubemap::GetFace(uint32_t i) {
+	return faces[i];
 }

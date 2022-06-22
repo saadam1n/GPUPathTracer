@@ -2,6 +2,8 @@
 
 #include "OpenGL.h"
 #include <string>
+#include <glm/glm.hpp>
+using namespace glm;
 
 class Texture {
 public:
@@ -23,10 +25,14 @@ public:
 	void CreateBinding();
 	void FreeBinding();
 
-	
-
 	void LoadTexture(const char* Path);
 	void LoadData(GLenum DestinationFormat, GLenum SourceFormat, GLenum SourceType, uint32_t X, uint32_t Y, void* Data);
+	void SaveData(GLenum SourceType, uint32_t X, uint32_t Y, void* Data);
+
+	vec4 Sample(const vec2 texcoords) const;
+private:
+	uint32_t width, height;
+	vec4* image;
 };
 
 class Buffer;
@@ -50,4 +56,10 @@ public:
 	void FreeBinding();
 
 	void LoadTexture(const std::string& path);
+
+	vec4 Sample(vec3 texcoords) const;
+	Texture2D& GetFace(uint32_t i);
+private:
+	friend class Renderer;
+	Texture2D faces[6];
 };

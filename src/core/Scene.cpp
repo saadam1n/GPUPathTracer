@@ -108,8 +108,9 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
                 currtex->LoadTexture(textureKey.c_str());
             }
             else {
-                float coldata[3]{ albedo.r, albedo.g, albedo.b };
-                currtex->LoadData(GL_RGBA32F, GL_RGB, GL_FLOAT, 1, 1, (void*)coldata);
+                float coldata[4]{ albedo.r, albedo.g, albedo.b, 1.0 };
+                currtex->LoadData(GL_RGBA32F, GL_RGBA, GL_FLOAT, 1, 1, (void*)coldata);
+                currtex->SaveData(GL_FLOAT, 1, 1, (void*)coldata);
             }
 
             textures.push_back(currtex);

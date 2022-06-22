@@ -195,6 +195,7 @@ void LoadEnvironmnet(TextureCubemap* environment, const std::string& args, Verte
 
             for (int i = 0; i < 6; i++) {
                 glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA32F, 1, 1, 0, GL_RGBA, GL_FLOAT, &color.r);
+                environment->GetFace(i).SaveData(GL_FLOAT, 1, 1, &color.r);
             }
         }
     }
@@ -573,12 +574,12 @@ float HybridTaus(uvec4& state) {
 
 #define M_PI 3.141529f
 
-constexpr uint32_t KNumRefSamples = 1024;
-constexpr uint32_t kMaxRefPathLength = 16;
+constexpr uint32_t KNumRefSamples = 16384;
+constexpr uint32_t kMaxRefPathLength = 64;
 void PathTraceImage(
     uint8_t* image, uint32_t x, uint32_t y, const uint32_t w, const uint32_t h, const Camera& camera,
     const std::vector<Vertex>& vertices, const std::vector<TriangleIndexData>& indices, const std::vector<NodeSerialized>& nodes,
-    const std::vector<MaterialInstance>& materials, uvec4& state
+    const std::vector<MaterialInstance>& materials, const std::vector<Texture*>& textures, uvec4& state
 ) {
     vec3 pixel = vec3(0.0);
 
@@ -593,11 +594,21 @@ void PathTraceImage(
             TraverseBVH(ray, closest, vertices, indices, nodes);
 
             if (materials[closest.intersection.matId].isEmissive) {
-                pixel += throughput * materials[closest.intersection.matId].emission;
+                vec3 emission;
+                if (closest.intersection.matId == 0) {
+                    const TextureCubemap* skybox = (const TextureCubemap*)textures.front();
+                    emission = skybox->Sample(ray.direction);
+                }
+                else
+                    emission = materials[closest.intersection.matId].emission;
+
+                pixel += throughput * emission;
                 break;
             }
 
-            throughput *= vec3(0.5f) / M_PI;
+            const Texture2D* tex = (const Texture2D*)textures[closest.intersection.matId];
+
+            throughput *= vec3(tex->Sample(closest.intersection.texcoords)) / M_PI;
             float rr = max(throughput.x, max(throughput.y, throughput.z));
             if (HybridTaus(state) > rr)
                 break;
@@ -630,7 +641,7 @@ void PathTraceImage(
 // Render the ground truth of the image on the CPU
 void Renderer::RenderReference(const Camera& camera) {
     auto filename = std::to_string(std::time(nullptr));
-    SaveScreenshot("res/screenshots/" + filename + "-RENDERED.png");
+    SaveScreenshot("res/screenshots/" + filename + '-' + std::to_string(numSamples) + "-RENDERED.png");
 
     uint64_t numPixels = (uint64_t) viewportWidth * viewportHeight;
     uint8_t* image = new uint8_t[3ULL * numPixels];
@@ -650,7 +661,11 @@ void Renderer::RenderReference(const Camera& camera) {
     constexpr uint32_t kNumWorkers = 8;
     for (uint32_t i = 0; i < kNumWorkers; i++) {
         workers.emplace_back(
-            [](uint32_t& nextTask, std::mutex& taskMutex, uint8_t* image, const std::vector<ivec2>& pixelTasks, uint32_t w, uint32_t h, const Camera& camera, const std::vector<Vertex>& vertices, const std::vector<TriangleIndexData>& indices, const std::vector<NodeSerialized>& nodes, const std::vector<MaterialInstance>& materials) {
+            [](
+            uint32_t& nextTask, std::mutex& taskMutex, uint8_t* image, const std::vector<ivec2>& pixelTasks, uint32_t w, uint32_t h, const Camera& camera,
+                const std::vector<Vertex>& vertices, const std::vector<TriangleIndexData>& indices, const std::vector<NodeSerialized>& nodes,
+                const std::vector<MaterialInstance>& materials, const std::vector<Texture*>& textures
+            ) {
                 while (true) {
                     taskMutex.lock();
                     uint32_t currentTask = nextTask++;
@@ -659,28 +674,31 @@ void Renderer::RenderReference(const Camera& camera) {
                     if (currentTask >= pixelTasks.size())
                         return;
 
-                    PathTraceImage(image, pixelTasks[currentTask].x, pixelTasks[currentTask].y, w, h, camera, vertices, indices, nodes, materials, threadRandomState[currentTask]);
+                    PathTraceImage(image, pixelTasks[currentTask].x, pixelTasks[currentTask].y, w, h, camera, vertices, indices, nodes, materials, textures, threadRandomState[currentTask]);
                 }
             },
-            std::ref(nextTask), std::ref(taskMutex), image, std::ref(pixelTasks), viewportWidth, viewportHeight, std::ref(camera), std::ref(scene.vertexVec), std::ref(scene.indexVec), std::ref(scene.bvh.nodesVec), std::ref(scene.materialVec)
+            std::ref(nextTask), std::ref(taskMutex), image, std::ref(pixelTasks), viewportWidth, viewportHeight, std::ref(camera), std::ref(scene.vertexVec), std::ref(scene.indexVec), std::ref(scene.bvh.nodesVec), std::ref(scene.materialVec), std::ref(scene.textures)
         );
     }
 
-    while (nextTask < pixelTasks.size()) {
-        for (int i = 0; i < 5000; i++) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            if (nextTask >= pixelTasks.size()) break;
-        }
-
-        std::cout << "Rendering " << 100.0f * nextTask / pixelTasks.size() << "% complete\tTime remaining: " << (std::time(nullptr) - start) * ((float)pixelTasks.size() - nextTask) / nextTask << " seconds\n";
-    }
+    std::thread progressUpdateThread([](time_t start, uint32_t& nextTask, size_t pixelTasksSize) {
+            while (true) {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                if (nextTask >= pixelTasksSize) break;
+                std::cout << "Rendering " << 100.0f * nextTask / pixelTasksSize << "% complete\tTime remaining: " << (std::time(nullptr) - start) * ((float)pixelTasksSize - nextTask) / nextTask << " seconds\n";
+            }
+        }, start, std::ref(nextTask), pixelTasks.size()
+    );
 
     for (std::thread& worker : workers)
         worker.join();
 
-    SOIL_save_image(("res/screenshots/" + filename + "-REFERENCE.png").c_str(), SOIL_SAVE_TYPE_PNG, viewportWidth, viewportHeight, 3, image);
+    progressUpdateThread.join();
+    auto deltaT = std::time(nullptr) - start;
+
+    SOIL_save_image(("res/screenshots/" + filename + '-' + std::to_string(deltaT) + "-REFERENCE.png").c_str(), SOIL_SAVE_TYPE_PNG, viewportWidth, viewportHeight, 3, image);
 
     delete[] image;
 
-    std::cout << "Pssst? You still there? Rendering completed in " << std::time(nullptr) - start << " seconds\n";
+    std::cout << "Pssst? You still there? Rendering completed in " << deltaT << " seconds\n";
 }

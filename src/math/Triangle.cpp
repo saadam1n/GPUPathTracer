@@ -42,7 +42,7 @@ bool Triangle::Intersect(const Ray& ray, HitInfo& closestHit) {
         closestHit = attemptHit;
         closestHit.intersection.position = closestHit.depth * ray.direction + ray.origin;
         closestHit.intersection.normal = Vertices[0].normal;
-        closestHit.intersection.texcoords = Vertices[0].texcoords * closestHit.u + Vertices[1].texcoords * closestHit.v + Vertices[2].texcoords * closestHit.t;
+        closestHit.intersection.texcoords = Vertices[0].texcoords * closestHit.t + Vertices[1].texcoords * closestHit.u + Vertices[2].texcoords * closestHit.v;
         closestHit.intersection.matId = Vertices[0].matId;
 
         return true;
