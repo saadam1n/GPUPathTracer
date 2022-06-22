@@ -1,3 +1,16 @@
+I need new direction. I cannot work on this project 24/7.
+First order of business is to rewrite stuff to follow coroutine based RT
+To that I will first undo NEE and return to a basic naive unidir path tracer
+Then I will rewrite everything to follow courutines
+I will implement NEE with MIS afterwards
+Then I will add cool BRDFs and whatnot
+Then I will ask, "what next"?
+
+Goal to finish all of these: August 31st
+Also I think I should delete my CPU renderer because it is slow AF and I could just do unidir PT on my GPU
+In fact the first thing I will write is my unidir reference PT with the GPU corountine system
+
+==============================================================
 Updated TODO list, 6/15/22, everything below the line is useless
 
 Now that I have a working ray pooling system, I want to take a crack at wavefront path tracing, but path tracing itself is an algorithm that is easy to make mistakes and have hidden bugs. For that reason, I will start off with ray tracing shadows, and then I will eventually modify my algorithm into a path tracer
