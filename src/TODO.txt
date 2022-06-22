@@ -73,6 +73,13 @@ TODO: reorganize code, reorganize overything, rewrite, etc.
 I need to restruct my pipeline so I can actually do NEE easily and all that jazz
 I also need to read up on materials on how to actually do NEE with specular so I can structure my pipeline properly
 
+Update: so what devsh taught me was that wavefront is bad, and for me it already is becomming a limitation
+I think I will soon discard this supposedly faster algorithm for just plain old iterative tracing
+The idea is to use coroutines between threads and thread groups
+We make sure each thread group does one exact thing at a time
+If they diverge, we simply exchange out divergent rays (or maybe all of them) to reobtain a set of rays that aren't divergent
+This way we can have a whole lot more bounces
+
 =================================================================
 Haha, time flies, right? Since I'm visiting this project after a year, everything below the line goes in the garbage until I can clear my mind about what to do.
 

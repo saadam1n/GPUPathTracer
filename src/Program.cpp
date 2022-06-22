@@ -9,8 +9,9 @@
 #include "math/Camera.h"
 #include "misc/TimeUtil.h"
 #include "core/Scene.h"
-
-
+#include <SOIL2.h>
+#include <ctime>
+#include <string>
 
 uint32_t Width = 1280;
 uint32_t Height = 720;
@@ -24,7 +25,7 @@ glm::vec2 LastCursorPosition;
 
 
 // I need class here because Intellisense is not detecting the camera type
-Camera camera((float)Width / Height, glm::radians(45.0f), 900.0 * kCameraSetting, 5.0 * kCameraSetting);
+Camera camera((float)Width / Height, glm::radians(45.0f), 900.0 * kCameraSetting, 30.0 * kCameraSetting);
 
 bool needResetSamples = false;
 
@@ -53,8 +54,10 @@ int main(int argc, char** argv) {
 	LastCursorPosition = glm::vec2(Width, Height) / 2.0f;
 	Window.SetInputCallback(MouseCallback);
 
+	
+
 	Renderer* renderer = new Renderer;
-	renderer->Initialize(&Window, "res/objects/sphere_light.obj", "GENERATE COLOR BLACK");
+	renderer->Initialize(&Window, "res/objects/22323.obj", "res/sky/logl/cubemap.txt");
 	camera.SetPosition(glm::vec3(-0.25f, 2.79f, 6.0));
 
 	Timer FrameTimer;
@@ -69,6 +72,16 @@ int main(int argc, char** argv) {
 		else if (Window.GetKey(GLFW_KEY_S)) {
 			camera.Move(-CameraSpeed * (float)FrameTimer.Delta);
 			needResetSamples = true;
+		}
+		else if (Window.GetKey(GLFW_KEY_F2)) {
+			std::string filename = "res/screenshots/" + std::to_string(std::time(nullptr)) + ".png";
+			if (SOIL_save_screenshot(filename.c_str(), SOIL_SAVE_TYPE_PNG, 0, 0, 1280, 720)) {
+				std::cout << "File saved successfully\n";
+			}
+			else {
+				std::cout << "File failed to save!\n";
+				exit(-1);
+			}
 		}
 
 		if (needResetSamples) {

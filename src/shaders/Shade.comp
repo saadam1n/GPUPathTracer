@@ -112,7 +112,7 @@ void main(){
     currVertex.MatID             = floatBitsToInt(raysR[idxR+4].x) ;
     viewDir                      =                raysR[idxR+4].yzw;
 
-    if(floatBitsToInt(materialInstance[currVertex.MatID + 1].w) == 1 && (sampleType == 1 || bounce == 0)) {
+    if(floatBitsToInt(materialInstance[currVertex.MatID + 1].w) == 1 && ((sampleType == 1 || bounce == 0) || (sampleType == 0 && currVertex.MatID == 0 ))) {
         vec3 currRadiance = throughput * (currVertex.MatID == 0 ? texture(samplerCube(floatBitsToUint(materialInstance[0].xy)), viewDir).xyz :   materialInstance[currVertex.MatID + 1].xyz);
         vec3 accumRadiance = imageLoad(directAccum, PixelCoordinates).xyz + currRadiance;
         imageStore(directAccum, PixelCoordinates,vec4(accumRadiance, 1.0));
