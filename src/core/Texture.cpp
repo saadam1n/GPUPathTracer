@@ -154,40 +154,41 @@ void Texture2D::SaveData(GLenum SourceType, uint32_t X, uint32_t Y, void* Data) 
 	width = X;
 	height = Y;
 
-	image = new vec4[1ULL * width * height];
+	image = new uint8_t[3ULL * width * height];
 
 	for (uint32_t i = 0; i < height; i++) {
 		for (uint32_t j = 0; j < width; j++) {
 			int idx = i * width + j;
+			int didx = 3 * idx;
+			int sidx = 4 * idx;
 			if (SourceType == GL_UNSIGNED_BYTE) {
-				unsigned char* source = (unsigned char*)Data;
-				int sidx = 4 * idx;
-
-				image[idx].r = source[sidx] / 255.0f;
-				image[idx].g = source[sidx + 1] / 255.0f;
-				image[idx].b = source[sidx + 2] / 255.0f;
-				image[idx].a = source[sidx + 3] / 255.0f;
+				uint8_t* source = (uint8_t*)Data;
+				image[didx    ] = source[sidx    ];
+				image[didx + 1] = source[sidx + 1];
+				image[didx + 2] = source[sidx + 2];
 			}
 			else {
 				vec4* source = (vec4*)Data;
-				image[idx] = source[idx];
+				image[didx    ] = (uint8_t)(source[idx].r * 255.99f);
+				image[didx + 1] = (uint8_t)(source[idx].g * 255.99f);
+				image[didx + 2] = (uint8_t)(source[idx].b * 255.99f);
 			}
 		}
 	}
 }
 
-vec4 Texture2D::Sample(const vec2 texcoords) const {
+vec3 Texture2D::Sample(const vec2 texcoords) const {
 	// Cast to integer coordinates
 	ivec2 texelcoords = texcoords * vec2(width, height);
 	texelcoords.x %= width;
 	texelcoords.y %= height;
+	uint32_t idx = 3 * (texelcoords.y * width + texelcoords.x);
 	// Nearest neighbor sampling
-	return image[texelcoords.y * width + texelcoords.x];
+	return vec3(image[idx], image[idx+1], image[idx+2]) / 255.0f;
 }
 
 void TextureBuffer::CreateBinding() {
 	EnsureGeneratedHandle();
-
 	glBindTexture(GL_TEXTURE_BUFFER, texture);
 }
 
@@ -252,7 +253,7 @@ void TextureCubemap::LoadTexture(const std::string& wpath) {
 
 }
 
-vec4 TextureCubemap::Sample(vec3 texcoords) const {
+vec3 TextureCubemap::Sample(vec3 texcoords) const {
 	// Taken from wikipedia https://en.wikipedia.org/wiki/Cube_mapping#Memory_addressing
 	texcoords.y = -texcoords.y;
 

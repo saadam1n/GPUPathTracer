@@ -567,9 +567,9 @@ bool NodeSerialized::Intersect(const Ray& ray, HitInfo& hit, const std::vector<V
 		auto elements = indices[k];
 
 		Triangle triangle;
-		triangle.Vertices[0] = vertices[elements[0]];
-		triangle.Vertices[1] = vertices[elements[1]];
-		triangle.Vertices[2] = vertices[elements[2]];
+		triangle.Vertices[0] = vertices[elements[0]]; // cache was most recently at the previous elements[2]
+		triangle.Vertices[1] = vertices[elements[1]]; // cache was most recently at elements[0]
+		triangle.Vertices[2] = vertices[elements[2]]; // cache was most recently at elements[1]
 
 		result |= triangle.Intersect(ray, hit);
 	}
