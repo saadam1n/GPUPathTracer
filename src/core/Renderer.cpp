@@ -575,7 +575,6 @@ float HybridTaus(uvec4& state) {
 #define M_PI 3.141529f
 
 constexpr uint32_t KNumRefSamples = 64;
-constexpr uint32_t kMaxRefPathLength = 8;
 void PathTraceImage(
     uint8_t* image, uint32_t x, uint32_t y, const uint32_t w, const uint32_t h, const Camera& camera,
     const std::vector<Vertex>& vertices, const std::vector<TriangleIndexData>& indices, const std::vector<NodeSerialized>& nodes,
@@ -588,7 +587,7 @@ void PathTraceImage(
         Ray ray = camera.GenRay(interpolation, HybridTaus(state), HybridTaus(state));
         vec3 throughput = vec3(1.0);
 
-        for (int j = 0; j < kMaxRefPathLength; j++) {
+        while(true) {
             HitInfo closest;
 
             TraverseBVH(ray, closest, vertices, indices, nodes);
@@ -608,7 +607,7 @@ void PathTraceImage(
 
             const Texture2D* tex = (const Texture2D*)textures[closest.intersection.matId];
 
-            throughput *= vec3(tex->Sample(closest.intersection.texcoords)) / M_PI;
+            throughput *= tex->Sample(closest.intersection.texcoords) / M_PI; // BRDF
             float rr = max(throughput.x, max(throughput.y, throughput.z));
             if (HybridTaus(state) > rr)
                 break;
