@@ -14,7 +14,7 @@
 #include <mutex>
 
 using namespace glm;
-constexpr float kExposure = 1.6f;
+constexpr float kExposure = 5.6f;
 
 /*
 When we trace a ray, we don't actually care about the ray, we care about the path
@@ -574,7 +574,7 @@ float HybridTaus(uvec4& state) {
 
 #define M_PI 3.141529f
 
-constexpr uint32_t KNumRefSamples = 64;
+constexpr uint32_t KNumRefSamples = 4096;
 void PathTraceImage(
     uint8_t* image, uint32_t x, uint32_t y, const uint32_t w, const uint32_t h, const Camera& camera,
     const std::vector<Vertex>& vertices, const std::vector<TriangleIndexData>& indices, const std::vector<NodeSerialized>& nodes,

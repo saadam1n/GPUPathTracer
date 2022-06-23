@@ -1,0 +1,33 @@
+#version 430
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+#include "common/Geometry.glsl"
+#include "common/Random.glsl"
+#include "common/Constants.glsl"
+#include "common/Util.glsl"
+
+uniform vec3 lower_left, horizontal, vertical, position, u, v;
+uniform int width, height;
+uniform float lens_radius;
+
+void main() {
+	// Begin by getting to know which pixel we are in	
+	uvec2 PixelCoordinates = gl_GlobalInvocationID.xy;
+    initRNG(PixelCoordinates.y * width + PixelCoordinates.x);
+
+	// Generate our ray
+	Ray ray;
+
+    vec2 interpolation = vec2(PixelCoordinates + vec2(rand(), rand())) / (vec2(width, height));
+
+    float phi = 2 * M_PI * rand(); 
+    float r = sqrt(rand());
+
+    vec2 rd = lens_radius * r * vec2(cos(phi), sin(phi));
+    vec3 offset = u * rd.x + v * rd.y;
+
+    ray.Origin    = position + offset;
+    ray.Direction = lower_left + interpolation.s * horizontal + interpolation.t * vertical - offset;
+
+}

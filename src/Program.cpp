@@ -17,7 +17,7 @@ uint32_t Width = 1280;
 uint32_t Height = 720;
 
 // Camera params 
-constexpr float kCameraSetting = 0.01f;
+constexpr float kCameraSetting = 1.0f;
 
 constexpr float CameraSpeed = 2000.000f * 0.5f * kCameraSetting;
 constexpr float CameraSensitivity = 0.001f;
@@ -25,7 +25,7 @@ glm::vec2 LastCursorPosition;
 
 
 // I need class here because Intellisense is not detecting the camera type
-Camera camera((float)Width / Height, glm::radians(45.0f), 900.0f * kCameraSetting, 30.0f * kCameraSetting);
+Camera camera((float)Width / Height, glm::radians(45.0f), 900.0f * kCameraSetting, 3.0f * kCameraSetting);
 
 bool needResetSamples = false;
 
@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
 	
 
 	Renderer* renderer = new Renderer;
-	renderer->Initialize(&Window, "res/objects/22323.obj", "GENERATE COLOR BLACK");
+	renderer->Initialize(&Window, "res/de_dust2/dust2fixed2.obj", "res/sky/logl/cubemap.txt");
 	camera.SetPosition(glm::vec3(-0.25f, 2.79f, 6.0));
 
 	Timer FrameTimer;

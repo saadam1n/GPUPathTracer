@@ -31,8 +31,8 @@ void main(){
     PixelCoordinates.xy = floatBitsToInt( raysR[idxR].xy);
     throughPut         = raysR[idxR+1].xyz;
     sampleType         = fbs(raysR[idxR+1].w);
-    ray.Origin    = raysR[idxR+2].xyz;
-    ray.Direction = raysR[idxR+3].xyz;
+    ray.origin    = raysR[idxR+2].xyz;
+    ray.direction = raysR[idxR+3].xyz;
 
     HitInfo IntersectionInfo;
     IntersectionInfo.di.x = 1e20;
@@ -53,8 +53,7 @@ void main(){
     } else {
         raysW[idxW+4].x = intBitsToFloat(0);
     }
-
-    raysW[idxW+4].yzw = ray.Direction;
+    raysW[idxW+4].yzw = ray.direction;
             //imageStore(ColorOutput, ivec2(PixelCoordinates), vec4(ray.Origin , 1.0));
 
 }

@@ -2,31 +2,25 @@
 #define GEOMETRY_GLSL
 
 struct Ray {
-    vec3 Origin;
-    vec3 Direction;
-};
-
-struct RayInfo {
     vec3 origin;
     vec3 direction;
-    uvec2 pixel;
 };
 
 struct AABB {
-    vec3 Min;
-    vec3 Max;
+    vec3 min;
+    vec3 max;
 };
 
-float IntersectPlane(in vec3 Origin, in vec3 Normal, in Ray Ray) {
-    float DdotN = dot(Ray.Direction, Normal);
-    vec3 TransformedOrigin = Origin - Ray.Origin;
+float IntersectPlane(in vec3 Origin, in vec3 Normal, in Ray ray) {
+    float DdotN = dot(ray.direction, Normal);
+    vec3 TransformedOrigin = Origin - ray.origin;
     float TdotN = dot(TransformedOrigin, Normal);
     return TdotN / DdotN;
 }
 
-vec2 IntersectionAABBDistance(in AABB Box, in Ray Ray, uint Index) {
-    vec2 Positions = vec2(Box.Min[Index], Box.Max[Index]);
-    vec2 Distances = Positions / Ray.Direction[Index];
+vec2 IntersectionAABBDistance(in AABB Box, in Ray ray, uint Index) {
+    vec2 Positions = vec2(Box.min[Index], Box.max[Index]);
+    vec2 Distances = Positions / ray.direction[Index];
     if (Distances.x > Distances.y) {
         float Temp = Distances.x;
         Distances.x = Distances.y;
@@ -37,8 +31,8 @@ vec2 IntersectionAABBDistance(in AABB Box, in Ray Ray, uint Index) {
 
 bool IntersectAABB(in AABB Box, in Ray Ray) {
 
-    Box.Max -= Ray.Origin;
-    Box.Min -= Ray.Origin;
+    Box.max -= Ray.origin;
+    Box.min -= Ray.origin;
 
     bool Result = false;
 
@@ -74,10 +68,10 @@ bool IntersectAABB(in AABB Box, in Ray Ray) {
 }
 
 bool IntersectAABB2(in AABB Box, in Ray Ray) {
-    vec3 InverseDirection = 1.0f / Ray.Direction;
+    vec3 InverseDirection = 1.0f / Ray.direction;
 
-    vec3 tbot = InverseDirection * (Box.Min - Ray.Origin);
-    vec3 ttop = InverseDirection * (Box.Max - Ray.Origin);
+    vec3 tbot = InverseDirection * (Box.min - Ray.origin);
+    vec3 ttop = InverseDirection * (Box.max - Ray.origin);
 
     vec3 tmin = min(ttop, tbot);
     vec3 tmax = max(ttop, tbot);
@@ -143,7 +137,6 @@ struct HitInfo {
     Triangle intersected;
 };
 
-
 bool IntersectTriangle(in Triangle tri, in Ray ray, inout HitInfo closestHit) {
     // this is mostly a copy paste from scratchapixel's code that has been refitted to work with GLSL
     HitInfo attemptHit;
@@ -152,20 +145,12 @@ bool IntersectTriangle(in Triangle tri, in Ray ray, inout HitInfo closestHit) {
     vec3 v01 = tri.Vertices[1].PN.xyz - tri.Vertices[0].PN.xyz;
     vec3 v02 = tri.Vertices[2].PN.xyz - tri.Vertices[0].PN.xyz;
 
-    vec3 p = cross(ray.Direction, v02);
+    vec3 p = cross(ray.direction, v02);
 
     float det = dot(v01, p);
-
-    //#define AVOID_DIV_BY_0
-#ifdef AVOID_DIV_BY_0
-    if (abs(det) < 1e-6f) {
-        return false;
-    }
-#endif
-
     float idet = 1.0f / det;
 
-    vec3 t = ray.Origin - tri.Vertices[0].PN.xyz;
+    vec3 t = ray.origin - tri.Vertices[0].PN.xyz;
     attemptHit.di.y = dot(t, p) * idet;
 
     if (attemptHit.di.y < 0.0f || attemptHit.di.y > 1.0f) {
@@ -173,7 +158,7 @@ bool IntersectTriangle(in Triangle tri, in Ray ray, inout HitInfo closestHit) {
     }
 
     vec3 q = cross(t, v01);
-    attemptHit.di.z = dot(ray.Direction, q) * idet;
+    attemptHit.di.z = dot(ray.direction, q) * idet;
 
     if (attemptHit.di.z < 0.0f || attemptHit.di.y + attemptHit.di.z  > 1.0f) {
         return false;
@@ -188,7 +173,6 @@ bool IntersectTriangle(in Triangle tri, in Ray ray, inout HitInfo closestHit) {
     else
         return false;
 }
-
 #include "Util.glsl"
 
 Vertex GetInterpolatedVertex(in Ray ray, inout HitInfo intersection) {
@@ -198,7 +182,7 @@ Vertex GetInterpolatedVertex(in Ray ray, inout HitInfo intersection) {
     intersection.di.w = 1.0 - intersection.di.y - intersection.di.z;
     
 
-    interpolated.Position = ray.Origin + ray.Direction * intersection.di.x;
+    interpolated.Position = ray.origin + ray.direction * intersection.di.x;
 
     /*
     interpolated.Normal = normalize(

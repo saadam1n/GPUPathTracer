@@ -131,8 +131,8 @@ void main(){
         vec3 bitangent = cross(tangent, currVertex.Normal);
 
         Ray ray;
-        ray.Origin = currVertex.Position + 0.001 * currVertex.Normal;
-        ray.Direction = mat3(tangent, bitangent, currVertex.Normal) * CosineWeightedDirection();
+        ray.origin = currVertex.Position + 0.001 * currVertex.Normal;
+        ray.direction = mat3(tangent, bitangent, currVertex.Normal) * CosineWeightedDirection();
 
         vec3 indirectThroughput = throughput * brdf;
         float continuation = max(indirectThroughput.x, max(indirectThroughput.y, indirectThroughput.z));
@@ -143,8 +143,8 @@ void main(){
             raysW[idxW  ].xy  = uintBitsToFloat(PixelCoordinates);
             raysW[idxW+1].xyz = indirectThroughput;
             raysW[idxW+1].w   = intBitsToFloat(0);
-            raysW[idxW+2].xyz = ray.Origin;
-            raysW[idxW+3].xyz = ray.Direction;
+            raysW[idxW+2].xyz = ray.origin;
+            raysW[idxW+3].xyz = ray.direction;
         }
     }
 
@@ -157,8 +157,8 @@ void main(){
         vec3 lightDir = (lightPosition - currVertex.Position) / radius;
 
         Ray ray;
-        ray.Origin = currVertex.Position + 0.001 * currVertex.Normal;
-        ray.Direction = lightDir;
+        ray.origin = currVertex.Position + 0.001 * currVertex.Normal;
+        ray.direction = lightDir;
 
         float geometric = max(dot(currVertex.Normal, lightDir), 0.0) * max(dot(lightNormal, -lightDir), 0.0)  / (radius * radius);
         vec3 directThroughput = throughput * brdf * geometric * totalLightArea;
@@ -170,8 +170,8 @@ void main(){
             raysW[idxW  ].xy  = uintBitsToFloat(PixelCoordinates);
             raysW[idxW+1].xyz = directThroughput;
             raysW[idxW+1].w   = intBitsToFloat(1);
-            raysW[idxW+2].xyz = ray.Origin;
-            raysW[idxW+3].xyz = ray.Direction;
+            raysW[idxW+2].xyz = ray.origin;
+            raysW[idxW+3].xyz = ray.direction;
         }
     }
 

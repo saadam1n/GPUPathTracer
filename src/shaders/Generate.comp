@@ -32,8 +32,8 @@ void main() {
     vec2 rd = lens_radius * r * vec2(cos(phi), sin(phi));
     vec3 offset = u * rd.x + v * rd.y;
 
-    ray.Origin    = position + offset;
-    ray.Direction = lower_left + interpolation.s * horizontal + interpolation.t * vertical - offset;
+    ray.origin    = position + offset;
+    ray.direction = lower_left + interpolation.s * horizontal + interpolation.t * vertical - offset;
 
     uint idx = atomicCounterIncrement(rayCounter) * 5;
 
@@ -47,8 +47,8 @@ void main() {
     raysW[idx  ].xy  = uintBitsToFloat(PixelCoordinates.xy);
     raysW[idx+1].xyz = initThroughPut;
     raysW[idx+1].w   = intBitsToFloat(0);
-    raysW[idx+2].xyz = ray.Origin;
-    raysW[idx+3].xyz = ray.Direction;
+    raysW[idx+2].xyz = ray.origin;
+    raysW[idx+3].xyz = ray.direction;
     
     freeRNG();
 }

@@ -364,8 +364,8 @@ BVHNode GetNode(int idx) {
 
 // AABB intersection test by madmann
 vec2 IntersectNode(in BVHNode node, in Ray iray, in HitInfo intersect) {
-	vec3 t_node_min = node.data[0].xyz * iray.Direction + iray.Origin;
-	vec3 t_node_max = node.data[1].xyz * iray.Direction + iray.Origin;
+	vec3 t_node_min = node.data[0].xyz * iray.direction + iray.origin;
+	vec3 t_node_max = node.data[1].xyz * iray.direction + iray.origin;
 
 	vec3 t_min = min(t_node_min, t_node_max);
 	vec3 t_max = max(t_node_min, t_node_max);
@@ -399,8 +399,8 @@ void IntersectLeaf(in BVHNode leaf, in Ray ray, inout HitInfo intersection, inou
 bool TraverseBVH(in Ray ray, inout HitInfo intersection) {
 	Ray iray;
 
-	iray.Direction = 1.0f / ray.Direction;
-	iray.Origin    = -ray.Origin * iray.Direction;
+	iray.direction = 1.0f / ray.direction;
+	iray.origin    = -ray.origin * iray.direction;
 
 	BVHNode root = GetNode(0);
 
