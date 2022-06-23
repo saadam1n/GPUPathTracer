@@ -134,7 +134,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
         for (uint32_t j = 0; j < currMesh->mNumVertices; j++) {
             Vertex CurrentVertex;
 
-            aiVector3D& Position = currMesh->mVertices[j];
+            aiVector3D& Position = Scene->mRootNode->mTransformation * currMesh->mVertices[j];
             aiVector3D& Normal = currMesh->mNormals[j];
 
             CurrentVertex.position = glm::vec3(Position.x, Position.y, Position.z);
