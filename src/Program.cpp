@@ -25,7 +25,7 @@ glm::vec2 LastCursorPosition;
 
 
 // I need class here because Intellisense is not detecting the camera type
-Camera camera((float)Width / Height, glm::radians(45.0f), 460.0f * kCameraSetting, 30.0f * kCameraSetting);
+Camera camera((float)Width / Height, glm::radians(45.0f), 460.0f * kCameraSetting, 15.0f * kCameraSetting);
 
 bool needResetSamples = false;
 
@@ -102,6 +102,8 @@ int main(int argc, char** argv) {
 			referenceTimer.End();
 			referenceTimer.DebugTime();
 		}
+
+		glFlush();
 
 		FrameTimer.End();
 		FrameTimer.DebugTime();

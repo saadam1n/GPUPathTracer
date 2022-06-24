@@ -388,7 +388,6 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     iterative.LoadShaderStorageBuffer("samplers", scene.materialsBuf);
     iterative.LoadShaderStorageBuffer("randomState", randomState);
 
-
     present.CreateBinding();
     present.LoadFloat("exposure", kExposure);
     present.LoadInteger("directAccum", 0);

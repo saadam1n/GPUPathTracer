@@ -1,3 +1,37 @@
+My next focus should be coroutine RT, but that is too complex. Over time once I understand things I will attempt it
+My next goal right now is OBB rejection sampling and overall cleaning up the NEE code
+Then I will proceed to better BRDFs and materials and what not
+Then I will implement cool ideas for NEE I have had
+Finally, coroutine RT
+Remember the completion deadlien is august 31st so I have a lot time
+If I finish ahead of time I can try BDPT
+
+NEE algorithm idea: "Intelligent Next Event Estimation":
+1. Split the scene into n voxels (or some other spatial data structure, but voxels seem simplest to me)
+2. For each of the voxels, for each light, initialize an array with each value set to 1
+3. During rendering, we choose a light according to the PMF of this array (ie, if you have two lights, with their values set 35 and 1 respectively, the first light has a 35/36 chance of being chosen)
+4. If we hit the light we picked, increment its value in the array by 1
+What we do here is that we keep a record of "most hit lights" for a certain area of our scene and then sample from the record
+The only issue I really see here is memory access, since you would need to find a smart way to do the PMF while other threads are reading from it
+You could implement a while(true) mutex, but this is a GPU, you are wasting a lot of energy and processing power and there is a chance a thread might just get past right before the mutex locks just in the nick of time
+To fix this issue, we suggest that you write to a seperate buffer, so there is ensurity that the PMF will not be updated within a frame
+After each frame, each PMF is updated, and samples are drawn from it instead
+One possible bug is that, in the case of multiple lights nearby, the PMF might get too biased over time towards a single light (after all, lights that are hit are more frequently sampled from causing them to be hit more often)
+Buffer swapping does alievte this issue but not competely
+We therefore suggest combining the PMF with an equal-chance PMF for each light, so that the distribution is attempted to be balanced over time
+Another possible idea is that "if light x has so many samples, we probably have already reached a good estimation for it, so we should sample other lights instead"
+That idea could be used to choose between the "successful-hit PMF" and the "equal-oppurtunity PMF"
+Nonetheless, this brings back the issue of sampling tiny lights that have zero contribution 
+So instead of an equal opputunity PMF, we should use a normal PMF that most normal people use for NEE
+
+Splitting scene into voxels:
+1. Deciede on "voxel side length"
+2. Compute AABB of scene
+3. Divide into voxels
+Access the voxel in the shader is easy as centering the corner voxel's corner on (0,0,0,), and then dividing by voxel side length and casting to integer
+This can then be transformed into an index in a SSBO
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
 I need new direction. I cannot work on this project 24/7.
 First order of business is to rewrite stuff to follow coroutine based RT
 To that I will first undo NEE and return to a basic naive unidir path tracer

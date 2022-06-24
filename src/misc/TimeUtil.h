@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <chrono>
 
 uint64_t GetCurrentTimeNano64(void);
 

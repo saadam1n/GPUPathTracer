@@ -3,6 +3,8 @@
 
 #include "../core/OpenGL.h"
 #include <stdint.h>
+#include <chrono>
+#include <ratio>
 
 class Window {
 public:

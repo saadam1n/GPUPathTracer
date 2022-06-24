@@ -12,15 +12,17 @@ static struct GLFW_Init_Struct_T {
 void Window::Open(const char* Title, uint32_t X, uint32_t Y, bool fullscreen) {
 	Width = X;
 	Height = Y;
-	GLFWmonitor* monitor = nullptr;
+	GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+	const GLFWvidmode* mode = glfwGetVideoMode(monitor);
 	if (fullscreen) {
-		monitor = glfwGetPrimaryMonitor();
-		const GLFWvidmode* mode = glfwGetVideoMode(monitor);
 		Width = mode->width;
 		Height = mode->height;
 	}
 
-	WindowHandle = glfwCreateWindow(Width, Height, Title, monitor, nullptr);
+	// To prevent crazzily weird FPS
+	glfwSwapInterval(1);
+
+	WindowHandle = glfwCreateWindow(Width, Height, Title, fullscreen ? monitor : nullptr, nullptr);
 	glfwMakeContextCurrent(WindowHandle);
 }
 

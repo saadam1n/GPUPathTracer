@@ -396,7 +396,7 @@ void IntersectLeaf(in BVHNode leaf, in Ray ray, inout HitInfo intersection, inou
 // Go with 48 for lower memory usage. I would consider 32 to be the minimum for generally all meshes
 #define BVH_STACK_SIZE 27
 
-bool TraverseBVH(in Ray ray, inout HitInfo intersection) {
+bool ClosestHit(in Ray ray, inout HitInfo intersection) {
 	Ray iray;
 
 	iray.direction = 1.0f / ray.direction;

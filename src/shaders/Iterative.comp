@@ -9,6 +9,7 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 #include "common/Random.glsl"
 #include "common/Constants.glsl"
 #include "common/Util.glsl"
+#include "common/Material.glsl"
 
 uniform vec3 lower_left, horizontal, vertical, position, u, v;
 uniform int width, height;
@@ -18,10 +19,6 @@ uniform samplerBuffer lightTex;
 uniform float totalLightArea;
 
 uniform layout(rgba32f) image2D accum;
-
-layout(std430) readonly buffer samplers {
-    vec4 materialInstance[];
-};
 
 vec3 CosineWeightedDirection() {
     float r0 = rand(), r1 = rand();
@@ -95,13 +92,18 @@ void main() {
     float bxdfPdf = 1.0;
     float neePdf = 1.0 / totalLightArea;
 
+    vec3 viewDir = -ray.direction;
+
+    float specular = 1.0f;
+    float shiny = 256.0f;
+
     // Set max bounce length to an inordinately high number so we (basically) get unbiased results while terminating the few odd rays that run for a lot of bounces without end
     const int kMaxBounces = 1024;
     for(int i = 0; i < kMaxBounces; i++) {
         // Intersect the scene
         HitInfo hit;
         hit.di.x = 1e20f;
-        if(!TraverseBVH(ray, hit)) {
+        if(!ClosestHit(ray, hit)) {
             break;
         }
         vertex = GetInterpolatedVertex(ray, hit);
@@ -114,29 +116,32 @@ void main() {
         }
 
         // Sample the texture
-        vec3 brdf = texture(sampler2D(floatBitsToUint(materialInstance[vertex.MatID].xy)), vertex.TextureCoordinate).xyz / M_PI;
-        throughput *= brdf;
+        vec3 albedo = texture(sampler2D(floatBitsToUint(materialInstance[vertex.MatID].xy)), vertex.TextureCoordinate).xyz;
 
         // Shoot our NEE ray
         vec3 lightPosition, lightNormal;
         RandomPointOnLight(lightPosition, lightNormal);
         float radius = distance(vertex.Position, lightPosition);
         vec3 lightDir = (lightPosition - vertex.Position) / radius;
-        vec3 neeThroughput = throughput *  max(dot(vertex.Normal, lightDir), 0.0) * max(dot(lightNormal, -lightDir), 0.0)  / (radius * radius);
-        HitInfo lightHit;
-        lightHit.di.x = 1e20f;
+        vec3 neeThroughput = BlinnPhongNormalized(albedo, specular, shiny, vertex.Normal, viewDir, lightDir) *  throughput *  max(dot(vertex.Normal, lightDir), 0.0) * max(dot(lightNormal, -lightDir), 0.0)  / (radius * radius) *  MISWeight(bxdfPdf, neePdf);
+        float neeContinuation = max(neeThroughput.x, max(neeThroughput.y, neeThroughput.z));
+        if(rand() < neeContinuation) {
+            HitInfo lightHit;
+            lightHit.di.x = 1e20f;
             
-        Ray neeRay;
-        neeRay.origin = vertex.Position + 0.001 * vertex.Normal;
-        neeRay.direction = lightDir;
-
-        if(TraverseBVH(neeRay, lightHit)) {
-            Vertex lightVertex = GetInterpolatedVertex(neeRay, lightHit);
-            if(distance(lightVertex.Position, lightPosition) < 0.1f) {
-                // Hit the light
-                contribution += neeThroughput * materialInstance[lightVertex.MatID + 1].xyz *  MISWeight(bxdfPdf, neePdf);
+            Ray neeRay;
+            neeRay.origin = vertex.Position + 0.001 * vertex.Normal;
+            neeRay.direction = lightDir;
+         
+            if(ClosestHit(neeRay, lightHit)) {
+                Vertex lightVertex = GetInterpolatedVertex(neeRay, lightHit);
+                if(distance(lightVertex.Position, lightPosition) < 0.1f) {
+                    // Hit the light
+                    contribution += neeThroughput * materialInstance[lightVertex.MatID + 1].xyz;
+                }
             }
         }
+
 
 
         // Construct a new ray
@@ -149,11 +154,14 @@ void main() {
         bxdfPdf = max(dot(vertex.Normal, ray.direction), 0.0f); // max for additional safety
 
         // Russian roulette
+        throughput *= BlinnPhongNormalized(albedo, specular, shiny, vertex.Normal, viewDir, ray.direction);
         float continuation = max(throughput.x, max(throughput.y, throughput.z));
         if(rand() > continuation) {
             break;
         }
         throughput /= continuation;
+
+        viewDir = -ray.direction;
     }
 
     vec3 accumContribution = imageLoad(accum, PixelCoordinates).xyz + contribution;

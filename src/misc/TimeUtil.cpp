@@ -3,13 +3,11 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <assert.h>
+#include <iostream>
+#include <ratio>
 
 uint64_t GetCurrentTimeNano64(void) {
-	timespec NSec;
-	int Res = timespec_get(&NSec, TIME_UTC);
-	assert(Res == TIME_UTC);
-	uint64_t Current = NSec.tv_sec * 1000000000 + NSec.tv_nsec;
-	return Current;
+	return std::chrono::duration_cast<std::chrono::duration<uint64_t, std::nano>>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
 }
 
 Timer::Timer(void) : Delta(0.0f), StartTime(0), EndTime(0) {}
