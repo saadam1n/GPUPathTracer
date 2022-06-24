@@ -383,8 +383,11 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     iterative.LoadInteger("vertexTex", 1);
     iterative.LoadInteger("indexTex", 2);
     iterative.LoadInteger("nodesTex", 3);
+    iterative.LoadInteger("lightTex", 4);
+    iterative.LoadFloat("totalLightArea", scene.totalLightArea);
     iterative.LoadShaderStorageBuffer("samplers", scene.materialsBuf);
     iterative.LoadShaderStorageBuffer("randomState", randomState);
+
 
     present.CreateBinding();
     present.LoadFloat("exposure", kExposure);

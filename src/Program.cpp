@@ -49,7 +49,7 @@ int main(int argc, char** argv) {
 	std::cout << "Working Directory: " << argv[0] << '\n';
 
 	Window Window;
-	Window.Open("OpenGL Light Transport", Width, Height, true);
+	Window.Open("OpenGL Light Transport", Width, Height, false);
 
 	LastCursorPosition = glm::vec2(Width, Height) / 2.0f;
 	Window.SetInputCallback(MouseCallback);
