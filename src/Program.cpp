@@ -25,7 +25,7 @@ glm::vec2 LastCursorPosition;
 
 
 // I need class here because Intellisense is not detecting the camera type
-Camera camera((float)Width / Height, glm::radians(45.0f), 460.0f * kCameraSetting, 15.0f * kCameraSetting);
+Camera camera((float)Width / Height, glm::radians(45.0f), 900.0f * kCameraSetting, 5.0f * kCameraSetting);
 
 bool needResetSamples = false;
 
@@ -54,10 +54,8 @@ int main(int argc, char** argv) {
 	LastCursorPosition = glm::vec2(Width, Height) / 2.0f;
 	Window.SetInputCallback(MouseCallback);
 
-	
-
 	Renderer* renderer = new Renderer;
-	renderer->Initialize(&Window, "res/objects/22323.obj", "GENERATE COLOR BLACK");
+	renderer->Initialize(&Window, "res/objects/22323.obj", "res/sky/ibl/Barce_Rooftop_C_3k.hdr");
 	camera.SetPosition(glm::vec3(-0.25f, 2.79f, 6.0));
 	camera.SetPosition(glm::vec3(-4.98805332, 1.38741374, 10.1879292));
 	camera.SetRotation(glm::vec3(0.724999964, -0.0800005496, 0.0));
