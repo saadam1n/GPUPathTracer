@@ -71,7 +71,7 @@ void Shader::LoadMat4x4F32(const char* Name, const glm::mat4& Value) {
 	glUniformMatrix4fv(GetUniformLocation(Name), 1, GL_FALSE, glm::value_ptr(Value));
 }
 
-void Shader::LoadCamera(const char* Name, const Camera& camera, uint32_t width, uint32_t height) {
+void Shader::LoadCamera(const Camera& camera, uint32_t width, uint32_t height) {
 	LoadVector3F32("lower_left", camera.lower_left);
 	LoadVector3F32("horizontal", camera.horizontal);
 	LoadVector3F32("vertical", camera.vertical);

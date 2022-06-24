@@ -28,7 +28,7 @@ public:
 	void LoadMat4x4F32          (const char* Name, const glm::mat4& Value);
 	void LoadVector3F32         (const char* Name, const glm::vec3& Value);
 
-	void LoadCamera             (const char* Name, const Camera& camera, uint32_t width, uint32_t height);
+	void LoadCamera             (const Camera& camera, uint32_t width, uint32_t height);
 
 	void LoadShaderStorageBuffer(const char* Name, GLuint specifcBinding );
 	void LoadShaderStorageBuffer(const char* Name, Buffer& Value         );

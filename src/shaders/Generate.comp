@@ -37,7 +37,7 @@ void main() {
 
     uint idx = atomicCounterIncrement(rayCounter) * 5;
 
-    //rays[idx].origin = ray.Origin;
+    //rays[idx].origin = ray.Origin; 
     //rays[idx].direction = ray.Direction;
     //rays[idx].pixel = PixelCoordinates;
 

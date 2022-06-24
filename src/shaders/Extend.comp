@@ -39,7 +39,7 @@ void main(){
 
     uint idxW = atomicCounterIncrement(rayWriteCounter) * 5;
     raysW[idxW].xy    = intBitsToFloat(PixelCoordinates.xy);
-    raysW[idxW+1].xyz = throughPut;
+    raysW[idxW+1].xyz = throughPut; 
     raysW[idxW+1].w   = intBitsToFloat(sampleType);
     if(TraverseBVH(ray, IntersectionInfo)) {
         Vertex currVertex = GetInterpolatedVertex(ray, IntersectionInfo);

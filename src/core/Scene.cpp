@@ -98,7 +98,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
             currMatID = result->second;
         }
         else {
-            currMatID = (int)textures.size();
+            currMatID = 2 * (int)textures.size();
             TexCache.insert({ textureKey, currMatID });
 
             Texture2D* currtex = new Texture2D;

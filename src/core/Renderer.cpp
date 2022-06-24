@@ -14,7 +14,7 @@
 #include <mutex>
 
 using namespace glm;
-constexpr float kExposure = 5.6f;
+constexpr float kExposure = 3.6f;
 
 /*
 When we trace a ray, we don't actually care about the ray, we care about the path
@@ -329,12 +329,8 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     cubeArr.CreateBinding();
     cubeArr.CreateStream(0, 3, 3 * sizeof(float));
 
-
-
-    generate.CompileFile("Generate.comp");
-    extend.CompileFile("Extend.comp");
-    shade.CompileFile("Shade.comp");
     present.CompileFiles("Present.vert", "Present.frag");
+    iterative.CompileFile("Iterative.comp");
 
     TextureCubemap* environment = new TextureCubemap;
     LoadEnvironmnet(environment, env_path, cubeArr);
@@ -357,11 +353,8 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     quadArr.CreateBinding();
     quadArr.CreateStream(0, 2, 2 * sizeof(float));
 
-    directAccum.CreateBinding();
-    directAccum.LoadData(GL_RGBA32F, GL_RGBA, GL_FLOAT, viewportWidth, viewportHeight, nullptr);
-
-    rayBuffer.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
-    rayBuffer.UploadData(sizeof(RayInfo) * numPixels * 2 * 2, nullptr, GL_DYNAMIC_DRAW);
+    accum.CreateBinding();
+    accum.LoadData(GL_RGBA32F, GL_RGBA, GL_FLOAT, viewportWidth, viewportHeight, nullptr);
 
     std::default_random_engine stateGenerator;
     std::uniform_int_distribution<uint32_t> initalRange(129, UINT32_MAX);
@@ -374,57 +367,28 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     }
     randomState.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
     randomState.UploadData(threadRandomState, GL_DYNAMIC_DRAW);
-
-    atomicCounterClear = new int[kNumAtomicCounters];
-    for (int i = 0; i < kNumAtomicCounters; i++) {
-        atomicCounterClear[i] = 0;
-    }
-    rayCounter.CreateBinding(BUFFER_TARGET_ATOMIC_COUNTER);
-    rayCounter.UploadData(sizeof(int) * kNumAtomicCounters, atomicCounterClear, GL_DYNAMIC_DRAW);
-    rayCounter.CreateBlockBinding(BUFFER_TARGET_ATOMIC_COUNTER, 0);
     
-    rayBuffer.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 1, 0, rayBuffer.GetSize() / 2);
-    rayBuffer.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 2, rayBuffer.GetSize() / 2, rayBuffer.GetSize());
     scene.materialsBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 4);
     randomState.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 5);
 
-    directAccum.BindImageUnit(0, GL_RGBA32F);
-    directAccum.BindTextureUnit(0, GL_TEXTURE_2D);
+    accum.BindImageUnit(0, GL_RGBA32F);
+    accum.BindTextureUnit(0, GL_TEXTURE_2D);
     scene.vertexTex.BindTextureUnit(1, GL_TEXTURE_BUFFER);
     scene.indexTex.BindTextureUnit(2, GL_TEXTURE_BUFFER);
     scene.bvh.nodesTex.BindTextureUnit(3, GL_TEXTURE_BUFFER);
     scene.lightTex.BindTextureUnit(4, GL_TEXTURE_BUFFER);
 
-    generate.CreateBinding();
-    generate.LoadShaderStorageBuffer("rayBufferW", 1);
-    generate.LoadShaderStorageBuffer("randomState", randomState);
-    generate.LoadAtomicBuffer(0, rayCounter);
-
-    extend.CreateBinding();
-    extend.LoadAtomicBuffer(0, rayCounter);
-    extend.LoadShaderStorageBuffer("rayBufferW", 2);
-    extend.LoadShaderStorageBuffer("rayBufferR", 1);
-    extend.LoadInteger("vertexTex", 1);
-    extend.LoadInteger("indexTex", 2);
-    extend.LoadInteger("nodesTex", 3);
-
-
-    shade.CreateBinding();
-    shade.LoadAtomicBuffer(0, rayCounter);
-    shade.LoadShaderStorageBuffer("rayBufferW", 1);
-    shade.LoadShaderStorageBuffer("rayBufferR", 2);
-    shade.LoadShaderStorageBuffer("samplers", scene.materialsBuf);
-    shade.LoadShaderStorageBuffer("randomState", randomState);
-    shade.LoadInteger("width", viewportWidth);
-    shade.LoadInteger("height", viewportHeight);
-    shade.LoadInteger("directAccum", 0);
-    shade.LoadInteger("lightTex", 4);
-    shade.LoadFloat("totalLightArea", scene.totalLightArea);
+    iterative.CreateBinding();
+    iterative.LoadInteger("accum", 0);
+    iterative.LoadInteger("vertexTex", 1);
+    iterative.LoadInteger("indexTex", 2);
+    iterative.LoadInteger("nodesTex", 3);
+    iterative.LoadShaderStorageBuffer("samplers", scene.materialsBuf);
+    iterative.LoadShaderStorageBuffer("randomState", randomState);
 
     present.CreateBinding();
     present.LoadFloat("exposure", kExposure);
     present.LoadInteger("directAccum", 0);
-
 
     frameCounter = 0;
     numSamples = 0;
@@ -432,41 +396,23 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
 
 void Renderer::CleanUp(void) {
     // I hope the scene destructor frees its resources
-    generate.Free();
-    extend.Free();
+    iterative.Free();
     present.Free();
 
-    directAccum.Free();
+    accum.Free();
 
     quadArr.Free();
     quadBuf.Free();
-
-    delete[] atomicCounterClear;
 }
 
 constexpr int kMaxPathLength = 16;
 #define MEMORY_BARRIER_RT GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT | GL_ATOMIC_COUNTER_BARRIER_BIT
 
 void Renderer::RenderFrame(const Camera& camera)  {
-    glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 0, sizeof(int), atomicCounterClear);
-    generate.CreateBinding();
-    generate.LoadCamera("Camera", camera, viewportWidth, viewportHeight);
+    iterative.CreateBinding();
+    iterative.LoadCamera(camera, viewportWidth, viewportHeight);
     glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
     glMemoryBarrier(MEMORY_BARRIER_RT);
-
-    for (int bounce = 0; bounce < kMaxPathLength; bounce++) {
-        glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 8, sizeof(int) * 2, atomicCounterClear);
-        extend.CreateBinding();
-        glDispatchCompute(numPixels / 64, 1, 1);
-        glMemoryBarrier(MEMORY_BARRIER_RT);
-
-        glBufferSubData(BUFFER_TARGET_ATOMIC_COUNTER, 0, sizeof(int) * 2, atomicCounterClear);
-        shade.CreateBinding();
-        shade.LoadInteger("bounce", bounce);
-        glDispatchCompute(numPixels / 64, 1, 1);
-        glMemoryBarrier(MEMORY_BARRIER_RT);
-    }
-
     numSamples++;
 }
 
@@ -482,7 +428,7 @@ void Renderer::Present() {
 void Renderer::ResetSamples() {
     numSamples = 0;
     float clearcol[4] = { 0.0, 0.0, 0.0, 1.0 };
-    glClearTexSubImage(directAccum.GetHandle(), 0, 0, 0, 0, viewportWidth, viewportHeight, 1, GL_RGBA, GL_FLOAT, clearcol);
+    glClearTexSubImage(accum.GetHandle(), 0, 0, 0, 0, viewportWidth, viewportHeight, 1, GL_RGBA, GL_FLOAT, clearcol);
 }
 
 void Renderer::SaveScreenshot(const std::string& filename) {
@@ -574,7 +520,7 @@ float HybridTaus(uvec4& state) {
 
 #define M_PI 3.141529f
 
-constexpr uint32_t KNumRefSamples = 4096;
+constexpr uint32_t KNumRefSamples = 1024;
 void PathTraceImage(
     uint8_t* image, uint32_t x, uint32_t y, const uint32_t w, const uint32_t h, const Camera& camera,
     const std::vector<Vertex>& vertices, const std::vector<TriangleIndexData>& indices, const std::vector<NodeSerialized>& nodes,
@@ -591,6 +537,7 @@ void PathTraceImage(
             HitInfo closest;
 
             TraverseBVH(ray, closest, vertices, indices, nodes);
+            closest.intersection.matId /= 2; // Not need for the CPU
 
             if (materials[closest.intersection.matId].isEmissive) {
                 vec3 emission;

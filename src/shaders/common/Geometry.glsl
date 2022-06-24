@@ -140,7 +140,6 @@ struct HitInfo {
 bool IntersectTriangle(in Triangle tri, in Ray ray, inout HitInfo closestHit) {
     // this is mostly a copy paste from scratchapixel's code that has been refitted to work with GLSL
     HitInfo attemptHit;
-    attemptHit.intersected = tri;
 
     vec3 v01 = tri.Vertices[1].PN.xyz - tri.Vertices[0].PN.xyz;
     vec3 v02 = tri.Vertices[2].PN.xyz - tri.Vertices[0].PN.xyz;
@@ -167,7 +166,8 @@ bool IntersectTriangle(in Triangle tri, in Ray ray, inout HitInfo closestHit) {
     attemptHit.di.x = dot(v02, q) * idet;
 
     if (attemptHit.di.x < closestHit.di.x && attemptHit.di.x > 0.0f) {
-        closestHit = attemptHit;
+        closestHit.di = attemptHit.di;
+        closestHit.intersected = tri;
         return true;
     }
     else

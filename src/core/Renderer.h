@@ -29,17 +29,11 @@ private:
 	Buffer cubeBuf;
 	VertexArray cubeArr;
 	ShaderRasterization present;
-	Texture2D directAccum;
-
-	// Wavefront path tracing
-	Buffer rayBuffer;
-	Buffer rayCounter;
+	Texture2D accum;
 
 	Buffer randomState;
 
-	ShaderCompute generate;
-	ShaderCompute extend;
-	ShaderCompute shade;
+	ShaderCompute iterative;
 
 	Scene scene;
 
