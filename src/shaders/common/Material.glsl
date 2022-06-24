@@ -78,8 +78,7 @@ vec3 FresnelShlick(vec3 F0, vec3 n, vec3 d)
 
 float DistributionTrowbridgeReitz(in vec3 n, in vec3 h, in float roughness) {
     float noh = max(dot(n, h), 0.0f);
-    float a = roughness * roughness;
-    float a2 = a * a;
+    float a2 = roughness * roughness;
     float k = (noh * noh * (a2 - 1.0f) + 1.0f);
     float div = M_PI * k * k;
     return a2 / div;
@@ -96,6 +95,18 @@ float GeometrySmith(in vec3 n, in vec3 v, in vec3 l, in float roughness) {
     return GeometryShlickGGX(n, v, k) * GeometryShlickGGX(n, l, k);
 }
 
+float VisibilityGGX(in float nov, in float nol, in float a2) {
+    return nol * sqrt(nov * nov * (1 - a2) + a2);
+}
+
+float VisibilitySmithGGXCorrelated(in vec3 n, in vec3 v, in vec3 l, in float roughness) {
+    float a2 = roughness * roughness;
+    float nov = max(dot(n, v), 0.0f);
+    float nol = max(dot(n, l), 0.0f);
+    float div = VisibilityGGX(nov, nol, a2) + VisibilityGGX(nol, nov, a2);
+    return 0.5f / div;
+}
+
 vec3 FresnelShlick(in vec3 f0, in vec3 n, in vec3 v) {
     return f0 + (1.0 - f0) * pow(clamp(1.0 - max(dot(n, v), 0.0f), 0.0, 1.0), 5.0);
 }
@@ -107,7 +118,7 @@ vec3 SingleScatterCookTorrace(in vec3 albedo, in float roughness, in float metal
     // Cook torrance
     vec3 f0 = mix(vec3(0.04f), albedo, metallic);
     vec3 h = normalize(v + l);
-    vec3 specular = DistributionTrowbridgeReitz(n, h, roughness) * GeometrySmith(n, v, l, roughness)* FresnelShlick(f0, h, v) / max(4 * max(dot(n, v), 0.0f) * max(dot(n, l), 0.0f), 0.001f);
+    vec3 specular = DistributionTrowbridgeReitz(n, h, roughness) * VisibilitySmithGGXCorrelated(n, v, l, roughness)* FresnelShlick(f0, h, v) / max(4 * max(dot(n, v), 0.0f) * max(dot(n, l), 0.0f), 0.001f);
     // Energy conserving diffuse
     vec3 diffuse = (1.0 - FresnelShlick(f0, n, l)) * (1.0f - FresnelShlick(f0, n, v)) * albedo / M_PI;
     return specular + diffuse;
