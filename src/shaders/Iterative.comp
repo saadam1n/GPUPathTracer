@@ -95,7 +95,7 @@ void main() {
     vec3 viewDir = -ray.direction;
 
     float metallic = 1.0;
-    float roughness = 0.05;
+    float roughness = 0.01;
 
     // Set max bounce length to an inordinately high number so we (basically) get unbiased results while terminating the few odd rays that run for a lot of bounces without end
     const int kMaxBounces = 1024;

@@ -135,9 +135,9 @@ vec3 SingleScatterCookTorrace(in vec3 albedo, in float roughness, in float metal
 vec3 ImportanceSampleDistributionGGX(in float roughness, out float pdf) {
     float a2 = roughness * roughness;
 
-    // Chose a direction
+    // Chose a direction https://agraphicsguy.wordpress.com/2015/11/01/sampling-microfacet-brdf/
     float rand0 = rand(), rand1 = rand();
-    float theta = acos(sqrt((1 - rand0) / (rand0 * (a2 - 1) + 1)));
+    float theta = atan(roughness * sqrt(rand0 / (1.0 - rand0))); // The article presents two methods to convert from rand to theta, one that uses acos and one that uses atan. acos causes nans, while atan does not
     float phi = 2 * M_PI * rand1;
 
     // Compute the direction
