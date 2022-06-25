@@ -95,7 +95,7 @@ void main() {
     vec3 viewDir = -ray.direction;
 
     float metallic = 1.0;
-    float roughness = 0.1;
+    float roughness = 0.05;
 
     // Set max bounce length to an inordinately high number so we (basically) get unbiased results while terminating the few odd rays that run for a lot of bounces without end
     const int kMaxBounces = 1024;
@@ -158,12 +158,10 @@ void main() {
         vec3 tangent = normalize(cross(normcrs, vertex.Normal));
         vec3 bitangent = cross(tangent, vertex.Normal);
         ray.origin = vertex.Position + 0.001 * vertex.Normal;
-        ray.direction = mat3(tangent, bitangent, vertex.Normal) * CosineWeightedDirection();
-
-        bxdfPdf = max(dot(vertex.Normal, ray.direction), 0.0f); // max for additional safety
+        ray.direction = reflect(-viewDir, mat3(tangent, bitangent, vertex.Normal) * ImportanceSampleDistributionGGX(roughness, bxdfPdf));
 
         // Russian roulette
-        throughput *= BRDF(albedo, roughness, metallic, vertex.Normal, viewDir, ray.direction);
+        throughput *= BRDF(albedo, roughness, metallic, vertex.Normal, viewDir, ray.direction) *  max(dot(vertex.Normal, ray.direction), 0.0f) / bxdfPdf;
         float continuation = max(throughput.x, max(throughput.y, throughput.z));
         if(rand() > continuation) {
             break;

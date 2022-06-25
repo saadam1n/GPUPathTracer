@@ -1,6 +1,9 @@
 #ifndef MATERIAL_GLSL
 #define MATERIAL_GLSL
 
+#include "Random.glsl"
+#include "Constants.glsl"
+
 layout(std430) readonly buffer samplers {
     vec4 materialInstance[];
 };
@@ -121,10 +124,30 @@ vec3 SingleScatterCookTorrace(in vec3 albedo, in float roughness, in float metal
     vec3 specular = DistributionTrowbridgeReitz(n, h, roughness) * VisibilitySmithGGXCorrelated(n, v, l, roughness)* FresnelShlick(f0, h, v) / max(4 * max(dot(n, v), 0.0f) * max(dot(n, l), 0.0f), 0.001f);
     // Energy conserving diffuse
     vec3 diffuse = (1.0 - FresnelShlick(f0, n, l)) * (1.0f - FresnelShlick(f0, n, v)) * albedo / M_PI;
-    return specular + diffuse;
+    return specular;// +diffuse * (1.0 - metallic);
 }
  
+// https://schuttejoe.github.io/post/ggximportancesamplingpart1/
+vec3 ImportanceSampleDistributionGGX(in float roughness, out float pdf) {
+    float a2 = roughness * roughness;
 
+    // Chose a direction
+    float rand0 = rand(), rand1 = rand();
+    float theta = acos(sqrt((1 - rand0) / (rand0 * (a2 - 1) + 1)));
+    float phi = 2 * M_PI * rand1;
+
+    // Compute the direction
+    vec3 direction;
+    direction.x = sin(theta) * sin(phi);
+    direction.y = sin(theta) * cos(phi);
+    direction.z = cos(theta);
+
+    // Calculate pdf
+    float div = (a2 - 1) * cos(theta) * cos(theta) + 1;
+    pdf = a2 * cos(theta) * sin(theta) / (M_PI * div * div);
+
+    return direction;
+}
 
 #define BRDF(a, r, m, n, v, l) SingleScatterCookTorrace(a, r, m, n, v, l)
 
