@@ -118,13 +118,17 @@ vec3 FresnelShlick(in vec3 f0, in vec3 n, in vec3 v) {
 
 // https://docs.google.com/document/d/1ZLT1-fIek2JkErN9ZPByeac02nWipMbO89oCW2jxzXo/edit
 vec3 SingleScatterCookTorrace(in vec3 albedo, in float roughness, in float metallic, in vec3 n, in vec3 v, in vec3 l) {
+    // If any point is bellow the hemisphere then do not reflect; BRDFs only work when both points are above the surface
+    if (dot(n, v) < 0.0f || dot(n, l) < 0.0f) {
+        return vec3(0.0f);
+    }
     // Cook torrance
     vec3 f0 = mix(vec3(0.04f), albedo, metallic);
     vec3 h = normalize(v + l);
-    vec3 specular = DistributionTrowbridgeReitz(n, h, roughness) * VisibilitySmithGGXCorrelated(n, v, l, roughness)* FresnelShlick(f0, h, v) / max(4 * max(dot(n, v), 0.0f) * max(dot(n, l), 0.0f), 0.001f);
+    vec3 specular = DistributionTrowbridgeReitz(n, h, roughness) * VisibilitySmithGGXCorrelated(n, v, l, roughness) * FresnelShlick(f0, h, v) / max(4 * max(dot(n, v), 0.0f) * max(dot(n, l), 0.0f), 0.001f);
     // Energy conserving diffuse
     vec3 diffuse = (1.0 - FresnelShlick(f0, n, l)) * (1.0f - FresnelShlick(f0, n, v)) * albedo / M_PI;
-    return specular;// +diffuse * (1.0 - metallic);
+    return specular + diffuse * (1.0 - metallic);
 }
  
 // https://schuttejoe.github.io/post/ggximportancesamplingpart1/
