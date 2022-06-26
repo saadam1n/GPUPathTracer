@@ -122,7 +122,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
             glMakeTextureHandleResidentARB(newInstance.samplerHandle);
 
             if (!hasTextures) {
-                if (emission.r + emission.g + emission.b > 0.00001f) {
+                if (emission.r + emission.g + emission.b > 0.001f) {
                     newInstance.isEmissive = 1;
                     newInstance.emission = vec3(emission.r, emission.g, emission.b);
                 }
@@ -160,7 +160,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
 
             Indices.push_back(CurrentIndexData);
 
-            if (materialInstances[currMatID].isEmissive) {
+            if (materialInstances[currMatID / 2].isEmissive == 1) {
                 Triangle lightTriangle;
                 lightTriangle.Vertices[0] = Vertices[CurrentIndexData[0]];
                 lightTriangle.Vertices[1] = Vertices[CurrentIndexData[1]];
