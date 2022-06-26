@@ -12,6 +12,11 @@
 #include <SOIL2.h>
 #include <ctime>
 #include <string>
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
+constexpr bool lockCamera = true;
 
 uint32_t Width = 1280;
 uint32_t Height = 720;
@@ -30,6 +35,7 @@ Camera camera((float)Width / Height, glm::radians(45.0f), 900.0f * kCameraSettin
 bool needResetSamples = false;
 
 void MouseCallback(GLFWwindow* Window, double X, double Y) {
+	if (lockCamera) return;
 	glm::vec2 CurrentCursorPosition = glm::vec2(X, Y);
 
 	glm::vec2 DeltaPosition = CurrentCursorPosition - LastCursorPosition;
@@ -46,6 +52,9 @@ void MouseCallback(GLFWwindow* Window, double X, double Y) {
 }
 
 int main(int argc, char** argv) {
+#if _WIN32
+	SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED); // prevent our program from sleeping on windows for long renders
+#endif
 	std::cout << "Working Directory: " << argv[0] << '\n';
 
 	Window Window;
@@ -55,10 +64,10 @@ int main(int argc, char** argv) {
 	Window.SetInputCallback(MouseCallback);
 
 	Renderer* renderer = new Renderer;
-	renderer->Initialize(&Window, "res/objects/22323.obj", "res/sky/ibl/Topanga_Forest_B_3k.hdr");
+	renderer->Initialize(&Window, "res/objects/cornell-box.obj", "GENERATE COLOR BLACK");
 	camera.SetPosition(glm::vec3(-0.25f, 2.79f, 6.0));
-	camera.SetPosition(glm::vec3(-4.98805332, 1.38741374, 10.1879292));
-	camera.SetRotation(glm::vec3(0.724999964, -0.0800005496, 0.0));
+	//camera.SetPosition(glm::vec3(-4.98805332, 1.38741374, 10.1879292));
+	//camera.SetRotation(glm::vec3(0.724999964, -0.0800005496, 0.0));
 
 	Timer FrameTimer;
 

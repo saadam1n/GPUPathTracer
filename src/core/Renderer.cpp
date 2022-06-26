@@ -14,7 +14,7 @@
 #include <mutex>
 
 using namespace glm;
-constexpr float kExposure = 3.6f;
+constexpr float kExposure = 0.5;
 
 /*
 When we trace a ray, we don't actually care about the ray, we care about the path
@@ -522,7 +522,7 @@ float HybridTaus(uvec4& state) {
 
 #define M_PI 3.141529f
 
-constexpr uint32_t KNumRefSamples = 1024;
+constexpr uint32_t KNumRefSamples = 128; // 32k sampling
 void PathTraceImage(
     uint8_t* image, uint32_t x, uint32_t y, const uint32_t w, const uint32_t h, const Camera& camera,
     const std::vector<Vertex>& vertices, const std::vector<TriangleIndexData>& indices, const std::vector<NodeSerialized>& nodes,
@@ -539,7 +539,7 @@ void PathTraceImage(
             HitInfo closest;
 
             TraverseBVH(ray, closest, vertices, indices, nodes);
-            closest.intersection.matId /= 2; // Not need for the CPU
+            closest.intersection.matId /= 2; // Not needed for the CPU
 
             if (materials[closest.intersection.matId].isEmissive) {
                 vec3 emission;
@@ -556,8 +556,8 @@ void PathTraceImage(
 
             const Texture2D* tex = (const Texture2D*)textures[closest.intersection.matId];
 
-            throughput *= tex->Sample(closest.intersection.texcoords) / M_PI; // BRDF
-            float rr = max(throughput.x, max(throughput.y, throughput.z));
+            throughput *= tex->Sample(closest.intersection.texcoords); // BRDF, lambert's 1 / PI cancels out with cosine pdf cos / PI
+            float rr = min(max(throughput.x, max(throughput.y, throughput.z)), 1.0f);
             if (HybridTaus(state) > rr)
                 break;
             throughput /= rr;

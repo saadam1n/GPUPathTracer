@@ -4,6 +4,8 @@
 #include "Random.glsl"
 #include "Constants.glsl"
 
+// TODO: REWRITE PBR CODE
+
 layout(std430) readonly buffer samplers {
     vec4 materialInstance[];
 };
@@ -151,6 +153,27 @@ vec3 ImportanceSampleDistributionGGX(in float roughness, out float pdf) {
     pdf = a2 * cos(theta) * sin(theta) / (M_PI * div * div);
 
     return direction;
+}
+
+float SamplePdfDistributionGGX(in vec3 n, in vec3 h, in float a) {
+    float costheta = max(dot(n, h), 0.0f);
+    float sintheta = sqrt(1.0 - costheta * costheta);
+    float a2 = a * a;
+    float div = (a2 - 1) * costheta * costheta + 1;
+    float pdf = a2 * costheta* sintheta / (M_PI * div * div);
+    return pdf;
+}
+
+float SamplePdfCosine(in vec3 n, in vec3 l) {
+    return max(dot(n, l), 0.0f);
+}
+
+vec3 ImportanceSampleCosine(out float pdf) {
+    float r0 = rand(), r1 = rand();
+    float r = sqrt(r0);
+    float phi = 2 * M_PI * r1;
+    pdf = sqrt(1.0 - r0);
+    return vec3(r * vec2(sin(phi), cos(phi)), pdf);
 }
 
 #define BRDF(a, r, m, n, v, l) SingleScatterCookTorrace(a, r, m, n, v, l)

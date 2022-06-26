@@ -1,3 +1,13 @@
+Idea: balance between cosine and ggx sampling based on metallic
+Actually that means zero specular for diffuse
+I will start off with a simple 0.5 probability for now
+
+
+T
+
+he next goal is to properly finish PBR and do bug testing with it
+Then move on to proper NEE
+
 My next focus should be coroutine RT, but that is too complex. Over time once I understand things I will attempt it
 My next goal right now is OBB rejection sampling and overall cleaning up the NEE code
 Then I will proceed to better BRDFs and materials and what not

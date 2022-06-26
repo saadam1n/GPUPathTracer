@@ -20,13 +20,6 @@ uniform float totalLightArea;
 
 uniform layout(rgba32f) image2D accum;
 
-vec3 CosineWeightedDirection() {
-    float r0 = rand(), r1 = rand();
-    float r = sqrt(r0); 
-    float phi = 2 * M_PI * r1;
-    return vec3(r * vec2(sin(phi), cos(phi)), sqrt(1.0 - r0));
-}
-
 void RandomPointOnLight(out vec3 position, out vec3 normal) {
     float selectedArea = rand() * totalLightArea;
     int a = 0, b = textureSize(lightTex) / 9 - 1;
@@ -62,9 +55,13 @@ void RandomPointOnLight(out vec3 position, out vec3 normal) {
     normal   = vec3(selectedTriangle.Vertices[0].PN.w, selectedTriangle.Vertices[0].NT.xy) * v + vec3(selectedTriangle.Vertices[1].PN.w, selectedTriangle.Vertices[1].NT.xy) * u + vec3(selectedTriangle.Vertices[2].PN.w, selectedTriangle.Vertices[2].NT.xy) * t;
 }
 
-float MISWeight(float bxdf, float nee) {
-    // Assume for each path we send one nee and one indirect sample
-    return (bxdf) / (nee + bxdf);
+float MISWeight(in float top, in float bottom) {
+    // Assume for each path we send one nee and one indirect sample, factor out 0.5
+    return (top) / (top + bottom);
+}
+
+float MISWeightBXDF(float bxdf, float cosine, float metallic) {
+    return 0.0f;
 }
 
 void main() {
@@ -95,7 +92,9 @@ void main() {
     vec3 viewDir = -ray.direction;
 
     float metallic = 1.0;
-    float roughness = 0.01;
+    float roughness = 0.1;
+
+    vec3 lastPosition = ray.origin;
 
     // Set max bounce length to an inordinately high number so we (basically) get unbiased results while terminating the few odd rays that run for a lot of bounces without end
     const int kMaxBounces = 1024;
@@ -110,14 +109,15 @@ void main() {
         }
 
         // Account for L_e
-        // (currVertex.MatID == 0 ? texture(samplerCube(floatBitsToUint(materialInstance[0].xy)), viewDir).xyz :   materialInstance[currVertex.MatID + 1].xyz);
         if(fbs(materialInstance[vertex.MatID + 1].w) == 1) {
             vec3 emission;
             if(miss) {
                 emission = texture(samplerCube(floatBitsToUint(materialInstance[0].xy)), -viewDir).xyz;
             } else {
                 emission = materialInstance[vertex.MatID + 1].xyz;
-                throughput *= MISWeight(bxdfPdf, neePdf);
+                float radius = distance(lastPosition, vertex.Position);
+                float lightPdf = neePdf * radius * radius / max(dot(vertex.Normal, viewDir), 0.001f);
+                throughput *= MISWeight(bxdfPdf, lightPdf);
             }
             contribution += throughput * emission;
             break; // Assume f_r for all surfaces where L_e != 0 is 0
@@ -127,48 +127,51 @@ void main() {
         // Sample the texture
         vec3 albedo = texture(sampler2D(floatBitsToUint(materialInstance[vertex.MatID].xy)), vertex.TextureCoordinate).xyz;
 
-        // Shoot our NEE ray
         vec3 lightPosition, lightNormal;
         RandomPointOnLight(lightPosition, lightNormal);
         float radius = distance(vertex.Position, lightPosition);
         vec3 lightDir = (lightPosition - vertex.Position) / radius;
-        vec3 neeThroughput = BRDF(albedo, roughness, metallic, vertex.Normal, viewDir, lightDir) *  throughput *  max(dot(vertex.Normal, lightDir), 0.0) * max(dot(lightNormal, -lightDir), 0.0)  / (radius * radius) *  MISWeight(bxdfPdf, neePdf);
-        float neeContinuation = max(neeThroughput.x, max(neeThroughput.y, neeThroughput.z));
-        if(rand() < neeContinuation) {
+        float lightPdf = neePdf * radius * radius / max(dot(lightNormal, -lightDir), 0.001f);
+        vec3 lightThroughput = throughput * (albedo / M_PI) * max(dot(vertex.Normal, lightDir), 0.0f) * max(dot(lightNormal, -lightDir), 0.0f) * MISWeight(lightPdf, max(dot(vertex.Normal, lightDir) / M_PI, 0.0f)) / (lightPdf * radius * radius);
+        float lightContinuation = min(max(lightThroughput.x, max(lightThroughput.y, lightThroughput.z)), 1.0f);
+        if(rand() < lightContinuation) {
+            lightThroughput /= lightContinuation;
+
             HitInfo lightHit;
             lightHit.di.x = 1e20f;
              
-            Ray neeRay;
-            neeRay.origin = vertex.Position + 0.001 * vertex.Normal;
-            neeRay.direction = lightDir;
-         
-            if(ClosestHit(neeRay, lightHit)) {
-                Vertex lightVertex = GetInterpolatedVertex(neeRay, lightHit);
+            Ray lightRay;
+            lightRay.origin = vertex.Position + 0.001 * vertex.Normal;
+            lightRay.direction = lightDir;
+                               
+            if(ClosestHit(lightRay, lightHit)) {
+                Vertex lightVertex = GetInterpolatedVertex(lightRay, lightHit);
                 if(distance(lightVertex.Position, lightPosition) < 0.1f) {
-                    // Hit the light
-                    contribution += neeThroughput * materialInstance[lightVertex.MatID + 1].xyz;
+                    // We hit the light
+                    contribution += lightThroughput * materialInstance[lightVertex.MatID + 1].xyz;
+
                 }
             }
         }
 
-
-
         // Construct a new ray
         vec3 normcrs = (abs(vertex.Normal.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0));
         vec3 tangent = normalize(cross(normcrs, vertex.Normal));
-        vec3 bitangent = cross(tangent, vertex.Normal);
+        vec3 bitangent = cross(tangent, vertex.Normal); 
         ray.origin = vertex.Position + 0.001 * vertex.Normal;
-        ray.direction = reflect(-viewDir, mat3(tangent, bitangent, vertex.Normal) * ImportanceSampleDistributionGGX(roughness, bxdfPdf));
+        ray.direction = mat3(tangent, bitangent, vertex.Normal) * ImportanceSampleCosine(bxdfPdf);
+        bxdfPdf /= M_PI;
 
         // Russian roulette
-        throughput *= BRDF(albedo, roughness, metallic, vertex.Normal, viewDir, ray.direction) *  max(dot(vertex.Normal, ray.direction), 0.0f) / bxdfPdf;
-        float continuation = max(throughput.x, max(throughput.y, throughput.z));
+        throughput *= albedo / M_PI *  max(dot(vertex.Normal, ray.direction), 0.0f) / bxdfPdf;
+        float continuation = min(max(throughput.x, max(throughput.y, throughput.z)), 1.0f);
         if(rand() > continuation) {
             break;
         }
         throughput /= continuation;
 
         viewDir = -ray.direction;
+        lastPosition = vertex.Position;
     }
 
     vec3 accumContribution = imageLoad(accum, PixelCoordinates).xyz + contribution;
@@ -191,4 +194,8 @@ void main() {
 	direction.z = cos(pitch) * -cos(yaw);
 
     contribution = SingleScatterCookTorrace(vec3(1.0), roughness, metallic, vec3(0.0, 1.0, 0.0), direction, testDir);
+*/
+
+/*
+
 */
