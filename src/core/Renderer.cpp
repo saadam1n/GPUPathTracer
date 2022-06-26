@@ -522,7 +522,7 @@ float HybridTaus(uvec4& state) {
 #define M_PI 3.141529f
 
 constexpr uint32_t KNumRefSamples = 1024; // 32k sampling
-constexpr uint32_t kNumWorkers = 1024;
+constexpr uint32_t kNumWorkers = 5;
 
 void PathTraceImage(
     uint8_t* image, uint32_t x, uint32_t y, const uint32_t w, const uint32_t h, const Camera& camera,

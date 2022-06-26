@@ -111,7 +111,7 @@ int main(int argc, char** argv) {
 		}
 
 		FrameTimer.End();
-		FrameTimer.DebugTime();
+		//FrameTimer.DebugTime();
 	}
 
 	renderer->CleanUp();

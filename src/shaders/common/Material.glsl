@@ -172,8 +172,9 @@ vec3 ImportanceSampleCosine(out float pdf) {
     float r0 = rand(), r1 = rand();
     float r = sqrt(r0);
     float phi = 2 * M_PI * r1;
-    pdf = sqrt(1.0 - r0);
-    return vec3(r * vec2(sin(phi), cos(phi)), pdf);
+    float z = sqrt(1.0 - r0);
+    pdf = z / M_PI;
+    return vec3(r * vec2(sin(phi), cos(phi)), z);
 }
 
 #define BRDF(a, r, m, n, v, l) SingleScatterCookTorrace(a, r, m, n, v, l)
