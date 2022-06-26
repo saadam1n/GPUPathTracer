@@ -70,3 +70,5 @@ class ShaderCompute : public Shader {
 public:
 	void CompileFile(const char* ComputeShaderPath);
 };
+
+extern GLuint CompileShader(const char* ShaderPath, GLenum Type);

@@ -202,7 +202,7 @@ void CollapseFilePath(std::string& Path) {
 std::ostringstream ParseShader(std::string& Path, std::map<uint32_t, FileLineNumber>& LineNumbers, uint32_t& GlobalLineIndex) {
 
 	MakeUnixIncludeSlash(Path);
-	std::string RealPath = (Path.find_first_of("src/shaders/") != 0 ? "src/shaders/" + Path : Path);
+	std::string RealPath = (Path.find("src/shaders/") != 0 ? "src/shaders/" + Path : Path);
 	std::string Folder = RealPath.substr(0, RealPath.find_last_of('/') + 1);
 
 	printf("Shader file folder is %s\n", Folder.c_str());

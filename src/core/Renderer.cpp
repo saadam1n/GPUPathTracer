@@ -258,7 +258,6 @@ void LoadEnvironmnet(TextureCubemap* environment, const std::string& args, Verte
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 }
 
-std::vector<uvec4> threadRandomState;
 void Renderer::Initialize(Window* Window, const char* scenePath, const std::string& env_path) {
     bindedWindow = Window;
     viewportWidth = bindedWindow->Width;
@@ -358,7 +357,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
 
     std::default_random_engine stateGenerator;
     std::uniform_int_distribution<uint32_t> initalRange(129, UINT32_MAX);
-    threadRandomState.resize(numPixels);
+    std::vector<uvec4> threadRandomState(numPixels);
     for (uvec4& currState : threadRandomState) {
         currState.x = initalRange(stateGenerator);
         currState.y = initalRange(stateGenerator);
@@ -523,11 +522,16 @@ float HybridTaus(uvec4& state) {
 #define M_PI 3.141529f
 
 constexpr uint32_t KNumRefSamples = 128; // 32k sampling
+constexpr uint32_t kNumWorkers = 8;
+
+std::vector<vec3> samples[kNumWorkers]; // outlier rejection denoising
+
 void PathTraceImage(
-    uint8_t* image, uint32_t x, uint32_t y, const uint32_t w, const uint32_t h, const Camera& camera,
+    uint32_t index, uint8_t* image, uint32_t x, uint32_t y, const uint32_t w, const uint32_t h, const Camera& camera,
     const std::vector<Vertex>& vertices, const std::vector<TriangleIndexData>& indices, const std::vector<NodeSerialized>& nodes,
-    const std::vector<MaterialInstance>& materials, const std::vector<Texture*>& textures, uvec4& state
+    const std::vector<MaterialInstance>& materials, const std::vector<Texture*>& textures, uvec4 state
 ) {
+    samples[index].clear();
     vec3 pixel = vec3(0.0);
 
     for (int i = 0; i < KNumRefSamples; i++) {
@@ -550,7 +554,7 @@ void PathTraceImage(
                 else
                     emission = materials[closest.intersection.matId].emission;
 
-                pixel += throughput * emission;
+                samples[index].push_back(throughput * emission);
                 break;
             }
 
@@ -575,12 +579,18 @@ void PathTraceImage(
         }
     }
 
+    std::sort(samples[index].begin(), samples[index].end(), [](const vec3& l, const vec3& r) {
+        float lb = dot(l, vec3(1.0f / 3.0f));
+        float rb = dot(r, vec3(1.0f / 3.0f));
+        }
+    );
+
     pixel /= KNumRefSamples;
-    pixel = 1.0f - exp(-kExposure * pixel);
+    //pixel = 1.0f - exp(-kExposure * pixel);
     pixel = pow(pixel, vec3(1.0f / 2.2f));
 
-    pixel = max(pixel, vec3(0.0));
-    uint64_t idx = 3ULL * ((uint64_t)(h - y - 1) * w + x); // Flip the y
+    pixel = clamp(pixel, vec3(0.0f), vec3(1.0f));
+    uint64_t idx = 3ULL * (y * w + x);
     image[idx    ] = (uint8_t)(255.0f * pixel.r);
     image[idx + 1] = (uint8_t)(255.0f * pixel.g);
     image[idx + 2] = (uint8_t)(255.0f * pixel.b);
@@ -598,55 +608,106 @@ void Renderer::RenderReference(const Camera& camera) {
 
     for (uint32_t y = 0; y < viewportHeight; y++) {
         for (uint32_t x = 0; x < viewportWidth; x++) {
+            size_t idx = 3ULL * (y * viewportWidth + x);
+            image[idx] = 0;
+            image[idx+1] = 0;
+            image[idx+2] = 0;
             pixelTasks.emplace_back(x, y);
         }
     }
+
+    std::default_random_engine generator;
+    std::uniform_int_distribution<uint32_t> distribution(129, UINT32_MAX);
 
     auto start = std::time(nullptr);
     uint32_t nextTask = 0;
     std::mutex taskMutex;
     std::vector<std::thread> workers;
-    constexpr uint32_t kNumWorkers = 8;
     for (uint32_t i = 0; i < kNumWorkers; i++) {
+        samples[i].reserve(KNumRefSamples);
         workers.emplace_back(
-            [](
+            [i](
             uint32_t& nextTask, std::mutex& taskMutex, uint8_t* image, const std::vector<ivec2>& pixelTasks, uint32_t w, uint32_t h, const Camera& camera,
                 const std::vector<Vertex>& vertices, const std::vector<TriangleIndexData>& indices, const std::vector<NodeSerialized>& nodes,
-                const std::vector<MaterialInstance>& materials, const std::vector<Texture*>& textures
+                const std::vector<MaterialInstance>& materials, const std::vector<Texture*>& textures,
+                std::default_random_engine& generator, std::uniform_int_distribution<uint32_t>& distribution
             ) {
                 while (true) {
                     taskMutex.lock();
                     uint32_t currentTask = nextTask++;
+                    uvec4 state;
+                    state.x = distribution(generator);
+                    state.y = distribution(generator);
+                    state.z = distribution(generator);
+                    state.w = distribution(generator);
                     taskMutex.unlock();
 
                     if (currentTask >= pixelTasks.size())
                         return;
 
-                    PathTraceImage(image, pixelTasks[currentTask].x, pixelTasks[currentTask].y, w, h, camera, vertices, indices, nodes, materials, textures, threadRandomState[currentTask]);
+                    PathTraceImage(i, image, pixelTasks[currentTask].x, pixelTasks[currentTask].y, w, h, camera, vertices, indices, nodes, materials, textures, state);
                 }
             },
-            std::ref(nextTask), std::ref(taskMutex), image, std::ref(pixelTasks), viewportWidth, viewportHeight, std::ref(camera), std::ref(scene.vertexVec), std::ref(scene.indexVec), std::ref(scene.bvh.nodesVec), std::ref(scene.materialVec), std::ref(scene.textures)
+            std::ref(nextTask), std::ref(taskMutex), image, std::ref(pixelTasks), viewportWidth, viewportHeight, std::ref(camera), std::ref(scene.vertexVec), std::ref(scene.indexVec), std::ref(scene.bvh.nodesVec), std::ref(scene.materialVec), std::ref(scene.textures), std::ref(generator), std::ref(distribution)
         );
     }
 
-    std::thread progressUpdateThread([](time_t start, uint32_t& nextTask, size_t pixelTasksSize) {
-            while (true) {
+    bool renderInProgress = true;
+    std::thread progressUpdateThread([&renderInProgress](time_t start, uint32_t& nextTask, size_t pixelTasksSize) {
+            while (renderInProgress) {
                 std::this_thread::sleep_for(std::chrono::seconds(1));
-                if (nextTask >= pixelTasksSize) break;
                 std::cout << "Rendering " << 100.0f * nextTask / pixelTasksSize << "% complete\tTime remaining: " << (std::time(nullptr) - start) * ((float)pixelTasksSize - nextTask) / nextTask << " seconds\n";
             }
         }, start, std::ref(nextTask), pixelTasks.size()
     );
 
+    Texture2D pixels;
+    pixels.CreateBinding();
+    pixels.LoadData(GL_RGB, GL_RGB, GL_UNSIGNED_BYTE, viewportWidth, viewportHeight, image);
+    pixels.BindTextureUnit(15, GL_TEXTURE_2D);
+
+    //glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGB, viewportWidth, viewportHeight);
+
+    ShaderRasterization imagePresent;
+    imagePresent.CompileFiles("extra/Image.vert", "extra/Image.frag");
+    imagePresent.CreateBinding();
+    imagePresent.LoadInteger("image", 15);
+
+    while (nextTask < pixelTasks.size()) {
+        glClear(GL_COLOR_BUFFER_BIT);
+        //glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, viewportWidth, viewportHeight, GL_RGB, GL_UNSIGNED_BYTE, image);
+        pixels.LoadData(GL_RGB, GL_RGB, GL_UNSIGNED_BYTE, viewportWidth, viewportHeight, image);
+
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        bindedWindow->Update();
+    }
+
+    imagePresent.Free();
+    pixels.Free();
+
     for (std::thread& worker : workers)
         worker.join();
 
+    renderInProgress = false;
     progressUpdateThread.join();
     auto deltaT = std::time(nullptr) - start;
 
-    SOIL_save_image(("res/screenshots/" + filename + '-' + std::to_string(deltaT) + "-REFERENCE.png").c_str(), SOIL_SAVE_TYPE_PNG, viewportWidth, viewportHeight, 3, image);
+    uint8_t* flipped = new uint8_t[3ULL * numPixels];
+    // Flip the image now
+    for (uint32_t y = 0; y < viewportHeight; y++) {
+        for (uint32_t x = 0; x < viewportWidth; x++) {
+            size_t cidx = 3ULL * (y * viewportWidth + x);
+            size_t fidx = 3ULL * ((uint64_t)(viewportHeight - y - 1) * viewportWidth + x); // Flip the y
+            flipped[cidx] = image[fidx];
+            flipped[cidx + 1] = image[fidx + 1];
+            flipped[cidx + 2] = image[fidx + 2];
+        }
+    }
+
+    SOIL_save_image(("res/screenshots/" + filename + '-' + std::to_string(deltaT) + "-REFERENCE.png").c_str(), SOIL_SAVE_TYPE_PNG, viewportWidth, viewportHeight, 3, flipped);
 
     delete[] image;
+    delete[] flipped;
 
     std::cout << "Pssst? You still there? Rendering completed in " << deltaT << " seconds\n";
 }
