@@ -521,17 +521,14 @@ float HybridTaus(uvec4& state) {
 
 #define M_PI 3.141529f
 
-constexpr uint32_t KNumRefSamples = 128; // 32k sampling
-constexpr uint32_t kNumWorkers = 8;
-
-std::vector<vec3> samples[kNumWorkers]; // outlier rejection denoising
+constexpr uint32_t KNumRefSamples = 1024; // 32k sampling
+constexpr uint32_t kNumWorkers = 1024;
 
 void PathTraceImage(
-    uint32_t index, uint8_t* image, uint32_t x, uint32_t y, const uint32_t w, const uint32_t h, const Camera& camera,
+    uint8_t* image, uint32_t x, uint32_t y, const uint32_t w, const uint32_t h, const Camera& camera,
     const std::vector<Vertex>& vertices, const std::vector<TriangleIndexData>& indices, const std::vector<NodeSerialized>& nodes,
     const std::vector<MaterialInstance>& materials, const std::vector<Texture*>& textures, uvec4 state
 ) {
-    samples[index].clear();
     vec3 pixel = vec3(0.0);
 
     for (int i = 0; i < KNumRefSamples; i++) {
@@ -554,7 +551,7 @@ void PathTraceImage(
                 else
                     emission = materials[closest.intersection.matId].emission;
 
-                samples[index].push_back(throughput * emission);
+                pixel += throughput * emission;
                 break;
             }
 
@@ -579,17 +576,11 @@ void PathTraceImage(
         }
     }
 
-    std::sort(samples[index].begin(), samples[index].end(), [](const vec3& l, const vec3& r) {
-        float lb = dot(l, vec3(1.0f / 3.0f));
-        float rb = dot(r, vec3(1.0f / 3.0f));
-        }
-    );
-
     pixel /= KNumRefSamples;
     //pixel = 1.0f - exp(-kExposure * pixel);
     pixel = pow(pixel, vec3(1.0f / 2.2f));
 
-    pixel = clamp(pixel, vec3(0.0f), vec3(1.0f));
+    pixel = clamp(pixel, vec3(0.0), vec3(1.0f));
     uint64_t idx = 3ULL * (y * w + x);
     image[idx    ] = (uint8_t)(255.0f * pixel.r);
     image[idx + 1] = (uint8_t)(255.0f * pixel.g);
@@ -624,9 +615,8 @@ void Renderer::RenderReference(const Camera& camera) {
     std::mutex taskMutex;
     std::vector<std::thread> workers;
     for (uint32_t i = 0; i < kNumWorkers; i++) {
-        samples[i].reserve(KNumRefSamples);
         workers.emplace_back(
-            [i](
+            [](
             uint32_t& nextTask, std::mutex& taskMutex, uint8_t* image, const std::vector<ivec2>& pixelTasks, uint32_t w, uint32_t h, const Camera& camera,
                 const std::vector<Vertex>& vertices, const std::vector<TriangleIndexData>& indices, const std::vector<NodeSerialized>& nodes,
                 const std::vector<MaterialInstance>& materials, const std::vector<Texture*>& textures,
@@ -645,7 +635,7 @@ void Renderer::RenderReference(const Camera& camera) {
                     if (currentTask >= pixelTasks.size())
                         return;
 
-                    PathTraceImage(i, image, pixelTasks[currentTask].x, pixelTasks[currentTask].y, w, h, camera, vertices, indices, nodes, materials, textures, state);
+                    PathTraceImage(image, pixelTasks[currentTask].x, pixelTasks[currentTask].y, w, h, camera, vertices, indices, nodes, materials, textures, state);
                 }
             },
             std::ref(nextTask), std::ref(taskMutex), image, std::ref(pixelTasks), viewportWidth, viewportHeight, std::ref(camera), std::ref(scene.vertexVec), std::ref(scene.indexVec), std::ref(scene.bvh.nodesVec), std::ref(scene.materialVec), std::ref(scene.textures), std::ref(generator), std::ref(distribution)
