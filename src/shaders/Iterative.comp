@@ -156,7 +156,7 @@ void main() {
         ray.direction = mat3(tangent, bitangent, vertex.Normal) * ImportanceSampleCosine(bxdfPdf);
 
         // Russian roulette
-        throughput *= BRDF(albedo, roughness, metallic, vertex.Normal, viewDir, ray.direction) * max(dot(vertex.Normal, ray.direction), 0.0f) / bxdfPdf;
+        throughput *= BRDF(albedo, roughness, metallic, vertex.Normal, viewDir, ray.direction) * M_PI; // terms cancel out when using cosine pdf
         float continuation = min(max(throughput.x, max(throughput.y, throughput.z)), 1.0f);
         if(rand() > continuation) {
             break;
