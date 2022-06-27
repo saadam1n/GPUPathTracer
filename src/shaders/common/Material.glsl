@@ -5,38 +5,18 @@
 #include "Constants.glsl"
 
 // TODO: REWRITE PBR CODE
-
+// TODO: switch the location of the metallic and roughness in the thingy
 layout(std430) readonly buffer samplers {
     vec4 materialInstance[];
 };
 
-// https://casual-effects.com/research/McGuire2013CubeMap/paper.pdf
-vec3 BlinnPhongNormalized(in vec3 albedo, in float shiny, in vec3 specular, in vec3 n, in vec3 v, in vec3 l) {
-    vec3 h = normalize(v + l);
-    float distribution = pow(max(dot(n, h), 0.0f), shiny);
-    float reflectance = distribution * (shiny + 8.0f) / 8.0f;
-    return (albedo + specular * reflectance) / M_PI;
-}
-
-vec3 BlinnPhongNormalizedPBR(in vec3 albedo, in float roughness, in float metallic, in vec3 n, in vec3 v, in vec3 l) {
-    // GGX != beckman but this is the only remapping I know
-    float shiny = 2 / (roughness * roughness) - 2;
-    vec3 f0 = mix(vec3(0.04f), albedo, metallic);
-    return BlinnPhongNormalized(albedo * (1.0f - metallic), shiny, f0, n, v, l);
-}
-
-vec3 ReflectiveTest(in vec3 albedo, in float roughness, in float metallic, in vec3 n, in vec3 v, in vec3 l) {
-    vec3 r = reflect(-l, n);
-    float dist = pow(max(dot(r, v), 0.0f), 256.0f);
-    return 1000000000.0 * albedo * dist;
-}
 
 //#define LOGL_PBR
 #ifdef LOGL_PBR
 
 float DistributionTrowbridgeReitz(vec3 N, vec3 H, float roughness)
 {
-    float a = roughness *roughness;
+    float a = roughness * roughness;
     float a2 = a * a;
     float NdotH = max(dot(N, H), 0.0);
     float NdotH2 = NdotH * NdotH;
@@ -113,10 +93,31 @@ float VisibilitySmithGGXCorrelated(in vec3 n, in vec3 v, in vec3 l, in float rou
 }
 
 vec3 FresnelShlick(in vec3 f0, in vec3 n, in vec3 v) {
-    return f0 + (1.0 - f0) * pow(clamp(1.0 - max(dot(n, v), 0.0f), 0.0, 1.0), 5.0);
+    float x = 1.0 - max(dot(n, v), 0.0f);
+    return f0 + (1.0 - f0) * (x * x * x * x * x);
 }
 
 #endif
+
+// https://casual-effects.com/research/McGuire2013CubeMap/paper.pdf
+vec3 BlinnPhongNormalized(in vec3 albedo, in float shiny, in vec3 specular, in vec3 n, in vec3 h) {
+    float distribution = pow(max(dot(n, h), 0.0f), shiny) * (shiny + 8.0f) / (8.0); // http://simonstechblog.blogspot.com/2011/12/microfacet-brdf.html
+    return (albedo + specular * distribution) / M_PI;
+}
+
+vec3 BlinnPhongNormalizedPBR(in vec3 albedo, in float roughness, in float metallic, in vec3 n, in vec3 v, in vec3 l) {
+    // GGX != beckman but this is the only remapping I know
+    float shiny = 2 / (roughness * roughness) - 2;
+    vec3 f0 = mix(vec3(0.04f), albedo, metallic);
+    vec3 h = normalize(v + l);
+    return BlinnPhongNormalized(albedo * (1.0f - metallic), shiny, FresnelShlick(f0, h, v), n, h);
+}
+
+vec3 ReflectiveTest(in vec3 albedo, in float roughness, in float metallic, in vec3 n, in vec3 v, in vec3 l) {
+    vec3 r = reflect(-l, n);
+    float dist = pow(max(dot(r, v), 0.0f), 256.0f);
+    return 1000000000.0 * albedo * dist;
+}
 
 // https://docs.google.com/document/d/1ZLT1-fIek2JkErN9ZPByeac02nWipMbO89oCW2jxzXo/edit
 vec3 SingleScatterCookTorrace(in vec3 albedo, in float roughness, in float metallic, in vec3 n, in vec3 v, in vec3 l) {
@@ -177,6 +178,6 @@ vec3 ImportanceSampleCosine(out float pdf) {
     return vec3(r * vec2(sin(phi), cos(phi)), z);
 }
 
-#define BRDF(a, r, m, n, v, l) SingleScatterCookTorrace(a, r, m, n, v, l)
+#define BRDF(a, r, m, n, v, l) BlinnPhongNormalizedPBR(a, r, m, n, v, l)
 
 #endif

@@ -91,8 +91,8 @@ void main() {
 
     vec3 viewDir = -ray.direction;
 
-    float metallic = 1.0;
-    float roughness = 0.1;
+    float metallic = 0.0f;
+    float roughness = 0.06;
 
     vec3 lastPosition = ray.origin;
 
@@ -108,24 +108,29 @@ void main() {
             vertex.MatID = 0;
         }
 
+        #define ENVIORNMENT_MAP
         // Account for L_e
         if(fbs(materialInstance[vertex.MatID + 1].w) == 1) {
             if(vertex.MatID != 0 && i == 0) {
                 contribution += throughput * materialInstance[vertex.MatID + 1].xyz;
             }
+            #ifdef ENVIORNMENT_MAP
+            if(vertex.MatID == 0) {
+                contribution += throughput * texture(samplerCube(fbu(materialInstance[0].xy)), -viewDir).xyz;
+            }
+            #endif
             break; // No indirect lighting except for zeroth bounce
         }
 
 
         // Sample the texture
-        vec3 albedo = texture(sampler2D(floatBitsToUint(materialInstance[vertex.MatID].xy)), vertex.TextureCoordinate).xyz;
+        vec3 albedo = texture(sampler2D(fbu(materialInstance[vertex.MatID].xy)), vertex.TextureCoordinate).xyz;
 
         vec3 lightPosition, lightNormal;
         RandomPointOnLight(lightPosition, lightNormal);
         float radius = distance(lightPosition, vertex.Position); 
         vec3 lightDir = normalize(lightPosition - vertex.Position);
-        vec3 lightThroughput = albedo / M_PI * throughput * nndot(vertex.Normal, lightDir) * nndot(lightNormal, -lightDir) / (neePdf * radius * radius);
-
+        vec3 lightThroughput = BRDF(albedo, roughness, metallic, vertex.Normal, viewDir, lightDir) * throughput * nndot(vertex.Normal, lightDir) * nndot(lightNormal, -lightDir) / (neePdf * radius * radius);
         HitInfo lightHit;
         lightHit.di.x = 1e20f;
              
@@ -135,11 +140,13 @@ void main() {
                                
         if(ClosestHit(lightRay, lightHit)) {
             Vertex lightVertex = GetInterpolatedVertex(lightRay, lightHit);
-            if(distance(lightVertex.Position, lightPosition) < 0.1f) {
+            if(distance(lightVertex.Position, lightPosition) < 0.005f) {
                 // We hit the light
                 contribution += lightThroughput * materialInstance[lightVertex.MatID + 1].xyz;
             }
         }
+
+       
 
         // Construct a new ray
         vec3 normcrs = (abs(vertex.Normal.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0));
@@ -149,7 +156,7 @@ void main() {
         ray.direction = mat3(tangent, bitangent, vertex.Normal) * ImportanceSampleCosine(bxdfPdf);
 
         // Russian roulette
-        throughput *= albedo;// / M_PI *  max(dot(vertex.Normal, ray.direction), 0.0f) / bxdfPdf;
+        throughput *= BRDF(albedo, roughness, metallic, vertex.Normal, viewDir, ray.direction) * max(dot(vertex.Normal, ray.direction), 0.0f) / bxdfPdf;
         float continuation = min(max(throughput.x, max(throughput.y, throughput.z)), 1.0f);
         if(rand() > continuation) {
             break;
