@@ -176,23 +176,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
 
             Indices.push_back(CurrentIndexData);
 
-            if (materialInstances[currMatID / 2].isEmissive == 1) {
-                CompactVertex lightTriangle;
-                lightTriangle.position0 = Vertices[CurrentIndexData[0]].position;
-                lightTriangle.position1 = Vertices[CurrentIndexData[1]].position;
-                lightTriangle.position2 = Vertices[CurrentIndexData[2]].position;
 
-                lightTriangle.surfaceNormal = Vertices[CurrentIndexData[0]].normal;
-                lightTriangle.matID = currMatID;
-
-                vec3 ac = lightTriangle.position1 - lightTriangle.position0;
-                vec3 ab = lightTriangle.position2 - lightTriangle.position0;
-                float s = length(cross(ab, ac));
-                totalLightArea += s;
-                lightTriangle.cumulativeArea = totalLightArea;
-
-                lightTriangles.push_back(lightTriangle);
-            }
         }
         BaseVertex += currMesh->mNumVertices;
     }
@@ -231,6 +215,29 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     }
     Vertices = reorderedVertices;
 #endif
+
+    for (auto& triplet : Indices) {
+        int currMatID = Vertices[triplet[0]].matId;
+        if (materialInstances[currMatID / 2].isEmissive == 1) {
+            CompactVertex lightTriangle;
+            lightTriangle.position0 = Vertices[triplet[0]].position;
+            lightTriangle.position1 = Vertices[triplet[1]].position;
+            lightTriangle.position2 = Vertices[triplet[2]].position;
+
+            lightTriangle.surfaceNormal = Vertices[triplet[0]].normal;
+            lightTriangle.matID = currMatID;
+
+            float a = distance(lightTriangle.position0, lightTriangle.position2);
+            float b = distance(lightTriangle.position0, lightTriangle.position1);
+            float c = distance(lightTriangle.position2, lightTriangle.position1);
+
+            float s = (a + b + c) / 2;
+            totalLightArea += sqrtf(s * (s - a) * (s - b) * (s - c));
+            lightTriangle.cumulativeArea = totalLightArea;
+
+            lightTriangles.push_back(lightTriangle);
+        }
+    }
 
     bvh.ConstructAccelerationStructure(Vertices, Indices);
 

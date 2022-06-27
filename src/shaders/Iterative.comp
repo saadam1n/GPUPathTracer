@@ -38,18 +38,26 @@ uniform layout(rgba32f) image2D accum;
 Vertex RandomPointOnLight() {
     float selectedArea = rand() * totalLightArea;
 
+    #define BINARY_SEARCH
+    #ifdef BINARY_SEARCH
+    // a is lower bound, b is upper bound
     int a = 0, b = textureSize(lightTex) / 4 - 1;
-
     while(b > a) {
         int m = (a + b) / 2;
         float currArea = texelFetch(lightTex, 4 * m + 3).w;
         if(currArea > selectedArea)
-            b = m - 1;
+            b = m; // We only know that m is *greater* than our target, so we cannot dismiss it via m - 1
         else
-            a = m + 1;
+            a = m + 1; // We certainly know m cannot be it, so we set the bound to m + 1
     }
-
     int idx = 4 * a;
+    #else
+    int idx;
+    for(idx = 0; idx <textureSize(lightTex); idx += 4) {
+        float currArea = texelFetch(lightTex, idx + 3).w;
+        if(currArea > selectedArea) break;
+    }
+    #endif
 
     vec4 data[4];
 
@@ -65,9 +73,9 @@ Vertex RandomPointOnLight() {
     position2 = vec3(data[1].zw, data[2].x);
 
     // https://pharr.org/matt/blog/2019/02/27/triangle-sampling-1
-    float su0 = sqrt(rand());
-    float u = 1 - su0;
-    float v = rand() * su0;
+    float sr = sqrt(rand());
+    float u = 1 - sr;
+    float v = rand() * sr;
     float t = 1.0f - u - v;
 
     Vertex lightVertex;
@@ -160,7 +168,7 @@ void main() {
         float bouncePdf = nndot(vertex.Normal, lightDir) / M_PI * nndot(lightVertex.Normal, -lightDir) / (radius * radius); // Seach veach 1995, eq 9
         vec3 lightThroughput = BRDF(albedo, roughness, metallic, vertex.Normal, viewDir, lightDir) * throughput * nndot(vertex.Normal, lightDir) * nndot(lightVertex.Normal, -lightDir) * MISWeight(neePdf, bouncePdf) / (neePdf * radius * radius);
         HitInfo lightHit;
-        lightHit.di.x = radius * 0.9f;
+        lightHit.di.x = radius - 0.005f;
              
         Ray lightRay;
         lightRay.origin = vertex.Position + 0.001f * lightDir;
