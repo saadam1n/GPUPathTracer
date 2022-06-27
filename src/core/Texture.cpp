@@ -154,7 +154,10 @@ void Texture2D::SaveData(GLenum SourceType, uint32_t X, uint32_t Y, void* Data) 
 	width = X;
 	height = Y;
 
-	image = new uint8_t[3ULL * width * height];
+	if (SourceType == GL_UNSIGNED_BYTE)
+		imagei = new uint8_t[3ULL * width * height];
+	else
+		imagef = new float[3ULL * width * height];
 
 	for (uint32_t i = 0; i < height; i++) {
 		for (uint32_t j = 0; j < width; j++) {
@@ -163,18 +166,19 @@ void Texture2D::SaveData(GLenum SourceType, uint32_t X, uint32_t Y, void* Data) 
 			int sidx = 4 * idx;
 			if (SourceType == GL_UNSIGNED_BYTE) {
 				uint8_t* source = (uint8_t*)Data;
-				image[didx    ] = source[sidx    ];
-				image[didx + 1] = source[sidx + 1];
-				image[didx + 2] = source[sidx + 2];
+				imagei[didx    ] = source[sidx    ];
+				imagei[didx + 1] = source[sidx + 1];
+				imagei[didx + 2] = source[sidx + 2];
 			}
 			else {
 				vec4* source = (vec4*)Data;
-				image[didx    ] = (uint8_t)(source[idx].r * 255.99f);
-				image[didx + 1] = (uint8_t)(source[idx].g * 255.99f);
-				image[didx + 2] = (uint8_t)(source[idx].b * 255.99f);
+				imagef[didx    ] = source[idx].r;
+				imagef[didx + 1] = source[idx].g;
+				imagef[didx + 2] = source[idx].b;
 			}
 		}
 	}
+	internalFormat = SourceType;
 }
 
 vec3 Texture2D::Sample(const vec2 texcoords) const {
@@ -184,7 +188,7 @@ vec3 Texture2D::Sample(const vec2 texcoords) const {
 	texelcoords.y %= height;
 	uint32_t idx = 3 * (texelcoords.y * width + texelcoords.x);
 	// Nearest neighbor sampling
-	return vec3(image[idx], image[idx+1], image[idx+2]) / 255.0f;
+	return (internalFormat == GL_UNSIGNED_BYTE ? vec3(imagei[idx], imagei[idx+1], imagei[idx+2]) / 255.0f : vec3(imagef[idx], imagef[idx+1], imagef[idx+2]));
 }
 
 void TextureBuffer::CreateBinding() {
@@ -294,7 +298,7 @@ vec3 TextureCubemap::Sample(vec3 texcoords) const {
 		maxAxis = absY;
 		uc = texcoords.x;
 		vc = -texcoords.z;
-		index = 2;
+		index = 3;
 	}
 	// NEGATIVE Y
 	if (!isYPositive && absY >= absX && absY >= absZ) {
@@ -303,7 +307,7 @@ vec3 TextureCubemap::Sample(vec3 texcoords) const {
 		maxAxis = absY;
 		uc = texcoords.x;
 		vc = texcoords.z;
-		index = 3;
+		index = 2;
 	}
 	// POSITIVE Z
 	if (isZPositive && absZ >= absX && absZ >= absY) {

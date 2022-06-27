@@ -223,7 +223,7 @@ void LoadEnvironmnet(TextureCubemap* environment, const std::string& args, Verte
 
         constexpr uint32_t cubemapSize = 1024;
         environment->CreateBinding();
-        glTexStorage2D(GL_TEXTURE_CUBE_MAP, 1, GL_RGBA32F, cubemapSize, cubemapSize);
+        glTexStorage2D(GL_TEXTURE_CUBE_MAP, 1, GL_RGB32F, cubemapSize, cubemapSize);
         glViewport(0, 0, cubemapSize, cubemapSize);
 
         GLuint fbo;
@@ -250,9 +250,9 @@ void LoadEnvironmnet(TextureCubemap* environment, const std::string& args, Verte
         glDeleteFramebuffers(1, &fbo);
 
         for (int i = 0; i < 6; i++) {
-            uint8_t* download = new uint8_t[4ULL * cubemapSize * cubemapSize];
-            glGetTexImage(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, GL_UNSIGNED_BYTE, download);
-            environment->GetFace(i).SaveData(GL_UNSIGNED_BYTE, cubemapSize, cubemapSize, download);
+            float* download = new float[4ULL * cubemapSize * cubemapSize];
+            glGetTexImage(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, GL_FLOAT, download);
+            environment->GetFace(i).SaveData(GL_FLOAT, cubemapSize, cubemapSize, download);
         }
     }
     else environment->LoadTexture(args); // Load TXT file
@@ -527,7 +527,7 @@ float HybridTaus(uvec4& state) {
 
 #define M_PI 3.141529f
 
-constexpr uint32_t KNumRefSamples = 1024;// 65536; // 32k sampling
+constexpr uint32_t KNumRefSamples = 128;// 65536; // 32k sampling
 constexpr uint32_t kNumWorkers = 5;
 
 void PathTraceImage(

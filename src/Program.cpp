@@ -30,7 +30,7 @@ glm::vec2 LastCursorPosition;
 
 
 // I need class here because Intellisense is not detecting the camera type
-Camera camera((float)Width / Height, glm::radians(45.0f), 900.0f * kCameraSetting, 0.0f *  5.0f * kCameraSetting);
+Camera camera((float)Width / Height, glm::radians(45.0f), 900.0f * kCameraSetting, 5.0f * kCameraSetting);
 
 bool needResetSamples = false;
 
@@ -64,7 +64,7 @@ int main(int argc, char** argv) {
 	Window.SetInputCallback(MouseCallback);
 
 	Renderer* renderer = new Renderer;
-	renderer->Initialize(&Window, "res/objects/22323.obj", "GENERATE COLOR BLACK");
+	renderer->Initialize(&Window, "res/objects/22323.obj", "res/sky/ibl/Topanga_Forest_B_3k.hdr"); // res/sky/ibl/Topanga_Forest_B_3k.hdr
 	camera.SetPosition(glm::vec3(-0.25f, 2.79f, 6.0));
 	//camera.SetPosition(glm::vec3(-4.98805332, 1.38741374, 10.1879292));
 	//camera.SetRotation(glm::vec3(0.724999964, -0.0800005496, 0.0));

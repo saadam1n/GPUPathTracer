@@ -27,12 +27,17 @@ public:
 
 	void LoadTexture(const char* Path);
 	void LoadData(GLenum DestinationFormat, GLenum SourceFormat, GLenum SourceType, uint32_t X, uint32_t Y, void* Data);
+	// Data formatting note: currently only RGB unsigned byte and RGBA float are supported for the source, and values are always stored as RGB
 	void SaveData(GLenum SourceType, uint32_t X, uint32_t Y, void* Data);
 
 	vec3 Sample(const vec2 texcoords) const;
 private:
 	uint32_t width, height;
-	uint8_t* image;
+	union {
+		uint8_t* imagei;
+		float* imagef;
+	};
+	GLenum internalFormat;
 };
 
 class Buffer;
