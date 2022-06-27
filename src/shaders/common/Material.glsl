@@ -3,6 +3,7 @@
 
 #include "Random.glsl"
 #include "Constants.glsl"
+#include "Util.glsl"
 
 // TODO: REWRITE PBR CODE
 // TODO: switch the location of the metallic and roughness in the thingy
@@ -93,7 +94,7 @@ float VisibilitySmithGGXCorrelated(in vec3 n, in vec3 v, in vec3 l, in float rou
 }
 
 vec3 FresnelShlick(in vec3 f0, in vec3 n, in vec3 v) {
-    float x = 1.0 - max(dot(n, v), 0.0f);
+    float x = -max(dot(n, v), 0.0f);
     return f0 + (1.0 - f0) * (x * x * x * x * x);
 }
 
@@ -106,7 +107,6 @@ vec3 BlinnPhongNormalized(in vec3 albedo, in float shiny, in vec3 specular, in v
 }
 
 vec3 BlinnPhongNormalizedPBR(in vec3 albedo, in float roughness, in float metallic, in vec3 n, in vec3 v, in vec3 l) {
-    return albedo / M_PI;
     // GGX != beckman but this is the only remapping I know
     float shiny = 2 / (roughness * roughness) - 2;
     vec3 f0 = mix(vec3(0.04f), albedo, metallic);
@@ -179,6 +179,27 @@ vec3 ImportanceSampleCosine(out float pdf) {
     return vec3(r * vec2(sin(phi), cos(phi)), z);
 }
 
-#define BRDF(a, r, m, n, v, l) BlinnPhongNormalizedPBR(a, r, m, n, v, l)
+float DistributionBeckmann(in vec3 n, in vec3 h, in float m) {
+    float noh = nndot(n, h);
+    float noh2 = noh * noh;
+    float m2 = m * m;
+    float numer = exp((noh2 - 1.0) / (m2 * noh2));
+    float denom = M_PI * m2 * noh2 * noh2;
+    return numer / denom;
+}
+
+vec3 BeckmannCookTorrance(in vec3 albedo, in float roughness, in float metallic, in vec3 n, in vec3 v, in vec3 l) {
+    if (dot(n, v) < 0.0f || dot(n, l) < 0.0f) {
+        return vec3(0.0f);
+    }
+    // Cook torrance
+    vec3 f0 = mix(vec3(0.04f), albedo, metallic);
+    vec3 h = normalize(v + l);
+    vec3 specular = FresnelShlick(f0, h, v) * DistributionBeckmann(n, h, roughness) / 4;
+    vec3 diffuse = albedo / M_PI * (1.0f - metallic) * (1.0 - FresnelShlick(f0, n, l))* (1.0f - FresnelShlick(f0, n, v));
+    return specular + diffuse;
+}
+
+#define BRDF(a, r, m, n, v, l) BeckmannCookTorrance(a, r, m, n, v, l)
 
 #endif

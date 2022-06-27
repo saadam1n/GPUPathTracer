@@ -20,21 +20,6 @@ uniform float totalLightArea;
 
 uniform layout(rgba32f) image2D accum;
 
-/*
-    int a = 0, b = textureSize(lightTex) / 9 - 1;
-
-    while(b > a) {
-        int m = (a + b) / 2;
-        float currArea = texelFetch(lightTex, 9 * m + 2).y;
-        if(currArea > selectedArea)
-            b = m - 1;
-        else
-            a = m + 1;
-    }
-
-    int idx = 9 * a;
-*/
-
 Vertex RandomPointOnLight() {
     float selectedArea = rand() * totalLightArea;
 
@@ -125,7 +110,7 @@ void main() {
     vec3 viewDir = -ray.direction;
 
     float metallic = 1.0f;
-    float roughness = 0.04;
+    float roughness = 0.1;
 
     vec3 lastPosition = ray.origin;
 
