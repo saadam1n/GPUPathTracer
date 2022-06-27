@@ -16,6 +16,7 @@
 
 #include <SOIL2.h>
 #include <cmath>
+#include <algorithm>
 
 #include <glm/gtx/matrix_transform_2d.hpp>
 
@@ -232,11 +233,19 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
             float c = distance(lightTriangle.position2, lightTriangle.position1);
 
             float s = (a + b + c) / 2;
-            totalLightArea += sqrtf(s * (s - a) * (s - b) * (s - c));
-            lightTriangle.cumulativeArea = totalLightArea;
+            lightTriangle.cumulativeArea = sqrtf(s * (s - a) * (s - b) * (s - c));
 
             lightTriangles.push_back(lightTriangle);
         }
+    }
+
+    // Make syre the biggest jumps in area are first so our binary search more often converges to closer locations
+    std::sort(lightTriangles.begin(), lightTriangles.end(), [](const CompactVertex& l, const CompactVertex& r) {
+        return l.cumulativeArea < r.cumulativeArea;
+    });
+    for (CompactVertex& cv : lightTriangles) {
+        totalLightArea += cv.cumulativeArea;
+        cv.cumulativeArea = totalLightArea;
     }
 
     bvh.ConstructAccelerationStructure(Vertices, Indices);
