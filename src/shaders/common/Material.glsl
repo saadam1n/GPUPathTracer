@@ -166,7 +166,7 @@ float SamplePdfDistributionGGX(in vec3 n, in vec3 h, in float a) {
 }
 
 float SamplePdfCosine(in vec3 n, in vec3 l) {
-    return max(dot(n, l), 0.0f);
+    return max(dot(n, l), 0.0f) / M_PI;
 }
 
 vec3 ImportanceSampleCosine(out float pdf) {
@@ -174,7 +174,7 @@ vec3 ImportanceSampleCosine(out float pdf) {
     float r = sqrt(r0);
     float phi = 2 * M_PI * r1;
     float z = sqrt(1.0 - r0);
-    pdf = z / M_PI;
+    pdf = max(z / M_PI, 1e-10);
     return vec3(r * vec2(sin(phi), cos(phi)), z);
 }
 
