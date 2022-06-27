@@ -393,7 +393,19 @@ void IntersectLeaf(in BVHNode leaf, in Ray ray, inout HitInfo intersection, inou
 	}
 }
 
-// Go with 48 for lower memory usage. I would consider 32 to be the minimum for generally all meshes
+bool IntersectLeafAny(in BVHNode leaf, in Ray ray, inout HitInfo intersection) {
+	int i = fbs(leaf.data[0].w);
+	int j = i - fbs(leaf.data[1].w);
+
+	for (int k = i; k < j; k++) {
+		if (IntersectTriangle(FetchTriangle(FetchIndexData(k)), ray, intersection)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 #define BVH_STACK_SIZE 27
 
 bool ClosestHit(in Ray ray, inout HitInfo intersection) {
@@ -466,6 +478,81 @@ bool ClosestHit(in Ray ray, inout HitInfo intersection) {
 	}
 
 	return result;
+}
+
+bool AnyHit(in Ray ray, inout HitInfo intersection) {
+	Ray iray;
+
+	iray.direction = 1.0f / ray.direction;
+	iray.origin = -ray.origin * iray.direction;
+
+	BVHNode root = GetNode(0);
+
+	if (!ValidateIntersection(IntersectNode(root, iray, intersection))) {
+		return false;
+	}
+
+	int currentNode = fbs(root.data[0].w);
+	int stack[BVH_STACK_SIZE];
+	int index = -1;
+
+	while (true) {
+		BVHNode child0 = GetNode(currentNode);
+		BVHNode child1 = GetNode(currentNode + 1);
+
+		vec2 distance0 = IntersectNode(child0, iray, intersection);
+		vec2 distance1 = IntersectNode(child1, iray, intersection);
+
+		bool hit0 = ValidateIntersection(distance0);
+		bool hit1 = ValidateIntersection(distance1);
+
+		// If the second node was hit but not the first, swap them to make sure all threads that just need to intersect one child don't branch 
+		if (!hit0 && hit1) {
+			hit0 = true;
+			hit1 = false;
+
+			BVHNode temp = child0;
+			child0 = child1;
+			child1 = temp;
+		}
+
+		if (hit0 && fbs(child0.data[1].w) < 0) {
+			if (IntersectLeafAny(child0, ray, intersection)) {
+				return true;
+			}
+			
+			hit0 = false;
+		}
+
+		if (hit1 && fbs(child1.data[1].w) < 0) {
+			if(IntersectLeafAny(child1, ray, intersection)) {
+				return true;
+			}
+			hit1 = false;
+		}
+
+		if (hit0 && hit1) {
+			if (distance0.x > distance1.x) {
+				BVHNode tmpn = child0;
+				child0 = child1;
+				child1 = tmpn;
+			}
+			stack[++index] = fbs(child1.data[0].w);
+			currentNode = fbs(child0.data[0].w);
+		}
+		else if (hit0)
+			currentNode = fbs(child0.data[0].w);
+		else if (hit1)
+			currentNode = fbs(child1.data[0].w);
+		else
+			if (index == -1)
+				break;
+			else
+				currentNode = stack[index--];
+
+	}
+
+	return false;
 }
 
 /*

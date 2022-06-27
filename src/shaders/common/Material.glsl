@@ -101,12 +101,12 @@ vec3 FresnelShlick(in vec3 f0, in vec3 n, in vec3 v) {
 
 // https://casual-effects.com/research/McGuire2013CubeMap/paper.pdf
 vec3 BlinnPhongNormalized(in vec3 albedo, in float shiny, in vec3 specular, in vec3 n, in vec3 h) {
-    return albedo / M_PI;
     float distribution = pow(max(dot(n, h), 0.0f), shiny) * (shiny + 8.0f) / (8.0); // http://simonstechblog.blogspot.com/2011/12/microfacet-brdf.html
     return (albedo + specular * distribution) / M_PI;
 }
 
 vec3 BlinnPhongNormalizedPBR(in vec3 albedo, in float roughness, in float metallic, in vec3 n, in vec3 v, in vec3 l) {
+    return albedo / M_PI;
     // GGX != beckman but this is the only remapping I know
     float shiny = 2 / (roughness * roughness) - 2;
     vec3 f0 = mix(vec3(0.04f), albedo, metallic);

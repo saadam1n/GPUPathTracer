@@ -21,6 +21,23 @@
 
 using namespace glm;
 
+// vec4 alignments: 4 8 12 16 of any combination of 4 byte values
+struct CompactVertex {
+    // 0 - starting
+    vec3 position0;
+    vec3 position1;
+    vec3 position2;
+    // 9
+    vec3 surfaceNormal; // only need one for light vertices, and I don't want to recompute this per every NEE sample, espically when we would have 3 spaces left over
+    // 12
+    vec2 texcoords; // Actually wait, I need 3 vec2s, not 1. I'll deal with this later
+    // 14
+    uint32_t matID; 
+    // 15
+    float cumulativeArea; 
+    // 16 - we just need 4 vec4s
+};
+
 void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     totalLightArea = 0;
     std::vector<MaterialInstance> materialInstances;
@@ -65,7 +82,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     };
 
     std::map<std::string, int> TexCache;
-    std::vector<Triangle> lightTriangles;
+    std::vector<CompactVertex> lightTriangles;
 
     for (uint32_t i = 0; i < Scene->mNumMeshes; i++) {
         const aiMesh* currMesh = Scene->mMeshes[i];
@@ -136,7 +153,6 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
 
             aiVector3D& Position = Scene->mRootNode->mTransformation * currMesh->mVertices[j];
             aiVector3D& Normal = currMesh->mNormals[j];
-
             CurrentVertex.position = glm::vec3(Position.x, Position.y, Position.z);
             CurrentVertex.normal = glm::vec3(Normal.x, Normal.y, Normal.z);
 
@@ -161,31 +177,60 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
             Indices.push_back(CurrentIndexData);
 
             if (materialInstances[currMatID / 2].isEmissive == 1) {
-                Triangle lightTriangle;
-                lightTriangle.Vertices[0] = Vertices[CurrentIndexData[0]];
-                lightTriangle.Vertices[1] = Vertices[CurrentIndexData[1]];
-                lightTriangle.Vertices[2] = Vertices[CurrentIndexData[2]];
+                CompactVertex lightTriangle;
+                lightTriangle.position0 = Vertices[CurrentIndexData[0]].position;
+                lightTriangle.position1 = Vertices[CurrentIndexData[1]].position;
+                lightTriangle.position2 = Vertices[CurrentIndexData[2]].position;
 
-                float a = distance(lightTriangle.Vertices[0].position, lightTriangle.Vertices[1].position);
-                float b = distance(lightTriangle.Vertices[0].position, lightTriangle.Vertices[2].position);
-                float c = distance(lightTriangle.Vertices[2].position, lightTriangle.Vertices[1].position);
+                lightTriangle.surfaceNormal = Vertices[CurrentIndexData[0]].normal;
+                lightTriangle.matID = currMatID;
 
-                float s = (a + b + c) / 2;
-                totalLightArea += sqrtf(s * (s - a) * (s - b) * (s - c));
-                lightTriangle.Vertices[0].area = totalLightArea;
-                lightTriangle.Vertices[1].area = totalLightArea;
-                lightTriangle.Vertices[2].area = totalLightArea;
+                vec3 ac = lightTriangle.position1 - lightTriangle.position0;
+                vec3 ab = lightTriangle.position2 - lightTriangle.position0;
+                float s = length(cross(ab, ac));
+                totalLightArea += s;
+                lightTriangle.cumulativeArea = totalLightArea;
+
                 lightTriangles.push_back(lightTriangle);
             }
         }
-
-        
-
         BaseVertex += currMesh->mNumVertices;
     }
 
     // As soon as we are done loading we should ignore it
     importer.FreeScene();
+
+#define FLAT_NORMALS
+#ifdef FLAT_NORMALS
+    // Use our vertex index stuff to build a triangle 
+    std::vector<Vertex> reorderedVertices;
+    for (auto& triplet : Indices) {
+        uint32_t i = reorderedVertices.size();
+
+        Vertex triangle[3];
+
+        triangle[0] = Vertices[triplet[0]];
+        triangle[1] = Vertices[triplet[1]];
+        triangle[2] = Vertices[triplet[2]];
+
+        vec3 v01 = triangle[1].position - triangle[0].position;
+        vec3 v02 = triangle[2].position - triangle[0].position;
+        vec3 nrm = normalize(cross(v01, v02));
+
+        triangle[0].normal = nrm;
+        triangle[1].normal = nrm;
+        triangle[2].normal = nrm;
+
+        reorderedVertices.push_back(triangle[0]);
+        reorderedVertices.push_back(triangle[1]);
+        reorderedVertices.push_back(triangle[2]);
+
+        triplet[0] = i;
+        triplet[1] = i + 1;
+        triplet[2] = i + 2;
+    }
+    Vertices = reorderedVertices;
+#endif
 
     bvh.ConstructAccelerationStructure(Vertices, Indices);
 

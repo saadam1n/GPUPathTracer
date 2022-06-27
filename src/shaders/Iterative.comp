@@ -20,8 +20,7 @@ uniform float totalLightArea;
 
 uniform layout(rgba32f) image2D accum;
 
-void RandomPointOnLight(out vec3 position, out vec3 normal) {
-    float selectedArea = rand() * totalLightArea;
+/*
     int a = 0, b = textureSize(lightTex) / 9 - 1;
 
     while(b > a) {
@@ -34,25 +33,51 @@ void RandomPointOnLight(out vec3 position, out vec3 normal) {
     }
 
     int idx = 9 * a;
+*/
 
-    Triangle selectedTriangle;
+Vertex RandomPointOnLight() {
+    float selectedArea = rand() * totalLightArea;
 
-    selectedTriangle.Vertices[0].PN = texelFetch(lightTex, idx);
-    selectedTriangle.Vertices[0].NT = texelFetch(lightTex, idx + 1);
-    selectedTriangle.Vertices[1].PN = texelFetch(lightTex, idx + 3);
-    selectedTriangle.Vertices[1].NT = texelFetch(lightTex, idx + 4);
-    selectedTriangle.Vertices[2].PN = texelFetch(lightTex, idx + 6);
-    selectedTriangle.Vertices[2].NT = texelFetch(lightTex, idx + 7);
+    int a = 0, b = textureSize(lightTex) / 4 - 1;
 
-    float u = rand(), v = rand(), t = rand();
-    float s = u + v + t;
+    while(b > a) {
+        int m = (a + b) / 2;
+        float currArea = texelFetch(lightTex, 4 * m + 3).w;
+        if(currArea > selectedArea)
+            b = m - 1;
+        else
+            a = m + 1;
+    }
 
-    u /= s;
-    v /= s;
-    t /= s;
+    int idx = 4 * a;
 
-    position = selectedTriangle.Vertices[0].PN.xyz * u + selectedTriangle.Vertices[1].PN.xyz * v + selectedTriangle.Vertices[2].PN.xyz * t;
-    normal   = vec3(selectedTriangle.Vertices[0].PN.w, selectedTriangle.Vertices[0].NT.xy) * v + vec3(selectedTriangle.Vertices[1].PN.w, selectedTriangle.Vertices[1].NT.xy) * u + vec3(selectedTriangle.Vertices[2].PN.w, selectedTriangle.Vertices[2].NT.xy) * t;
+    vec4 data[4];
+
+    data[0] = texelFetch(lightTex, idx    );
+    data[1] = texelFetch(lightTex, idx + 1);
+    data[2] = texelFetch(lightTex, idx + 2);
+    data[3] = texelFetch(lightTex, idx + 3);
+
+    vec3 position0, position1, position2;
+
+    position0 =      data[0].xyz;
+    position1 = vec3(data[0].w, data[1].xy);
+    position2 = vec3(data[1].zw, data[2].x);
+
+    // https://pharr.org/matt/blog/2019/02/27/triangle-sampling-1
+    float su0 = sqrt(rand());
+    float u = 1 - su0;
+    float v = rand() * su0;
+    float t = 1.0f - u - v;
+
+    Vertex lightVertex;
+
+    lightVertex.Position              = position0 * u + position1 * v + position2 * t;
+    lightVertex.Normal                = data[2].yzw;
+    lightVertex.TextureCoordinate     = data[3].xy;
+    lightVertex.MatID                 = fbs(data[3].z);
+
+    return lightVertex;
 }
 
 float MISWeight(in float top, in float bottom) {
@@ -91,8 +116,8 @@ void main() {
 
     vec3 viewDir = -ray.direction;
 
-    float metallic = 0.0f;
-    float roughness = 0.06;
+    float metallic = 1.0f;
+    float roughness = 0.04;
 
     vec3 lastPosition = ray.origin;
 
@@ -112,7 +137,7 @@ void main() {
         if(fbs(materialInstance[vertex.MatID + 1].w) == 1) {
             vec3 emission;
             if(vertex.MatID == 0) {
-                emission =  texture(samplerCube(fbu(materialInstance[0].xy)), -viewDir).xyz;
+                emission = texture(samplerCube(fbu(materialInstance[0].xy)), ray.direction).xyz;
             } else {
                 emission = materialInstance[vertex.MatID + 1].xyz;
                 if(i != 0) {
@@ -129,25 +154,20 @@ void main() {
         // Sample the texture
         vec3 albedo = texture(sampler2D(fbu(materialInstance[vertex.MatID].xy)), vertex.TextureCoordinate).xyz;
 
-        vec3 lightPosition, lightNormal;
-        RandomPointOnLight(lightPosition, lightNormal);
-        float radius = distance(lightPosition, vertex.Position); 
-        vec3 lightDir = normalize(lightPosition - vertex.Position);
-        float bouncePdf = nndot(vertex.Normal, lightDir) / M_PI * nndot(lightNormal, -lightDir) / (radius * radius); // Seach veach 1995, eq 9
-        vec3 lightThroughput = BRDF(albedo, roughness, metallic, vertex.Normal, viewDir, lightDir) * throughput * nndot(vertex.Normal, lightDir) * nndot(lightNormal, -lightDir) * MISWeight(neePdf, bouncePdf) / (neePdf * radius * radius);
+        Vertex lightVertex = RandomPointOnLight();
+        float radius = distance(lightVertex.Position, vertex.Position); 
+        vec3 lightDir = normalize(lightVertex.Position - vertex.Position);
+        float bouncePdf = nndot(vertex.Normal, lightDir) / M_PI * nndot(lightVertex.Normal, -lightDir) / (radius * radius); // Seach veach 1995, eq 9
+        vec3 lightThroughput = BRDF(albedo, roughness, metallic, vertex.Normal, viewDir, lightDir) * throughput * nndot(vertex.Normal, lightDir) * nndot(lightVertex.Normal, -lightDir) * MISWeight(neePdf, bouncePdf) / (neePdf * radius * radius);
         HitInfo lightHit;
-        lightHit.di.x = 1e20f;
+        lightHit.di.x = radius * 0.9f;
              
         Ray lightRay;
-        lightRay.origin = vertex.Position + 0.001 * vertex.Normal;
+        lightRay.origin = vertex.Position + 0.001f * lightDir;
         lightRay.direction = lightDir;
                                
-        if(ClosestHit(lightRay, lightHit)) {
-            Vertex lightVertex = GetInterpolatedVertex(lightRay, lightHit);
-            if(distance(lightVertex.Position, lightPosition) < 0.005f) {
-                // We hit the light
-                contribution += lightThroughput * materialInstance[lightVertex.MatID + 1].xyz;
-            }
+        if(!AnyHit(lightRay, lightHit)) {
+            contribution += lightThroughput * materialInstance[lightVertex.MatID + 1].xyz;
         }
 
         // Construct a new ray
