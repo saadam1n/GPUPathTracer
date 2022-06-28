@@ -15,6 +15,8 @@
 
 using namespace glm;
 constexpr float kExposure = 0.5;
+constexpr float kMetallic = 1.0f;
+constexpr float kRoughness = 0.01f;
 
 /*
 When we trace a ray, we don't actually care about the ray, we care about the path
@@ -390,6 +392,8 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     iterative.LoadInteger("nodesTex", 3);
     iterative.LoadInteger("lightTex", 4);
     iterative.LoadFloat("totalLightArea", scene.totalLightArea);
+    iterative.LoadFloat("kMetallic", kMetallic);
+    iterative.LoadFloat("kRoughness", kRoughness);
     iterative.LoadShaderStorageBuffer("samplers", scene.materialsBuf);
     iterative.LoadShaderStorageBuffer("randomState", randomState);
 
@@ -525,10 +529,37 @@ float HybridTaus(uvec4& state) {
     );
 }
 
-#define M_PI 3.141529f
+#define M_PI 3.141592653589793238462643383279f
 
-constexpr uint32_t KNumRefSamples = 128;// 65536; // 32k sampling
+constexpr uint32_t KNumRefSamples = 256;// 4096 * 8;// 65536; // 32k sampling
 constexpr uint32_t kNumWorkers = 5;
+
+float DistributionBeckmann(vec3 n, vec3 h, float m) {
+    float noh = max(dot(n, h), 0.0f);
+    float noh2 = noh * noh;
+    float m2 = m * m;
+    float numer = exp((noh2 - 1.0) / (m2 * noh2));
+    float denom = M_PI * m2 * noh2 * noh2;
+    return numer / denom;
+}
+
+vec3 FresnelShlick(vec3 f0, vec3 n, vec3 v) {
+    float x = 1.0f - max(dot(n, v), 0.0f);
+    return f0 + (1.0f - f0) * (x * x * x * x * x);
+}
+
+vec3 BeckmannCookTorrance(vec3 albedo, float roughness, float metallic, vec3 n, vec3 v, vec3 l) {
+    return albedo / M_PI;
+    if (dot(n, v) < 0.0f || dot(n, l) < 0.0f) {
+        return vec3(0.0f);
+    }
+    // Cook torrance
+    vec3 f0 = mix(vec3(0.04f), albedo, metallic);
+    vec3 h = normalize(v + l);
+    vec3 specular = FresnelShlick(f0, h, v) * DistributionBeckmann(n, h, roughness) / 4.0f;
+    vec3 diffuse = albedo / M_PI * (1.0f - metallic) * (1.0f - FresnelShlick(f0, n, l)) * (1.0f - FresnelShlick(f0, n, v));
+    return specular + diffuse;
+}
 
 void PathTraceImage(
     uint8_t* image, uint32_t x, uint32_t y, const uint32_t w, const uint32_t h, const Camera& camera,
@@ -561,24 +592,29 @@ void PathTraceImage(
                 break;
             }
 
-            const Texture2D* tex = (const Texture2D*)textures[closest.intersection.matId];
-
-            throughput *= tex->Sample(closest.intersection.texcoords); // BRDF, lambert's 1 / PI cancels out with cosine pdf cos / PI
-            float rr = min(max(throughput.x, max(throughput.y, throughput.z)), 1.0f);
-            if (HybridTaus(state) > rr)
-                break;
-            throughput /= rr;
-
             ray.origin = closest.intersection.position + closest.intersection.normal * 0.001f;
 
             vec3 normcrs = (abs(closest.intersection.normal.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0));
             vec3 tangent = normalize(cross(normcrs, closest.intersection.normal));
             vec3 bitangent = cross(tangent, closest.intersection.normal);
 
-            float r0 = HybridTaus(state), r1 = HybridTaus(state);
-            float r = sqrt(r0);
-            float phi = 2 * M_PI * r1;
-            ray.direction = mat3(tangent, bitangent, closest.intersection.normal) * vec3(r * vec2(sin(phi), cos(phi)), sqrt(1.0 - r0));
+            vec3 viewDir = -ray.direction;
+
+            // I do not take advantage of cosine sampling here (yet) to sit well with specular BRDFs at grazing angles
+            // https://mathworld.wolfram.com/SpherePointPicking.html
+            float phi = 2 * M_PI * HybridTaus(state);
+            float z = HybridTaus(state);
+            float r = sqrt(1.0f - z * z);
+            ray.direction = mat3(tangent, bitangent, closest.intersection.normal) * vec3(r * vec2(sin(phi), cos(phi)), z);
+
+            const Texture2D* tex = (const Texture2D*)textures[closest.intersection.matId];
+            throughput *= BeckmannCookTorrance(tex->Sample(closest.intersection.texcoords), kRoughness, kMetallic, closest.intersection.normal, viewDir, ray.direction) * 2.0f * M_PI * max(dot(closest.intersection.normal, ray.direction), 0.0f); // BRDF, we need to multiply by M_PI to account for cosine PDF
+
+
+            float rr = min(max(throughput.x, max(throughput.y, throughput.z)), 1.0f);
+            if (HybridTaus(state) > rr)
+                break;
+            throughput /= rr;
         }
     }
 

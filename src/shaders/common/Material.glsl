@@ -94,7 +94,7 @@ float VisibilitySmithGGXCorrelated(in vec3 n, in vec3 v, in vec3 l, in float rou
 }
 
 vec3 FresnelShlick(in vec3 f0, in vec3 n, in vec3 v) {
-    float x = -max(dot(n, v), 0.0f);
+    float x = 1.0f - max(dot(n, v), 0.0f);
     return f0 + (1.0 - f0) * (x * x * x * x * x);
 }
 
@@ -106,7 +106,7 @@ vec3 BlinnPhongNormalized(in vec3 albedo, in float shiny, in vec3 specular, in v
     return (albedo + specular * distribution) / M_PI;
 }
 
-vec3 BlinnPhongNormalizedPBR(in vec3 albedo, in float roughness, in float metallic, in vec3 n, in vec3 v, in vec3 l) {
+vec3 BlinnPhongNormalizedPBR(in vec3 albedo, in float metallic, in float roughness, in vec3 n, in vec3 v, in vec3 l) {
     // GGX != beckman but this is the only remapping I know
     float shiny = 2 / (roughness * roughness) - 2;
     vec3 f0 = mix(vec3(0.04f), albedo, metallic);
@@ -121,7 +121,7 @@ vec3 ReflectiveTest(in vec3 albedo, in float roughness, in float metallic, in ve
 }
 
 // https://docs.google.com/document/d/1ZLT1-fIek2JkErN9ZPByeac02nWipMbO89oCW2jxzXo/edit
-vec3 SingleScatterCookTorrace(in vec3 albedo, in float roughness, in float metallic, in vec3 n, in vec3 v, in vec3 l) {
+vec3 SingleScatterCookTorrace(in vec3 albedo, in float metallic, in float roughness,  in vec3 n, in vec3 v, in vec3 l) {
     // If any point is bellow the hemisphere then do not reflect; BRDFs only work when both points are above the surface
     if (dot(n, v) < 0.0f || dot(n, l) < 0.0f) {
         return vec3(0.0f);
@@ -188,7 +188,8 @@ float DistributionBeckmann(in vec3 n, in vec3 h, in float m) {
     return numer / denom;
 }
 
-vec3 BeckmannCookTorrance(in vec3 albedo, in float roughness, in float metallic, in vec3 n, in vec3 v, in vec3 l) {
+vec3 BeckmannCookTorrance(in vec3 albedo, in float metallic, in float roughness,  in vec3 n, in vec3 v, in vec3 l) {
+    return albedo / M_PI;
     if (dot(n, v) < 0.0f || dot(n, l) < 0.0f) {
         return vec3(0.0f);
     }
@@ -197,9 +198,9 @@ vec3 BeckmannCookTorrance(in vec3 albedo, in float roughness, in float metallic,
     vec3 h = normalize(v + l);
     vec3 specular = FresnelShlick(f0, h, v) * DistributionBeckmann(n, h, roughness) / 4;
     vec3 diffuse = albedo / M_PI * (1.0f - metallic) * (1.0 - FresnelShlick(f0, n, l))* (1.0f - FresnelShlick(f0, n, v));
-    return specular + diffuse;
+    return specular;// +diffuse;
 }
 
-#define BRDF(a, r, m, n, v, l) BeckmannCookTorrance(a, r, m, n, v, l)
+#define BRDF(a, m, r, n, v, l) BeckmannCookTorrance(a, m, r, n, v, l)
 
 #endif

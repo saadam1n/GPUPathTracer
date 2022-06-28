@@ -193,7 +193,7 @@ Vertex GetInterpolatedVertex(in Ray ray, inout HitInfo intersection) {
         */
 
     // It is better to use this since in path tracing, the normal MUST be perpendicular to the triangle face to conserve energy
-    interpolated.Normal = vec3(intersection.intersected.Vertices[0].PN.w, intersection.intersected.Vertices[0].NT.xy);
+    interpolated.Normal = normalize(vec3(intersection.intersected.Vertices[0].PN.w, intersection.intersected.Vertices[0].NT.xy));
 
     
     interpolated.TextureCoordinate =

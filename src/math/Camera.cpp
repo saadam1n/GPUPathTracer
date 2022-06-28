@@ -64,6 +64,6 @@ Ray Camera::GenRay(vec2 interpolation, float random0, float random1) const {
 
 	Ray ray;
 	ray.origin = position + offset;
-	ray.direction = lower_left + interpolation.x * horizontal + interpolation.y * vertical - offset;
+	ray.direction = normalize(lower_left + interpolation.x * horizontal + interpolation.y * vertical - offset);
 	return ray;
 }

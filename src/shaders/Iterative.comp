@@ -18,6 +18,9 @@ uniform float lens_radius;
 uniform samplerBuffer lightTex;
 uniform float totalLightArea;
 
+uniform float kMetallic;
+uniform float kRoughness;
+
 uniform layout(rgba32f) image2D accum;
 
 Vertex RandomPointOnLight() {
@@ -109,9 +112,6 @@ void main() {
 
     vec3 viewDir = -ray.direction;
 
-    float metallic = 1.0f;
-    float roughness = 0.1;
-
     vec3 lastPosition = ray.origin;
 
     // Set max bounce length to an inordinately high number so we (basically) get unbiased results while terminating the few odd rays that run for a lot of bounces without end
@@ -151,7 +151,7 @@ void main() {
         float radius = distance(lightVertex.Position, vertex.Position); 
         vec3 lightDir = normalize(lightVertex.Position - vertex.Position);
         float bouncePdf = nndot(vertex.Normal, lightDir) / M_PI * nndot(lightVertex.Normal, -lightDir) / (radius * radius); // Seach veach 1995, eq 9
-        vec3 lightThroughput = BRDF(albedo, roughness, metallic, vertex.Normal, viewDir, lightDir) * throughput * nndot(vertex.Normal, lightDir) * nndot(lightVertex.Normal, -lightDir) * MISWeight(neePdf, bouncePdf) / (neePdf * radius * radius);
+        vec3 lightThroughput = BRDF(albedo, kMetallic, kRoughness, vertex.Normal, viewDir, lightDir) * throughput * nndot(vertex.Normal, lightDir) * nndot(lightVertex.Normal, -lightDir) * MISWeight(neePdf, bouncePdf) / (neePdf * radius * radius);
         HitInfo lightHit;
         lightHit.di.x = radius - 0.005f;
              
@@ -168,10 +168,10 @@ void main() {
         vec3 tangent = normalize(cross(normcrs, vertex.Normal));
         vec3 bitangent = cross(tangent, vertex.Normal); 
         ray.origin = vertex.Position + 0.001 * vertex.Normal;
-        ray.direction = mat3(tangent, bitangent, vertex.Normal) * ImportanceSampleCosine(bxdfPdf);
+        ray.direction = normalize(mat3(tangent, bitangent, vertex.Normal) * ImportanceSampleCosine(bxdfPdf));
 
         // Russian roulette
-        throughput *= BRDF(albedo, roughness, metallic, vertex.Normal, viewDir, ray.direction) * M_PI; // terms cancel out when using cosine pdf
+        throughput *= BRDF(albedo, kMetallic, kRoughness, vertex.Normal, viewDir, ray.direction) * M_PI; // terms cancel out when using cosine pdf
         float continuation = min(max(throughput.x, max(throughput.y, throughput.z)), 1.0f);
         if(rand() > continuation) {
             break;
