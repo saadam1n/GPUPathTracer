@@ -14,7 +14,7 @@
 #include <mutex>
 
 using namespace glm;
-constexpr float kExposure = 0.5;
+constexpr float kExposure = 1.68;
 constexpr float kMetallic = 1.0f;
 constexpr float kRoughness = 0.01f;
 
@@ -531,14 +531,15 @@ float HybridTaus(uvec4& state) {
 
 #define M_PI 3.141592653589793238462643383279f
 
-constexpr uint32_t KNumRefSamples = 256;// 4096 * 8;// 65536; // 32k sampling
-constexpr uint32_t kNumWorkers = 5;
+constexpr uint32_t KNumRefSamples = 65536 * 2; // 32k sampling
+constexpr uint32_t kNumWorkers = 7;
 
+// http://simonstechblog.blogspot.com/2011/12/microfacet-brdf.html
 float DistributionBeckmann(vec3 n, vec3 h, float m) {
     float noh = max(dot(n, h), 0.0f);
     float noh2 = noh * noh;
     float m2 = m * m;
-    float numer = exp((noh2 - 1.0) / (m2 * noh2));
+    float numer = exp((noh2 - 1.0f) / (m2 * noh2));
     float denom = M_PI * m2 * noh2 * noh2;
     return numer / denom;
 }
@@ -548,16 +549,16 @@ vec3 FresnelShlick(vec3 f0, vec3 n, vec3 v) {
     return f0 + (1.0f - f0) * (x * x * x * x * x);
 }
 
+// I'm using a simple BRDF instead of a proper one to make debugging easier 
 vec3 BeckmannCookTorrance(vec3 albedo, float roughness, float metallic, vec3 n, vec3 v, vec3 l) {
-    return albedo / M_PI;
     if (dot(n, v) < 0.0f || dot(n, l) < 0.0f) {
         return vec3(0.0f);
     }
     // Cook torrance
     vec3 f0 = mix(vec3(0.04f), albedo, metallic);
     vec3 h = normalize(v + l);
-    vec3 specular = FresnelShlick(f0, h, v) * DistributionBeckmann(n, h, roughness) / 4.0f;
-    vec3 diffuse = albedo / M_PI * (1.0f - metallic) * (1.0f - FresnelShlick(f0, n, l)) * (1.0f - FresnelShlick(f0, n, v));
+    vec3 specular = FresnelShlick(f0, h, v) * DistributionBeckmann(n, h, roughness) / 4.0f; // Implicit geometric term
+    vec3 diffuse = albedo / M_PI * (1.0f - metallic) * (1.0f - FresnelShlick(f0, n, l)) * (1.0f - FresnelShlick(f0, n, v)); // See pbr discussion by devsh on how to do energy conservation
     return specular + diffuse;
 }
 
@@ -619,7 +620,7 @@ void PathTraceImage(
     }
 
     pixel /= KNumRefSamples;
-    //pixel = 1.0f - exp(-kExposure * pixel);
+    pixel = 1.0f - exp(-kExposure * pixel);
     pixel = pow(pixel, vec3(1.0f / 2.2f));
 
     pixel = clamp(pixel, vec3(0.0), vec3(1.0f));

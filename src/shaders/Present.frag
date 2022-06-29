@@ -8,7 +8,7 @@ uniform sampler2D directAccum;
 uniform float exposure;
 uniform int numSamples;
 
-//#define TONEMAPPING
+#define TONEMAPPING
 
 void main(){
 	color =  texelFetch(directAccum, ivec2(gl_FragCoord.xy), 0).rgb / numSamples;

@@ -95,7 +95,7 @@ float VisibilitySmithGGXCorrelated(in vec3 n, in vec3 v, in vec3 l, in float rou
 
 vec3 FresnelShlick(in vec3 f0, in vec3 n, in vec3 v) {
     float x = 1.0f - max(dot(n, v), 0.0f);
-    return f0 + (1.0 - f0) * (x * x * x * x * x);
+    return f0 + (1.0f - f0) * (x * x * x * x * x);
 }
 
 #endif
@@ -179,26 +179,52 @@ vec3 ImportanceSampleCosine(out float pdf) {
     return vec3(r * vec2(sin(phi), cos(phi)), z);
 }
 
+// http://simonstechblog.blogspot.com/2011/12/microfacet-brdf.html
 float DistributionBeckmann(in vec3 n, in vec3 h, in float m) {
-    float noh = nndot(n, h);
+    float noh = max(dot(n, h), 0.0f);
     float noh2 = noh * noh;
     float m2 = m * m;
-    float numer = exp((noh2 - 1.0) / (m2 * noh2));
+    float numer = exp((noh2 - 1.0f) / (m2 * noh2));
     float denom = M_PI * m2 * noh2 * noh2;
     return numer / denom;
 }
 
-vec3 BeckmannCookTorrance(in vec3 albedo, in float metallic, in float roughness,  in vec3 n, in vec3 v, in vec3 l) {
-    return albedo / M_PI;
+// See "Microfacet Models for Refraction through Rough Surfaces", eqs 28 and 29
+// Interestingly, "A Microfacet Based Coupled Specular-Matte BRDF Model with Importance Sampling" complains importance sampling the beckmann equation isn't possible, so I might be reading the EGSR 2007 paper incorrectly
+vec3 BeckmannImportanceSample(in float m, out float pdf) {
+    float g = -m * m * log(1 - rand());
+    float z2 = 1.0f / (1.0f + g);
+    float z = sqrt(z2);
+    pdf = DistributionBeckmann(vec3(0.0f, 0.0f, 1.0f), vec3(0.0f, 0.0f, z), m);
+    float phi = 2 * M_PI * rand();
+    float r = sqrt(1.0 - z2);
+    return vec3(r * vec2(sin(phi), cos(phi)), z);
+}
+
+// pdf of selecting l given n,v and m is just the distribution since itself is a pdf
+float PdfBeckmann(in float m, in vec3 n, in vec3 v, in vec3 l) {
+    vec3 h = normalize(v + l);
+    return DistributionBeckmann(n, h, m);
+}
+
+// I'm using a simple BRDF instead of a proper one to make debugging easier 
+vec3 BeckmannCookTorrance(in vec3 albedo, in float metallic, in float roughness, in vec3 n, in vec3 v, in vec3 l) {
     if (dot(n, v) < 0.0f || dot(n, l) < 0.0f) {
         return vec3(0.0f);
     }
     // Cook torrance
     vec3 f0 = mix(vec3(0.04f), albedo, metallic);
     vec3 h = normalize(v + l);
-    vec3 specular = FresnelShlick(f0, h, v) * DistributionBeckmann(n, h, roughness) / 4;
-    vec3 diffuse = albedo / M_PI * (1.0f - metallic) * (1.0 - FresnelShlick(f0, n, l))* (1.0f - FresnelShlick(f0, n, v));
-    return specular;// +diffuse;
+    vec3 specular = FresnelShlick(f0, h, v) * DistributionBeckmann(n, h, roughness) / 4.0f; // Implicit geometric term
+    vec3 diffuse = albedo / M_PI * (1.0f - metallic) * (1.0f - FresnelShlick(f0, n, l)) * (1.0f - FresnelShlick(f0, n, v)); // See pbr discussion by devsh on how to do energy conservation
+    return specular + diffuse;
+}
+
+
+vec3 PhongTest(in vec3 albedo, in float metallic, in float roughness, in vec3 n, in vec3 v, in vec3 l) {
+    vec3 idealReflect = reflect(-l, n);
+    float distribution = (256.0f + 2.0) / (2*M_PI) * pow(nndot(idealReflect, v), 256.0f);
+    return albedo * distribution;
 }
 
 #define BRDF(a, m, r, n, v, l) BeckmannCookTorrance(a, m, r, n, v, l)
