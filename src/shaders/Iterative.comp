@@ -142,6 +142,9 @@ void main() {
             contribution += throughput * emission;
             break; // No indirect lighting except for zeroth bounce
         }
+        if(dot(vertex.Normal, viewDir) < 0.0f){
+            break;
+        }
 
 
         // Sample the texture
@@ -168,8 +171,9 @@ void main() {
         vec3 tangent = normalize(cross(normcrs, vertex.Normal));
         vec3 bitangent = cross(tangent, vertex.Normal); 
         ray.origin = vertex.Position + 0.001 * vertex.Normal;
-        ray.direction = reflect(-viewDir, normalize(mat3(tangent, bitangent, vertex.Normal) * BeckmannImportanceSample(kRoughness))); // mat3(tangent, bitangent, vertex.Normal) * ImportanceSampleCosine(bxdfPdf);//
-        bxdfPdf = PdfBeckmann(kRoughness, vertex.Normal, viewDir, ray.direction);
+        vec3 h = mat3(tangent, bitangent, vertex.Normal) * BeckmannImportanceSample(kRoughness);
+        ray.direction = reflect(-viewDir, h); // mat3(tangent, bitangent, vertex.Normal) * ImportanceSampleCosine(bxdfPdf);//
+        bxdfPdf = PdfBeckmannH(kRoughness, vertex.Normal, viewDir, h);
 
         // Russian roulette
         throughput *= BRDF(albedo, kMetallic, kRoughness, vertex.Normal, viewDir, ray.direction) * nndot(vertex.Normal, ray.direction) / bxdfPdf; // terms cancel out when using cosine pdf
