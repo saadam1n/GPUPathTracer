@@ -110,8 +110,8 @@ void main() {
     float bxdfPdf = 1.0;
     float neePdf = 1.0 / totalLightArea;
 
+    // TODO: clean up variable names
     vec3 viewDir = -ray.direction;
-
     vec3 lastPosition = ray.origin;
 
     // Set max bounce length to an inordinately high number so we (basically) get unbiased results while terminating the few odd rays that run for a lot of bounces without end

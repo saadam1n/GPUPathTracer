@@ -18,6 +18,10 @@ constexpr float kExposure = 1.68;
 constexpr float kMetallic = 1.0f;
 constexpr float kRoughness = 0.01f;
 
+// REFERENCE CPU RENDERER PARAMS
+constexpr uint32_t KNumRefSamples = 768;// 65536 * 2; // 32k sampling
+constexpr uint32_t kNumWorkers = 7;
+
 /*
 When we trace a ray, we don't actually care about the ray, we care about the path
 There are two things a path is always associated with:
@@ -531,9 +535,6 @@ float HybridTaus(uvec4& state) {
 
 #define M_PI 3.141592653589793238462643383279f
 
-constexpr uint32_t KNumRefSamples = 65536 * 2; // 32k sampling
-constexpr uint32_t kNumWorkers = 7;
-
 // http://simonstechblog.blogspot.com/2011/12/microfacet-brdf.html
 float DistributionBeckmann(vec3 n, vec3 h, float m) {
     float noh = max(dot(n, h), 0.0f);
@@ -549,6 +550,17 @@ vec3 FresnelShlick(vec3 f0, vec3 n, vec3 v) {
     return f0 + (1.0f - f0) * (x * x * x * x * x);
 }
 
+float G1_Shlick(vec3 n, vec3 v, float k) {
+    float nov = max(dot(n, v), 0.0f);
+    return nov / (nov * (1.0 - k) + k);
+}
+
+float GSmith(vec3 n, vec3 v, vec3 l, float m) {
+    float k = m + 1.0;
+    k *= k / 8.0f;
+    return G1_Shlick(n, v, k) * G1_Shlick(n, l, k);
+}
+
 // I'm using a simple BRDF instead of a proper one to make debugging easier 
 vec3 BeckmannCookTorrance(vec3 albedo, float roughness, float metallic, vec3 n, vec3 v, vec3 l) {
     if (dot(n, v) < 0.0f || dot(n, l) < 0.0f) {
@@ -557,7 +569,7 @@ vec3 BeckmannCookTorrance(vec3 albedo, float roughness, float metallic, vec3 n, 
     // Cook torrance
     vec3 f0 = mix(vec3(0.04f), albedo, metallic);
     vec3 h = normalize(v + l);
-    vec3 specular = FresnelShlick(f0, h, v) * DistributionBeckmann(n, h, roughness) / 4.0f; // Implicit geometric term
+    vec3 specular = FresnelShlick(f0, h, v) * DistributionBeckmann(n, h, roughness) * GSmith(n, v, l, roughness) / max(4.0f * max(dot(n, v), 0.0f) * max(dot(n, l), 0.0f), 1e-10f); // Implicit geometric term
     vec3 diffuse = albedo / M_PI * (1.0f - metallic) * (1.0f - FresnelShlick(f0, n, l)) * (1.0f - FresnelShlick(f0, n, v)); // See pbr discussion by devsh on how to do energy conservation
     return specular + diffuse;
 }
