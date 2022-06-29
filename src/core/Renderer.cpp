@@ -14,9 +14,9 @@
 #include <mutex>
 
 using namespace glm;
-constexpr float kExposure = 1.68;
+constexpr float kExposure = 1.68f;
 constexpr float kMetallic = 1.0f;
-constexpr float kRoughness = 0.01f;
+constexpr float kRoughness = 0.01f; // At very low roughness values, there tends to be numerical instability between the beckmann pdf and the distribution term of the brdf, which can be removed by canceling them out but I'm not sure how MIS will like that just yet
 
 // REFERENCE CPU RENDERER PARAMS
 constexpr uint32_t KNumRefSamples = 768;// 65536 * 2; // 32k sampling
@@ -552,11 +552,11 @@ vec3 FresnelShlick(vec3 f0, vec3 n, vec3 v) {
 
 float G1_Shlick(vec3 n, vec3 v, float k) {
     float nov = max(dot(n, v), 0.0f);
-    return nov / (nov * (1.0 - k) + k);
+    return nov / (nov * (1.0f - k) + k);
 }
 
 float GSmith(vec3 n, vec3 v, vec3 l, float m) {
-    float k = m + 1.0;
+    float k = m + 1.0f;
     k *= k / 8.0f;
     return G1_Shlick(n, v, k) * G1_Shlick(n, l, k);
 }

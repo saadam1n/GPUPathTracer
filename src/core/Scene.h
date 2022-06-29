@@ -10,9 +10,8 @@ using namespace glm;
 
 // Mapped to by material ID
 struct MaterialInstance {
-	GLuint64 samplerHandle;
-	float ior;
-	float padding0;
+	GLuint64 albedoHandle;
+	GLuint64 roughnessHandle;
 	vec3 emission;
 	int isEmissive;
 };

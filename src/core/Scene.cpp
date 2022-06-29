@@ -48,8 +48,8 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     MaterialInstance sky;
     sky.isEmissive = true;
     sky.emission = glm::vec3(1.0);
-    sky.samplerHandle = glGetTextureHandleARB(environment->GetHandle());
-    glMakeTextureHandleResidentARB(sky.samplerHandle);
+    sky.albedoHandle = glGetTextureHandleARB(environment->GetHandle());
+    glMakeTextureHandleResidentARB(sky.albedoHandle);
     materialInstances.push_back(sky);
 
     std::string Folder = path.substr(0, path.find_last_of('/') + 1);
@@ -84,30 +84,33 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
 
     std::map<std::string, int> TexCache;
     std::vector<CompactVertex> lightTriangles;
-
+    uint32_t nextMatId = 1;
+    
     for (uint32_t i = 0; i < Scene->mNumMeshes; i++) {
         const aiMesh* currMesh = Scene->mMeshes[i];
 
-        aiColor3D albedo, emission;
+        aiColor3D albedo, emission, specular;
 
         int currMatID;
 
         aiMaterial* mat = Scene->mMaterials[Scene->mMeshes[i]->mMaterialIndex];
         bool hasTextures = (mat->GetTextureCount(aiTextureType_DIFFUSE) != 0);
+        bool hasSpecular = (mat->GetTextureCount(aiTextureType_SPECULAR) != 0);
         
         std::string textureKey;
         if (hasTextures) {
             aiString localpath;
             mat->GetTexture(aiTextureType_DIFFUSE, 0, &localpath);
-
             textureKey = Folder + localpath.C_Str();
         } else {
             mat->Get(AI_MATKEY_COLOR_DIFFUSE , albedo  );
             mat->Get(AI_MATKEY_COLOR_EMISSIVE, emission);
+            mat->Get(AI_MATKEY_COLOR_SPECULAR, specular);
 
             std::stringstream triple;
-            triple << albedo.r   << ' ' << albedo.g     << ' ' << albedo.b   << ';';
-            triple << emission.r << ' ' << emission.g   << ' ' << emission.b;
+            triple << albedo.r   << ' ' << albedo.g   << ' ' << albedo.b   << ';';
+            triple << emission.r << ' ' << emission.g << ' ' << emission.b << ';';
+            triple << specular.r << ' ' << specular.g << ' ' << specular.b;
             textureKey = triple.str();
         }
 
@@ -116,7 +119,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
             currMatID = result->second;
         }
         else {
-            currMatID = 2 * (int)textures.size();
+            currMatID = 2 * nextMatId++;
             TexCache.insert({ textureKey, currMatID });
 
             Texture2D* currtex = new Texture2D;
@@ -131,13 +134,32 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
                 currtex->SaveData(GL_FLOAT, 1, 1, (void*)coldata);
             }
 
+            Texture2D* spectex = new Texture2D;
+            spectex->CreateBinding();
+            if (hasSpecular) {
+                aiString localpath;
+                mat->GetTexture(aiTextureType_SPECULAR, 0, &localpath);
+                std::string specpath = Folder + localpath.C_Str();
+                spectex->LoadTexture(specpath.c_str());
+            }
+            else {
+                float coldata[4]{ specular.r, specular.g, specular.b, 1.0 };
+                spectex->LoadData(GL_RGBA32F, GL_RGBA, GL_FLOAT, 1, 1, (void*)coldata);
+                spectex->SaveData(GL_FLOAT, 1, 1, (void*)coldata);
+            }
+            
+
             textures.push_back(currtex);
+            textures.push_back(spectex);
 
             MaterialInstance newInstance;
             newInstance.isEmissive = 0;
 
-            newInstance.samplerHandle = glGetTextureHandleARB(currtex->GetHandle());
-            glMakeTextureHandleResidentARB(newInstance.samplerHandle);
+            newInstance.albedoHandle = glGetTextureHandleARB(currtex->GetHandle());
+            glMakeTextureHandleResidentARB(newInstance.albedoHandle);
+
+            newInstance.roughnessHandle = glGetTextureHandleARB(spectex->GetHandle());
+            glMakeTextureHandleResidentARB(newInstance.roughnessHandle);
 
             if (!hasTextures) {
                 if (emission.r + emission.g + emission.b > 0.001f) {
@@ -190,7 +212,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     // Use our vertex index stuff to build a triangle 
     std::vector<Vertex> reorderedVertices;
     for (auto& triplet : Indices) {
-        uint32_t i = reorderedVertices.size();
+        uint32_t i = (uint32_t)reorderedVertices.size();
 
         Vertex triangle[3];
 

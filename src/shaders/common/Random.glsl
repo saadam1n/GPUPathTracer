@@ -58,6 +58,13 @@ float HybridTaus() {
     );
 }
 
+const int numStrata = 64;
+float FakeLD() {
+    float r0 = HybridTaus(), r1 = HybridTaus();
+    float base = floor(r0 * numStrata) / numStrata;
+    return base + r1 / numStrata;
+}
+
 #define rand() HybridTaus()
 
 void initRNG(uint ridx) {
