@@ -574,6 +574,22 @@ vec3 BeckmannCookTorrance(vec3 albedo, float roughness, float metallic, vec3 n, 
     return specular + diffuse;
 }
 
+vec3 ComputeTonemapUncharted2(vec3 color) {
+    float A = 0.15f;
+    float B = 0.50f;
+    float C = 0.10f;
+    float D = 0.20f;
+    float E = 0.02f;
+    float F = 0.30f;
+    float W = 11.2f;
+    float exposure = 2.0f;
+    color *= exposure;
+    color = ((color * (A * color + C * B) + D * E) / (color * (A * color + B) + D * F)) - E / F;
+    float white = ((W * (A * W + C * B) + D * E) / (W * (A * W + B) + D * F)) - E / F;
+    color /= white;
+    return color;
+}
+
 void PathTraceImage(
     uint8_t* image, uint32_t x, uint32_t y, const uint32_t w, const uint32_t h, const Camera& camera,
     const std::vector<Vertex>& vertices, const std::vector<TriangleIndexData>& indices, const std::vector<NodeSerialized>& nodes,
@@ -620,8 +636,10 @@ void PathTraceImage(
             float r = sqrt(1.0f - z * z);
             ray.direction = mat3(tangent, bitangent, closest.intersection.normal) * vec3(r * vec2(sin(phi), cos(phi)), z);
 
-            const Texture2D* tex = (const Texture2D*)textures[closest.intersection.matId];
-            throughput *= BeckmannCookTorrance(tex->Sample(closest.intersection.texcoords), kRoughness, kMetallic, closest.intersection.normal, viewDir, ray.direction) * 2.0f * M_PI * max(dot(closest.intersection.normal, ray.direction), 0.0f); // BRDF, we need to multiply by M_PI to account for cosine PDF
+            const Texture2D* tex = (const Texture2D*)textures[2ULL * closest.intersection.matId - 1ULL];
+            const Texture2D* mat = (const Texture2D*)textures[2ULL * closest.intersection.matId];
+            float roughness = mat->Sample(closest.intersection.texcoords).x;
+            throughput *= BeckmannCookTorrance(tex->Sample(closest.intersection.texcoords), roughness * roughness, kMetallic, closest.intersection.normal, viewDir, ray.direction) * 2.0f * M_PI * max(dot(closest.intersection.normal, ray.direction), 0.0f); // BRDF, we need to multiply by M_PI to account for cosine PDF
 
 
             float rr = min(max(throughput.x, max(throughput.y, throughput.z)), 1.0f);
@@ -632,7 +650,8 @@ void PathTraceImage(
     }
 
     pixel /= KNumRefSamples;
-    pixel = 1.0f - exp(-kExposure * pixel);
+    //pixel = 1.0f - exp(-kExposure * pixel);
+    pixel = ComputeTonemapUncharted2(kExposure * pixel);
     pixel = pow(pixel, vec3(1.0f / 2.2f));
 
     pixel = clamp(pixel, vec3(0.0), vec3(1.0f));
@@ -641,6 +660,7 @@ void PathTraceImage(
     image[idx + 1] = (uint8_t)(255.0f * pixel.g);
     image[idx + 2] = (uint8_t)(255.0f * pixel.b);
 }
+
 
 // Render the ground truth of the image on the CPU
 void Renderer::RenderReference(const Camera& camera) {

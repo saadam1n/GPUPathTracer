@@ -1,3 +1,10 @@
+TODO:
+1. Verify rendering with CPU renderer, finally ditch it for a GPU renderer
+2. Add diffuse sampling (layered BRDF?) and then add better texture support
+3. LD sampling
+4. OBB sampling for lights
+
+
 Idea: balance between cosine and ggx sampling based on metallic
 Actually that means zero specular for diffuse
 I will start off with a simple 0.5 probability for now

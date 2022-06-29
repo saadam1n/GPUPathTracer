@@ -39,6 +39,15 @@ struct CompactVertex {
     // 16 - we just need 4 vec4s
 };
 
+/*
+matId 0 - skybox    starting at textures[0]
+matId 1 - material, starting at textures[1]
+matId 2 - material, starting at textures[3]
+matId 3 - material, starting at textures[5]
+..................
+matId n - material, starting at textures[2n - 1]
+*/
+
 void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     totalLightArea = 0;
     std::vector<MaterialInstance> materialInstances;
@@ -120,6 +129,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
         }
         else {
             currMatID = 2 * nextMatId++;
+            std::cout << currMatID << '\n';
             TexCache.insert({ textureKey, currMatID });
 
             Texture2D* currtex = new Texture2D;
