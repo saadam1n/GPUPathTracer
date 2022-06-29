@@ -191,20 +191,22 @@ float DistributionBeckmann(in vec3 n, in vec3 h, in float m) {
 
 // See "Microfacet Models for Refraction through Rough Surfaces", eqs 28 and 29
 // Interestingly, "A Microfacet Based Coupled Specular-Matte BRDF Model with Importance Sampling" complains importance sampling the beckmann equation isn't possible, so I might be reading the EGSR 2007 paper incorrectly
-vec3 BeckmannImportanceSample(in float m, out float pdf) {
+vec3 BeckmannImportanceSample(in float m) {
     float g = -m * m * log(1 - rand());
     float z2 = 1.0f / (1.0f + g);
     float z = sqrt(z2);
-    pdf = DistributionBeckmann(vec3(0.0f, 0.0f, 1.0f), vec3(0.0f, 0.0f, z), m);
+    //pdf = DistributionBeckmann(vec3(0.0f, 0.0f, 1.0f), vec3(0.0f, 0.0f, z), m);
     float phi = 2 * M_PI * rand();
     float r = sqrt(1.0 - z2);
     return vec3(r * vec2(sin(phi), cos(phi)), z);
 }
 
 // pdf of selecting l given n,v and m is just the distribution since itself is a pdf
+// Edit: https://www.gamedev.net/blogs/entry/2261786-microfacet-importance-sampling-for-dummies/
+// My pdf was broken, which made me loose a day trying to render the refrence and seeing what would work
 float PdfBeckmann(in float m, in vec3 n, in vec3 v, in vec3 l) {
     vec3 h = normalize(v + l);
-    return DistributionBeckmann(n, h, m);
+    return DistributionBeckmann(n, h, m) * nndot(n, h) / (4.0f * nndot(v, h));
 }
 
 // I'm using a simple BRDF instead of a proper one to make debugging easier 
