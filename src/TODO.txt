@@ -1,5 +1,12 @@
+Revised TODO:
+- CLEAN UP CODE, AND OPTIMIZE STUFF
+- Add support for metallic textures. I need to deciede on a file format to keep things tidy in one place
+- Implement GPU reference renderer
+- LD sampling
+- Faster BVH so I can start tracing more complex scenes
+
 TODO:
-1. Verify rendering with CPU renderer, finally ditch it for a GPU renderer
+1. Verify rendering with CPU renderer, finally ditch it for a GPU renderer- 50% done
 2. Add diffuse sampling (layered BRDF?) and then add better texture support
 3. LD sampling
 4. OBB sampling for lights

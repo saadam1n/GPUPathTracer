@@ -175,7 +175,7 @@ vec3 ImportanceSampleCosine(out float pdf) {
     float r = sqrt(r0);
     float phi = 2 * M_PI * r1;
     float z = sqrt(1.0 - r0);
-    pdf = max(z / M_PI, 1e-10);
+    pdf = max(z / M_PI, 1e-10f);
     return vec3(r * vec2(sin(phi), cos(phi)), z);
 }
 

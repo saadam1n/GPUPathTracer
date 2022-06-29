@@ -76,9 +76,11 @@ Vertex RandomPointOnLight() {
     return lightVertex;
 }
 
+// See madmann's implementation https://github.com/madmann91/sol/blob/master/include/sol/renderer.h#L57
 float MISWeight(in float top, in float bottom) {
     // Assume for each path we send one nee and one indirect sample, factor out 0.5
-    return (top) / (top + bottom);
+    // return (top) / (top + bottom); // Your screen gets overtaken by NaNs when you are doing specular reflections
+    return 1.0f / (1.0f + bottom / top);
 }
 
 float MISWeightBXDF(float bxdf, float cosine, float metallic) {
@@ -146,7 +148,6 @@ void main() {
             break;
         }
 
-
         // Sample the texture
         vec3 albedo = texture(sampler2D(fbu(materialInstance[vertex.MatID].xy)), vertex.TextureCoordinate).xyz;
         float roughness = texture(sampler2D(fbu(materialInstance[vertex.MatID].zw)), vertex.TextureCoordinate).x;
@@ -155,7 +156,7 @@ void main() {
         Vertex lightVertex = RandomPointOnLight();
         float radius = distance(lightVertex.Position, vertex.Position); 
         vec3 lightDir = normalize(lightVertex.Position - vertex.Position);
-        float bouncePdf = PdfBeckmann(roughness, vertex.Normal, viewDir, lightDir) * nndot(lightVertex.Normal, -lightDir) / (radius * radius); // Seach veach 1995, eq 9
+        float bouncePdf = 0.5f * (PdfBeckmann(roughness, vertex.Normal, viewDir, lightDir) + SamplePdfCosine(vertex.Normal, lightDir)) * nndot(lightVertex.Normal, -lightDir) / (radius * radius); // Seach veach 1995, eq 9
         vec3 lightThroughput = BRDF(albedo, kMetallic, roughness, vertex.Normal, viewDir, lightDir) * throughput * nndot(vertex.Normal, lightDir) * nndot(lightVertex.Normal, -lightDir) * MISWeight(neePdf, bouncePdf) / (neePdf * radius * radius);
         HitInfo lightHit;
         lightHit.di.x = radius - 0.005f;
@@ -173,12 +174,20 @@ void main() {
         vec3 tangent = normalize(cross(normcrs, vertex.Normal));
         vec3 bitangent = cross(tangent, vertex.Normal); 
         ray.origin = vertex.Position + 0.001 * vertex.Normal;
-        vec3 h = mat3(tangent, bitangent, vertex.Normal) * BeckmannImportanceSample(roughness);
-        ray.direction = reflect(-viewDir, h); // mat3(tangent, bitangent, vertex.Normal) * ImportanceSampleCosine(bxdfPdf);//
-        bxdfPdf = PdfBeckmannH(roughness, vertex.Normal, viewDir, h);
+
+        float otherPdf;
+        if(rand() > 0.5f) {
+            vec3 h = mat3(tangent, bitangent, vertex.Normal) * BeckmannImportanceSample(roughness);
+            ray.direction = reflect(-viewDir, h);
+            bxdfPdf = PdfBeckmannH(roughness, vertex.Normal, viewDir, h);
+            otherPdf = SamplePdfCosine(vertex.Normal, ray.direction);
+        } else {
+            ray.direction = mat3(tangent, bitangent, vertex.Normal) * ImportanceSampleCosine(bxdfPdf);
+            otherPdf = PdfBeckmann(roughness, vertex.Normal, viewDir, ray.direction);
+        }
 
         // Russian roulette
-        throughput *= BRDF(albedo, kMetallic, roughness, vertex.Normal, viewDir, ray.direction) * nndot(vertex.Normal, ray.direction) / bxdfPdf; // terms cancel out when using cosine pdf
+        throughput *= BRDF(albedo, kMetallic, roughness, vertex.Normal, viewDir, ray.direction) * nndot(vertex.Normal, ray.direction) * 2.0f * MISWeight(bxdfPdf, otherPdf) / bxdfPdf; // I have no idea why we need to multiply by 2 but hey, it works. The way I figured it out was that we needed to average our PDFs as well somehow. We also are sending one sample, not two
         float continuation = min(max(throughput.x, max(throughput.y, throughput.z)), 1.0f);
         if(rand() > continuation) {
             break;

@@ -19,7 +19,7 @@ constexpr float kMetallic = 1.0f;
 constexpr float kRoughness = 0.01f; // At very low roughness values, there tends to be numerical instability between the beckmann pdf and the distribution term of the brdf, which can be removed by canceling them out but I'm not sure how MIS will like that just yet
 
 // REFERENCE CPU RENDERER PARAMS
-constexpr uint32_t KNumRefSamples = 768;// 65536 * 2; // 32k sampling
+constexpr uint32_t KNumRefSamples = 8192;// 65536 * 2; // 32k sampling
 constexpr uint32_t kNumWorkers = 7;
 
 /*
@@ -76,8 +76,6 @@ struct RayInfo {
     };
 
 };
-
-constexpr int kNumAtomicCounters = 1024;
 
 void DebugMessageCallback(GLenum source, GLenum type, GLuint id,
     GLenum severity, GLsizei length,

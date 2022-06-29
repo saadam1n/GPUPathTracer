@@ -34,3 +34,7 @@ Acheived June 19, 2022
 
 Acheived June 20, 2022
 ![Next Event Estimation on the GPU](images/9NextEventEstimation.png)
+
+Acheived June 29, 2022
+![PBR using Beckamn BRDF](images/10PBR-1.png)
+![PBR using Beckamn BRDF](images/10PBR-2.png)

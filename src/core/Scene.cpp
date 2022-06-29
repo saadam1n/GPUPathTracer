@@ -48,6 +48,23 @@ matId 3 - material, starting at textures[5]
 matId n - material, starting at textures[2n - 1]
 */
 
+void InitializeTexture(const std::string& folder, Texture2D* tex, const aiMaterial* mat, aiTextureType type, aiColor3D backup) {
+    tex->CreateBinding();
+    if (mat->GetTextureCount(type) == 0) {
+        // No bitmap available, just use the backup color
+        float coldata[4]{ backup.r, backup.g, backup.b, 1.0 };
+        tex->LoadData(GL_RGBA32F, GL_RGBA, GL_FLOAT, 1, 1, (void*)coldata);
+        tex->SaveData(GL_FLOAT, 1, 1, (void*)coldata);
+    }
+    else {
+        aiString apath;
+        mat->GetTexture(type, 0, &apath);
+        std::string path = folder + apath.C_Str();
+        std::cout << path.c_str() << '\n';
+        tex->LoadTexture(path.c_str());
+    }
+}
+
 void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     totalLightArea = 0;
     std::vector<MaterialInstance> materialInstances;
@@ -133,31 +150,10 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
             TexCache.insert({ textureKey, currMatID });
 
             Texture2D* currtex = new Texture2D;
-            currtex->CreateBinding();
-
-            if (hasTextures) {
-                currtex->LoadTexture(textureKey.c_str());
-            }
-            else {
-                float coldata[4]{ albedo.r, albedo.g, albedo.b, 1.0 };
-                currtex->LoadData(GL_RGBA32F, GL_RGBA, GL_FLOAT, 1, 1, (void*)coldata);
-                currtex->SaveData(GL_FLOAT, 1, 1, (void*)coldata);
-            }
-
             Texture2D* spectex = new Texture2D;
-            spectex->CreateBinding();
-            if (hasSpecular) {
-                aiString localpath;
-                mat->GetTexture(aiTextureType_SPECULAR, 0, &localpath);
-                std::string specpath = Folder + localpath.C_Str();
-                spectex->LoadTexture(specpath.c_str());
-            }
-            else {
-                float coldata[4]{ specular.r, specular.g, specular.b, 1.0 };
-                spectex->LoadData(GL_RGBA32F, GL_RGBA, GL_FLOAT, 1, 1, (void*)coldata);
-                spectex->SaveData(GL_FLOAT, 1, 1, (void*)coldata);
-            }
-            
+
+            InitializeTexture(Folder, currtex, mat, aiTextureType_DIFFUSE, albedo);
+            InitializeTexture(Folder, spectex, mat, aiTextureType_SPECULAR, specular);
 
             textures.push_back(currtex);
             textures.push_back(spectex);

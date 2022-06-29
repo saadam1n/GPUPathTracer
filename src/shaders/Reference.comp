@@ -18,41 +18,62 @@ uniform float lens_radius;
 uniform samplerBuffer lightTex;
 uniform float totalLightArea;
 
+uniform float kMetallic;
+uniform float kRoughness;
+
 uniform layout(rgba32f) image2D accum;
 
-void RandomPointOnLight(out vec3 position, out vec3 normal) {
+Vertex RandomPointOnLight() {
     float selectedArea = rand() * totalLightArea;
-    int a = 0, b = textureSize(lightTex) / 9 - 1;
 
+    #define BINARY_SEARCH
+    #ifdef BINARY_SEARCH
+    // a is lower bound, b is upper bound
+    int a = 0, b = textureSize(lightTex) / 4 - 1;
     while(b > a) {
         int m = (a + b) / 2;
-        float currArea = texelFetch(lightTex, 9 * m + 2).y;
+        float currArea = texelFetch(lightTex, 4 * m + 3).w;
         if(currArea > selectedArea)
-            b = m - 1;
+            b = m; // We only know that m is *greater* than our target, so we cannot dismiss it via m - 1
         else
-            a = m + 1;
+            a = m + 1; // We certainly know m cannot be it, so we set the bound to m + 1
     }
+    int idx = 4 * a;
+    #else
+    int idx;
+    for(idx = 0; idx <textureSize(lightTex); idx += 4) {
+        float currArea = texelFetch(lightTex, idx + 3).w;
+        if(currArea > selectedArea) break;
+    }
+    #endif
 
-    int idx = 9 * a;
+    vec4 data[4];
 
-    Triangle selectedTriangle;
+    data[0] = texelFetch(lightTex, idx    );
+    data[1] = texelFetch(lightTex, idx + 1);
+    data[2] = texelFetch(lightTex, idx + 2);
+    data[3] = texelFetch(lightTex, idx + 3);
 
-    selectedTriangle.Vertices[0].PN = texelFetch(lightTex, idx);
-    selectedTriangle.Vertices[0].NT = texelFetch(lightTex, idx + 1);
-    selectedTriangle.Vertices[1].PN = texelFetch(lightTex, idx + 3);
-    selectedTriangle.Vertices[1].NT = texelFetch(lightTex, idx + 4);
-    selectedTriangle.Vertices[2].PN = texelFetch(lightTex, idx + 6);
-    selectedTriangle.Vertices[2].NT = texelFetch(lightTex, idx + 7);
+    vec3 position0, position1, position2;
 
-    float u = rand(), v = rand(), t = rand();
-    float s = u + v + t;
+    position0 =      data[0].xyz;
+    position1 = vec3(data[0].w, data[1].xy);
+    position2 = vec3(data[1].zw, data[2].x);
 
-    u /= s;
-    v /= s;
-    t /= s;
+    // https://pharr.org/matt/blog/2019/02/27/triangle-sampling-1
+    float sr = sqrt(rand());
+    float u = 1 - sr;
+    float v = rand() * sr;
+    float t = 1.0f - u - v;
 
-    position = selectedTriangle.Vertices[0].PN.xyz * u + selectedTriangle.Vertices[1].PN.xyz * v + selectedTriangle.Vertices[2].PN.xyz * t;
-    normal   = vec3(selectedTriangle.Vertices[0].PN.w, selectedTriangle.Vertices[0].NT.xy) * v + vec3(selectedTriangle.Vertices[1].PN.w, selectedTriangle.Vertices[1].NT.xy) * u + vec3(selectedTriangle.Vertices[2].PN.w, selectedTriangle.Vertices[2].NT.xy) * t;
+    Vertex lightVertex;
+
+    lightVertex.Position              = position0 * u + position1 * v + position2 * t;
+    lightVertex.Normal                = data[2].yzw;
+    lightVertex.TextureCoordinate     = data[3].xy;
+    lightVertex.MatID                 = fbs(data[3].z);
+
+    return lightVertex;
 }
 
 float MISWeight(in float top, in float bottom) {
@@ -72,7 +93,7 @@ void main() {
 	// Generate our ray
 	Ray ray;
 
-    vec2 interpolation = vec2(PixelCoordinates + vec2(rand(), rand())) / (vec2(width, height));
+    vec2 interpolation = vec2(vec2(PixelCoordinates) + vec2(rand(), rand())) / (vec2(width, height));
     float phi = 2 * M_PI * rand(); 
     float r = sqrt(rand());
 
@@ -89,11 +110,8 @@ void main() {
     float bxdfPdf = 1.0;
     float neePdf = 1.0 / totalLightArea;
 
+    // TODO: clean up variable names
     vec3 viewDir = -ray.direction;
-
-    float metallic = 1.0;
-    float roughness = 0.1;
-
     vec3 lastPosition = ray.origin;
 
     // Set max bounce length to an inordinately high number so we (basically) get unbiased results while terminating the few odd rays that run for a lot of bounces without end
@@ -110,35 +128,44 @@ void main() {
 
         // Account for L_e
         if(fbs(materialInstance[vertex.MatID + 1].w) == 1) {
-            if(vertex.MatID != 0 && i == 0) {
-                contribution += throughput * materialInstance[vertex.MatID + 1].xyz;
+            vec3 emission;
+            if(vertex.MatID == 0) {
+                emission = texture(samplerCube(fbu(materialInstance[0].xy)), ray.direction).xyz;
+            } else {
+                emission = materialInstance[vertex.MatID + 1].xyz;
+                if(i != 0) {
+                    float dist = distance(lastPosition, vertex.Position);
+                    bxdfPdf *= nndot(vertex.Normal, viewDir) / (dist * dist);
+                    throughput *= MISWeight(bxdfPdf, neePdf);
+                }
             }
+            contribution += throughput * emission;
             break; // No indirect lighting except for zeroth bounce
+        }
+        if(dot(vertex.Normal, viewDir) < 0.0f){
+            break;
         }
 
 
         // Sample the texture
-        vec3 albedo = texture(sampler2D(floatBitsToUint(materialInstance[vertex.MatID].xy)), vertex.TextureCoordinate).xyz;
+        vec3 albedo = texture(sampler2D(fbu(materialInstance[vertex.MatID].xy)), vertex.TextureCoordinate).xyz;
+        float roughness = texture(sampler2D(fbu(materialInstance[vertex.MatID].zw)), vertex.TextureCoordinate).x;
+        roughness *= roughness;
 
-        vec3 lightPosition, lightNormal;
-        RandomPointOnLight(lightPosition, lightNormal);
-        float radius = distance(lightPosition, vertex.Position); 
-        vec3 lightDir = normalize(lightPosition - vertex.Position);
-        vec3 lightThroughput = albedo / M_PI * throughput * nndot(vertex.Normal, lightDir) * nndot(lightNormal, -lightDir) / (neePdf * radius * radius);
-
+        Vertex lightVertex = RandomPointOnLight();
+        float radius = distance(lightVertex.Position, vertex.Position); 
+        vec3 lightDir = normalize(lightVertex.Position - vertex.Position);
+        float bouncePdf = PdfBeckmann(roughness, vertex.Normal, viewDir, lightDir) * nndot(lightVertex.Normal, -lightDir) / (radius * radius); // Seach veach 1995, eq 9
+        vec3 lightThroughput = BRDF(albedo, kMetallic, roughness, vertex.Normal, viewDir, lightDir) * throughput * nndot(vertex.Normal, lightDir) * nndot(lightVertex.Normal, -lightDir) * MISWeight(neePdf, bouncePdf) / (neePdf * radius * radius);
         HitInfo lightHit;
-        lightHit.di.x = 1e20f;
+        lightHit.di.x = radius - 0.005f;
              
         Ray lightRay;
-        lightRay.origin = vertex.Position + 0.001 * vertex.Normal;
+        lightRay.origin = vertex.Position + 0.001f * lightDir;
         lightRay.direction = lightDir;
                                
-        if(ClosestHit(lightRay, lightHit)) {
-            Vertex lightVertex = GetInterpolatedVertex(lightRay, lightHit);
-            if(distance(lightVertex.Position, lightPosition) < 0.1f) {
-                // We hit the light
-                contribution += lightThroughput * materialInstance[lightVertex.MatID + 1].xyz;
-            }
+        if(!AnyHit(lightRay, lightHit)) {
+            contribution += lightThroughput * materialInstance[lightVertex.MatID + 1].xyz;
         }
 
         // Construct a new ray
@@ -146,10 +173,12 @@ void main() {
         vec3 tangent = normalize(cross(normcrs, vertex.Normal));
         vec3 bitangent = cross(tangent, vertex.Normal); 
         ray.origin = vertex.Position + 0.001 * vertex.Normal;
-        ray.direction = mat3(tangent, bitangent, vertex.Normal) * ImportanceSampleCosine(bxdfPdf);
+        vec3 h = mat3(tangent, bitangent, vertex.Normal) * BeckmannImportanceSample(roughness);
+        ray.direction = reflect(-viewDir, h); // mat3(tangent, bitangent, vertex.Normal) * ImportanceSampleCosine(bxdfPdf);//
+        bxdfPdf = PdfBeckmannH(roughness, vertex.Normal, viewDir, h);
 
         // Russian roulette
-        throughput *= albedo;// / M_PI *  max(dot(vertex.Normal, ray.direction), 0.0f) / bxdfPdf;
+        throughput *= BRDF(albedo, kMetallic, roughness, vertex.Normal, viewDir, ray.direction) * nndot(vertex.Normal, ray.direction) / bxdfPdf; // terms cancel out when using cosine pdf
         float continuation = min(max(throughput.x, max(throughput.y, throughput.z)), 1.0f);
         if(rand() > continuation) {
             break;
