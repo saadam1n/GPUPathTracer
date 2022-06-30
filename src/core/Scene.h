@@ -20,13 +20,9 @@ class Scene {
 public:
 	void LoadScene(const std::string& path, TextureCubemap* env_path);
 private:
-	std::vector<Vertex> vertexVec;
+	std::vector<CompactTriangle> triangleVec;
 	Buffer vertexBuf;
 	TextureBuffer vertexTex;
-
-	std::vector<TriangleIndexData> indexVec;
-	Buffer indexBuf;
-	TextureBuffer indexTex;
 
 	BoundingVolumeHierarchy bvh;
 

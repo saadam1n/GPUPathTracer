@@ -344,7 +344,7 @@ void RenotifyThreads(std::condition_variable& WorkSignal, bool& WorkerThreadsRun
 	//std::cout << "Done renotifying\n";
 }
 
-void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<Vertex>& Vertices, std::vector<TriangleIndexData>& Indices) {
+void BoundingVolumeHierarchy::Construct(std::vector<CompactTriangle>& triangles) {
 	//std::cout << "Start of BVH construction" << std::endl;
 
 	Timer ConstructionTimer;
@@ -354,26 +354,22 @@ void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<V
 	ConstructionTimer.Begin();
 
 	std::vector<TriangleCentroid> CentroidList;
-	CentroidList.reserve(Indices.size());
+	CentroidList.reserve(triangles.size());
 
 	std::vector<AABB> TriangleBoundingBoxes;
+	TriangleBoundingBoxes.reserve(triangles.size());
 
-	TriangleBoundingBoxes.reserve(Indices.size());
-
-	for (uint32_t TriIdx = 0; TriIdx < Indices.size(); TriIdx++) {
-		TriangleIndexData TriIdxInfo = Indices[TriIdx];
-
-		Triangle CurrentTriangle = AssembleTriangle(Vertices.data(), TriIdxInfo);
-
+	for (uint32_t i = 0; i < triangles.size(); i++) {
+		CompactTriangle currentTriangle = triangles[i];
 		// Calculate centriod of the triangle. We need this in order to split triangles in the BVH building process
 		TriangleCentroid Centroid;
 
-		Centroid.Index = TriIdx;
+		Centroid.Index = i;
 
 		Centroid.Position =
-			CurrentTriangle.Vertices[0].position +
-			CurrentTriangle.Vertices[1].position +
-			CurrentTriangle.Vertices[2].position ;
+			currentTriangle.position0 +
+			currentTriangle.position1 +
+			currentTriangle.position2;
 
 		Centroid.Position /= 3.0f;
 
@@ -381,9 +377,9 @@ void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<V
 
 		AABB Box;
 
-		Box.Extend(CurrentTriangle.Vertices[0].position);
-		Box.Extend(CurrentTriangle.Vertices[1].position);
-		Box.Extend(CurrentTriangle.Vertices[2].position);
+		Box.Extend(currentTriangle.position0);
+		Box.Extend(currentTriangle.position1);
+		Box.Extend(currentTriangle.position2);
 
 		TriangleBoundingBoxes.push_back(Box);
 	}
@@ -507,13 +503,13 @@ void BoundingVolumeHierarchy::ConstructAccelerationStructure(const std::vector<V
 	//ConstructionTimer.DebugTime();
 	ConstructionTimer.Begin();
 
-	// Directly substitute the index values in the leaf buffer
-	std::vector<TriangleIndexData> directTriangleIndices;
-	directTriangleIndices.reserve(LeafContentBuffer.size());
-	for (const auto indexBufferIdx : LeafContentBuffer) {
-		directTriangleIndices.push_back(Indices[indexBufferIdx]);
+	// Now directly subsitute the triangles according to the indices
+	std::vector<CompactTriangle> reorder;
+	reorder.reserve(triangles.size());
+	for (const int32_t next : LeafContentBuffer) {
+		reorder.push_back(triangles[next]);
 	}
-	Indices = directTriangleIndices;
+	triangles = reorder;
 
 	nodesVec = ProcessedNodes;
 
@@ -558,19 +554,13 @@ NodeType NodeSerialized::GetType(void) {
 	return Leaf.Size < 0 ? NodeType::LEAF : NodeType::NODE;
 }
 
-bool NodeSerialized::Intersect(const Ray& ray, HitInfo& hit, const std::vector<Vertex>& vertices, const std::vector<TriangleIndexData>& indices) {
+bool NodeSerialized::Intersect(const Ray& ray, HitInfo& hit, const std::vector<CompactTriangle>& triangles) {
 	int i = Leaf.Offset;
 	int j = i - Leaf.Size;
 
 	bool result = false;
 	for (int k = i; k < j; k++) {
-		auto elements = indices[k];
-
-		Triangle triangle;
-		triangle.Vertices[0] = vertices[elements[0]]; // cache was most recently at the previous elements[2]
-		triangle.Vertices[1] = vertices[elements[1]]; // cache was most recently at elements[0]
-		triangle.Vertices[2] = vertices[elements[2]]; // cache was most recently at elements[1]
-
+		auto triangle = triangles[i];
 		result |= triangle.Intersect(ray, hit);
 	}
 

@@ -50,3 +50,29 @@ bool Triangle::Intersect(const Ray& ray, HitInfo& closestHit) {
     else
         return false;
 }
+
+Triangle CompactTriangle::Decompress() {
+    Triangle unpacked;
+
+    unpacked.Vertices[0].position = position0;
+    unpacked.Vertices[1].position = position1;
+    unpacked.Vertices[2].position = position2;
+
+    unpacked.Vertices[0].texcoords = texcoord0;
+    unpacked.Vertices[1].texcoords = texcoord1;
+    unpacked.Vertices[2].texcoords = texcoord2;
+
+    unpacked.Vertices[0].normal = normal;
+    unpacked.Vertices[1].normal = normal;
+    unpacked.Vertices[2].normal = normal;
+
+    unpacked.Vertices[0].matId = material;
+    unpacked.Vertices[1].matId = material;
+    unpacked.Vertices[2].matId = material;
+
+    return unpacked;
+}
+
+bool CompactTriangle::Intersect(const Ray& ray, HitInfo& hit) {
+    return Decompress().Intersect(ray, hit);
+}

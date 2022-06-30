@@ -10,7 +10,7 @@ struct Triangle : public Hittable{
     bool Intersect(const Ray& ray, HitInfo& hit);
 };
 
-struct CompactTriangle {
+struct CompactTriangle : public Hittable {
     vec3 position0; // 3
     vec3 position1; // 6
     vec3 position2; // 9
@@ -23,4 +23,7 @@ struct CompactTriangle {
 
     uint32_t material; // 19
     uint32_t padding; // 20 - make 4 unit alignment
+
+    Triangle Decompress();
+    bool Intersect(const Ray& ray, HitInfo& hit);
 };

@@ -1,5 +1,7 @@
 #version 430
 
+vec3 debugColor;
+
 #extension GL_ARB_bindless_texture : enable
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
@@ -27,23 +29,17 @@ Vertex RandomPointOnLight() {
 
     // a is lower bound, b is upper bound
     int a = 0, b = textureSize(lightTex) - 1;
-    vec4 data;
+    vec2 data;
     while(b > a) {
         int m = (a + b) / 2;
-        data = texelFetch(lightTex, m); // Reading the who thing instead of just .x is not more expensive because of how GPUs work
+        data = texelFetch(lightTex, m).xy; // Reading the who thing instead of just .x is not more expensive because of how GPUs work
         if(data.x > selectedArea)
             b = m; // We only know that m is *greater* than our target, so we cannot dismiss it via m - 1
         else
             a = m + 1; // We certainly know m cannot be it, so we set the bound to m + 1
     }
 
-    ivec3 idx = fbs(data.yzw);
-
-    Vertex lightVertex = UnpackVertex(FetchVertex(uint(idx.x)));
-
-    vec3 position0 = lightVertex.Position;
-    vec3 position1 = texelFetch(vertexTex, 3 * idx.y).xyz;
-    vec3 position2 = texelFetch(vertexTex, 3 * idx.z).xyz;
+    CompactTriangle triangle = ReadCompactTriangle(fbs(data.y));
 
     vec2 r = rand2();
 
@@ -53,7 +49,12 @@ Vertex RandomPointOnLight() {
     float v = r.y * sr;
     float t = 1.0f - u - v;
 
-    lightVertex.Position = position0 * u + position1 * v + position2 * t;
+    Vertex lightVertex;
+
+    lightVertex.Position = triangle.position0 * u + triangle.position1 * v + triangle.position2 * t;
+    lightVertex.TextureCoordinate = triangle.texcoord0 * u + triangle.texcoord1 * v + triangle.texcoord2 * t;
+    lightVertex.Normal = triangle.normal;
+    lightVertex.MatID = triangle.material;
 
     return lightVertex;
 }

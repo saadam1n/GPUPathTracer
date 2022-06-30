@@ -383,12 +383,21 @@ bool ValidateIntersection(in vec2 distances) {
 // Go to the next avaible node on the stack if there is any
 //#define TRAVERSE_STACK()  if (StackIndex == -1) {break;} else {CurrentNode = Stack[StackIndex--];}
 
+bool IterateAllTriangles(in Ray ray, inout HitInfo intersection) {
+	bool result = false;
+	for (int i = 0; i < textureSize(vertexTex) / 5; i++) {
+		bool hit = IntersectTriangle(ReadCompactTriangle(i), ray, intersection);
+		result = result || hit;
+	}
+	return result;
+}
+
 void IntersectLeaf(in BVHNode leaf, in Ray ray, inout HitInfo intersection, inout bool result) {
 	int i = fbs(leaf.data[0].w);
 	int j = i - fbs(leaf.data[1].w);
 
 	for(int k = i; k < j; k++){
-		bool hit = IntersectTriangle(FetchTriangle(FetchIndexData(k)), ray, intersection);
+		bool hit = IntersectTriangle(ReadCompactTriangle(k), ray, intersection);
 		result = result || hit;
 	}
 }
@@ -398,7 +407,7 @@ bool IntersectLeafAny(in BVHNode leaf, in Ray ray, inout HitInfo intersection) {
 	int j = i - fbs(leaf.data[1].w);
 
 	for (int k = i; k < j; k++) {
-		if (IntersectTriangle(FetchTriangle(FetchIndexData(k)), ray, intersection)) {
+		if (IntersectTriangle(ReadCompactTriangle(k), ray, intersection)) {
 			return true;
 		}
 	}
@@ -409,6 +418,7 @@ bool IntersectLeafAny(in BVHNode leaf, in Ray ray, inout HitInfo intersection) {
 #define BVH_STACK_SIZE 27
 
 bool ClosestHit(in Ray ray, inout HitInfo intersection) {
+	debugColor = vec3(0.0f);
 	Ray iray;
 
 	iray.direction = 1.0f / ray.direction;
@@ -427,6 +437,7 @@ bool ClosestHit(in Ray ray, inout HitInfo intersection) {
 	int index = -1;
 
 	while (true) {
+		debugColor++;
 		BVHNode child0 = GetNode(currentNode);
 		BVHNode child1 = GetNode(currentNode + 1);
 

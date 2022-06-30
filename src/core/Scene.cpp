@@ -212,59 +212,54 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     // As soon as we are done loading we should ignore it
     importer.FreeScene();
 
-#define FLAT_NORMALS
-#ifdef FLAT_NORMALS
     // Use our vertex index stuff to build a triangle 
-    std::vector<Vertex> reorderedVertices;
+    std::vector<CompactTriangle> compactTriangles;
     for (auto& triplet : Indices) {
-        uint32_t i = (uint32_t)reorderedVertices.size();
+        uint32_t i = (uint32_t)compactTriangles.size();
 
-        Vertex triangle[3];
+        CompactTriangle triangle;
 
-        triangle[0] = Vertices[triplet[0]];
-        triangle[1] = Vertices[triplet[1]];
-        triangle[2] = Vertices[triplet[2]];
+        triangle.position0 = Vertices[triplet[0]].position;
+        triangle.position1 = Vertices[triplet[1]].position;
+        triangle.position2 = Vertices[triplet[2]].position;
 
-        vec3 v01 = triangle[1].position - triangle[0].position;
-        vec3 v02 = triangle[2].position - triangle[0].position;
+        triangle.texcoord0 = Vertices[triplet[0]].texcoords;
+        triangle.texcoord1 = Vertices[triplet[1]].texcoords;
+        triangle.texcoord2 = Vertices[triplet[2]].texcoords;
+
+        vec3 v01 = triangle.position1 - triangle.position0;
+        vec3 v02 = triangle.position2 - triangle.position0;
         vec3 nrm = normalize(cross(v01, v02));
 
-        triangle[0].normal = nrm;
-        triangle[1].normal = nrm;
-        triangle[2].normal = nrm;
+        triangle.normal = Vertices[triplet[0]].normal;
+        triangle.material = Vertices[triplet[0]].matId;
 
-        reorderedVertices.push_back(triangle[0]);
-        reorderedVertices.push_back(triangle[1]);
-        reorderedVertices.push_back(triangle[2]);
-
-        triplet[0] = i;
-        triplet[1] = i + 1;
-        triplet[2] = i + 2;
+        compactTriangles.push_back(triangle);
     }
-    Vertices = reorderedVertices;
-#endif
+
+    bvh.Construct(compactTriangles);
 
     struct LightTriangleInfo {
         float cumulativeArea;
-        uvec3 indices;
+        uint32_t index;
     };
 
     std::vector<LightTriangleInfo> lightTriangles;
 
-    for (auto& triplet : Indices) {
-        int currMatID = Vertices[triplet[0]].matId;
-        if (materialInstances[currMatID / 2].isEmissive == 1) {
+    for (uint32_t i = 0; i < compactTriangles.size(); i++) {
+        const auto& triangle = compactTriangles[i];
+        if (materialInstances[triangle.material / 2].isEmissive == 1) {
             LightTriangleInfo info;
 
-            float a = distance(Vertices[triplet[0]].position, Vertices[triplet[2]].position);
-            float b = distance(Vertices[triplet[0]].position, Vertices[triplet[1]].position);
-            float c = distance(Vertices[triplet[2]].position, Vertices[triplet[1]].position);
+            float a = distance(triangle.position0, triangle.position2);
+            float b = distance(triangle.position0, triangle.position1);
+            float c = distance(triangle.position2, triangle.position1);
 
             float s = (a + b + c) / 2;
             info.cumulativeArea = sqrtf(s * (s - a) * (s - b) * (s - c));
-            info.indices = uvec3(triplet.Indices[0], triplet.Indices[1], triplet.Indices[2]);
+            info.index = i;
 
-            std::cout << "IDX: " << Vertices[triplet[0]].position.x << '\n';
+            //std::cout << "IDX: " << Vertices[triplet[0]].position.x << '\n';
 
             lightTriangles.push_back(info);
         }
@@ -279,7 +274,6 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
         cv.cumulativeArea = totalLightArea;
     }
 
-    bvh.ConstructAccelerationStructure(Vertices, Indices);
 
     materialsBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
     materialsBuf.UploadData(materialInstances, GL_STATIC_DRAW);
@@ -287,25 +281,18 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     materialVec = materialInstances;
 
     vertexBuf.CreateBinding(BUFFER_TARGET_ARRAY);
-    vertexBuf.UploadData(Vertices, GL_STATIC_DRAW);
+    vertexBuf.UploadData(compactTriangles, GL_STATIC_DRAW);
 
     vertexTex.CreateBinding();
     vertexTex.SelectBuffer(&vertexBuf, GL_RGBA32F);
-
-    indexBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
-    indexBuf.UploadData(Indices, GL_STATIC_DRAW);
-
-    indexTex.CreateBinding();
-    indexTex.SelectBuffer(&indexBuf, GL_RGBA32UI);
 
     lightBuf.CreateBinding(BUFFER_TARGET_ARRAY);
     lightBuf.UploadData(lightTriangles, GL_STATIC_DRAW);
 
     lightTex.CreateBinding();
-    lightTex.SelectBuffer(&lightBuf, GL_RGBA32F);
+    lightTex.SelectBuffer(&lightBuf, GL_RG32F);
 
-    vertexVec = Vertices;
-    indexVec = Indices;
+    triangleVec = compactTriangles;
 }
 
 /*

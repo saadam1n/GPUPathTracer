@@ -39,7 +39,7 @@ struct NodeSerialized : public Hittable {
 		LeafPointer Leaf;
 	};
 
-	bool Intersect(const Ray& ray, HitInfo& hit, const std::vector<Vertex>& vertices, const std::vector<TriangleIndexData>& indices);
+	bool Intersect(const Ray& ray, HitInfo& hit, const std::vector<CompactTriangle>& triangles);
 };
 
 // BVH triangle
@@ -84,7 +84,7 @@ struct Split {
 
 class BoundingVolumeHierarchy {
 public:
-	void ConstructAccelerationStructure(const std::vector<Vertex>& Vertices, std::vector<TriangleIndexData>& Indices);
+	void Construct(std::vector<CompactTriangle>& triangles);
 private:
 	friend class Shader;
 	friend class Renderer;
