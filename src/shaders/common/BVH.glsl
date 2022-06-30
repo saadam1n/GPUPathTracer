@@ -386,7 +386,7 @@ bool ValidateIntersection(in vec2 distances) {
 bool IterateAllTriangles(in Ray ray, inout HitInfo intersection) {
 	bool result = false;
 	for (int i = 0; i < textureSize(vertexTex) / 5; i++) {
-		bool hit = IntersectTriangle(ReadCompactTriangle(i), ray, intersection);
+		bool hit = IntersectTriangle(ReadPackedCompactTriangle(i), ray, intersection);
 		result = result || hit;
 	}
 	return result;
@@ -397,7 +397,7 @@ void IntersectLeaf(in BVHNode leaf, in Ray ray, inout HitInfo intersection, inou
 	int j = i - fbs(leaf.data[1].w);
 
 	for(int k = i; k < j; k++){
-		bool hit = IntersectTriangle(ReadCompactTriangle(k), ray, intersection);
+		bool hit = IntersectTriangle(ReadPackedCompactTriangle(k), ray, intersection);
 		result = result || hit;
 	}
 }
@@ -407,7 +407,7 @@ bool IntersectLeafAny(in BVHNode leaf, in Ray ray, inout HitInfo intersection) {
 	int j = i - fbs(leaf.data[1].w);
 
 	for (int k = i; k < j; k++) {
-		if (IntersectTriangle(ReadCompactTriangle(k), ray, intersection)) {
+		if (IntersectTriangle(ReadPackedCompactTriangle(k), ray, intersection)) {
 			return true;
 		}
 	}

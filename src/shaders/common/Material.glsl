@@ -239,7 +239,6 @@ vec3 BeckmannCookTorrance(in vec3 albedo, in float metallic, in float roughness,
     return specular + diffuse;
 }
 
-
 vec3 PhongTest(in vec3 albedo, in float metallic, in float roughness, in vec3 n, in vec3 v, in vec3 l) {
     vec3 idealReflect = reflect(-l, n);
     float distribution = (256.0f + 2.0) / (2*M_PI) * pow(nndot(idealReflect, v), 256.0f);

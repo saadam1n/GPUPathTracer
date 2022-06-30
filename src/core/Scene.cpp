@@ -229,9 +229,8 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
 
         vec3 v01 = triangle.position1 - triangle.position0;
         vec3 v02 = triangle.position2 - triangle.position0;
-        vec3 nrm = normalize(cross(v01, v02));
 
-        triangle.normal = Vertices[triplet[0]].normal;
+        triangle.normal = normalize(cross(v01, v02));
         triangle.material = Vertices[triplet[0]].matId;
 
         compactTriangles.push_back(triangle);

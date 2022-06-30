@@ -1,6 +1,10 @@
 #ifndef GEOMETRY_GLSL
 #define GEOMETRY_GLSL
 
+#include "Util.glsl"
+
+uniform samplerBuffer vertexTex;
+
 struct Ray {
     vec3 origin;
     vec3 direction;
@@ -138,6 +142,45 @@ struct CompactTriangle {
     // uint padding; // 20 - make 4 unit alignment
 };
 
+struct PackedCompactTriangle {
+    vec4 data[5];
+};
+
+PackedCompactTriangle ReadPackedCompactTriangle(int idx) {
+    idx *= 5;
+
+    PackedCompactTriangle pct;
+
+    pct.data[0] = texelFetch(vertexTex, idx);
+    pct.data[1] = texelFetch(vertexTex, idx + 1);
+    pct.data[2] = texelFetch(vertexTex, idx + 2);
+    pct.data[3] = texelFetch(vertexTex, idx + 3);
+    pct.data[4] = texelFetch(vertexTex, idx + 4);
+
+    return pct;
+}
+
+CompactTriangle UnpackCompactTriangle(in PackedCompactTriangle pct) {
+    CompactTriangle deserealized;
+
+    deserealized.position0 = vec3(pct.data[0].xyz);
+    deserealized.position1 = vec3(pct.data[0].w, pct.data[1].xy);
+    deserealized.position2 = vec3(pct.data[1].zw, pct.data[2].x);
+
+    deserealized.texcoord0 = pct.data[2].yz;
+    deserealized.texcoord1 = vec2(pct.data[2].w, pct.data[3].x);
+    deserealized.texcoord2 = pct.data[3].yz;
+
+    deserealized.normal = vec3(pct.data[3].w, pct.data[4].xy);
+    deserealized.material = fbu(pct.data[4].z);
+
+    return deserealized;
+}
+
+CompactTriangle ReadCompactTriangle(int idx) {
+    return UnpackCompactTriangle(ReadPackedCompactTriangle(idx));
+}
+
 struct VertexInterpolationInfo {
     float U, V;
 };
@@ -149,22 +192,26 @@ struct TriangleHitInfo {
 
 struct HitInfo {
     vec4 di;
-    CompactTriangle intersected;
+    PackedCompactTriangle intersected;
 };
 
-bool IntersectTriangle(in CompactTriangle tri, in Ray ray, inout HitInfo closestHit) {
+bool IntersectTriangle(in PackedCompactTriangle pct, in Ray ray, inout HitInfo closestHit) {
     // this is mostly a copy paste from scratchapixel's code that has been refitted to work with GLSL
     HitInfo attemptHit;
 
-    vec3 v01 = tri.position1 - tri.position0;
-    vec3 v02 = tri.position2 - tri.position0;
+    vec3 position0 = vec3(pct.data[0].xyz);
+    vec3 position1 = vec3(pct.data[0].w, pct.data[1].xy);
+    vec3 position2 = vec3(pct.data[1].zw, pct.data[2].x);
+
+    vec3 v01 = position1 - position0;
+    vec3 v02 = position2 - position0;
 
     vec3 p = cross(ray.direction, v02);
 
     float det = dot(v01, p);
     float idet = 1.0f / det;
 
-    vec3 t = ray.origin - tri.position0;
+    vec3 t = ray.origin - position0;
     attemptHit.di.y = dot(t, p) * idet;
 
     if (attemptHit.di.y < 0.0f || attemptHit.di.y > 1.0f) {
@@ -182,20 +229,19 @@ bool IntersectTriangle(in CompactTriangle tri, in Ray ray, inout HitInfo closest
 
     if (attemptHit.di.x < closestHit.di.x && attemptHit.di.x > 0.0f) {
         closestHit.di = attemptHit.di;
-        closestHit.intersected = tri;
+        closestHit.intersected = pct;
         return true;
     }
     else
         return false;
 }
-#include "Util.glsl"
 
 Vertex GetInterpolatedVertex(in Ray ray, inout HitInfo intersection) {
     Vertex interpolated;
 
-    // I should probably precompute 1 - U - V
     intersection.di.w = 1.0 - intersection.di.y - intersection.di.z;
     
+    CompactTriangle tri = UnpackCompactTriangle(intersection.intersected);
 
     interpolated.Position = ray.origin + ray.direction * intersection.di.x;
 
@@ -208,24 +254,21 @@ Vertex GetInterpolatedVertex(in Ray ray, inout HitInfo intersection) {
         */
 
     // It is better to use this since in path tracing, the normal MUST be perpendicular to the triangle face to conserve energy
-    interpolated.Normal = intersection.intersected.normal;;
+    interpolated.Normal = tri.normal;;
 
     
     interpolated.TextureCoordinate =
 
-        intersection.intersected.texcoord0 * intersection.di.y + // U
-        intersection.intersected.texcoord1 * intersection.di.z + // V
-        intersection.intersected.texcoord2 * intersection.di.w;  // T
+        tri.texcoord0 * intersection.di.y + // U
+        tri.texcoord1 * intersection.di.z + // V
+        tri.texcoord2 * intersection.di.w;  // T
 
     // T  U  V
 
-    interpolated.MatID = intersection.intersected.material;
+    interpolated.MatID = tri.material;
 
     return interpolated;
 }
-
-uniform samplerBuffer vertexTex;
-uniform isamplerBuffer indexTex;
 
 #define FetchIndexData(idx) texelFetch(indexTex, idx).xyz
 
@@ -248,33 +291,6 @@ Triangle FetchTriangle(ivec3 indices) {
     CurrentTriangle.Vertices[2] = FetchVertex(indices[2]);
 
     return CurrentTriangle;
-}
-
-CompactTriangle ReadCompactTriangle(int idx) {
-    idx *= 5;
-    vec4 data[5];
-
-    data[0] = texelFetch(vertexTex, idx);
-    data[1] = texelFetch(vertexTex, idx + 1);
-    data[2] = texelFetch(vertexTex, idx + 2);
-    data[3] = texelFetch(vertexTex, idx + 3);
-    data[4] = texelFetch(vertexTex, idx + 4);
-
-    CompactTriangle deserealized;
-
-    deserealized.position0 = vec3(data[0].xyz);
-    deserealized.position1 = vec3(data[0].w, data[1].xy);
-    deserealized.position2 = vec3(data[1].zw, data[2].x);
-
-    deserealized.texcoord0 = data[2].yz;
-    deserealized.texcoord1 = vec2(data[2].w, data[3].x);
-    deserealized.texcoord2 = data[3].yz;
-
-    deserealized.normal = vec3(data[3].w, data[4].xy);
-    deserealized.material = fbu(data[4].z);
-
-    return deserealized;
-
 }
 
 #endif
