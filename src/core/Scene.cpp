@@ -109,7 +109,6 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     };
 
     std::map<std::string, int> TexCache;
-    std::vector<CompactVertex> lightTriangles;
     uint32_t nextMatId = 1;
     
     for (uint32_t i = 0; i < Scene->mNumMeshes; i++) {
@@ -245,33 +244,37 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     Vertices = reorderedVertices;
 #endif
 
+    struct LightTriangleInfo {
+        float cumulativeArea;
+        uvec3 indices;
+    };
+
+    std::vector<LightTriangleInfo> lightTriangles;
+
     for (auto& triplet : Indices) {
         int currMatID = Vertices[triplet[0]].matId;
         if (materialInstances[currMatID / 2].isEmissive == 1) {
-            CompactVertex lightTriangle;
-            lightTriangle.position0 = Vertices[triplet[0]].position;
-            lightTriangle.position1 = Vertices[triplet[1]].position;
-            lightTriangle.position2 = Vertices[triplet[2]].position;
+            LightTriangleInfo info;
 
-            lightTriangle.surfaceNormal = Vertices[triplet[0]].normal;
-            lightTriangle.matID = currMatID;
-
-            float a = distance(lightTriangle.position0, lightTriangle.position2);
-            float b = distance(lightTriangle.position0, lightTriangle.position1);
-            float c = distance(lightTriangle.position2, lightTriangle.position1);
+            float a = distance(Vertices[triplet[0]].position, Vertices[triplet[2]].position);
+            float b = distance(Vertices[triplet[0]].position, Vertices[triplet[1]].position);
+            float c = distance(Vertices[triplet[2]].position, Vertices[triplet[1]].position);
 
             float s = (a + b + c) / 2;
-            lightTriangle.cumulativeArea = sqrtf(s * (s - a) * (s - b) * (s - c));
+            info.cumulativeArea = sqrtf(s * (s - a) * (s - b) * (s - c));
+            info.indices = uvec3(triplet.Indices[0], triplet.Indices[1], triplet.Indices[2]);
 
-            lightTriangles.push_back(lightTriangle);
+            std::cout << "IDX: " << Vertices[triplet[0]].position.x << '\n';
+
+            lightTriangles.push_back(info);
         }
     }
 
     // Make syre the biggest jumps in area are first so our binary search more often converges to closer locations
-    std::sort(lightTriangles.begin(), lightTriangles.end(), [](const CompactVertex& l, const CompactVertex& r) {
+    std::sort(lightTriangles.begin(), lightTriangles.end(), [](const LightTriangleInfo& l, const LightTriangleInfo& r) {
         return l.cumulativeArea < r.cumulativeArea;
     });
-    for (CompactVertex& cv : lightTriangles) {
+    for (LightTriangleInfo& cv : lightTriangles) {
         totalLightArea += cv.cumulativeArea;
         cv.cumulativeArea = totalLightArea;
     }

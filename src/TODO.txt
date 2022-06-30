@@ -1,6 +1,6 @@
 Revised TODO:
 - CLEAN UP CODE, AND OPTIMIZE STUFF
-- Add support for metallic textures. I need to deciede on a file format to keep things tidy in one place
+- Add support for metallic textures. I need to deciede on a file format to keep things tidy in one place (suggeseted by the kind folks on the gp server: gltf)
 - Implement GPU reference renderer
 - LD sampling
 - Faster BVH so I can start tracing more complex scenes

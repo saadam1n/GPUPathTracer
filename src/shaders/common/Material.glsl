@@ -11,7 +11,6 @@ layout(std430) readonly buffer samplers {
     vec4 materialInstance[];
 };
 
-
 //#define LOGL_PBR
 #ifdef LOGL_PBR
 
@@ -171,12 +170,12 @@ float SamplePdfCosine(in vec3 n, in vec3 l) {
 }
 
 vec3 ImportanceSampleCosine(out float pdf) {
-    float r0 = rand(), r1 = rand();
-    float r = sqrt(r0);
-    float phi = 2 * M_PI * r1;
-    float z = sqrt(1.0 - r0);
+    vec2 r = rand2();
+    float radius = sqrt(r.x);
+    float phi = 2 * M_PI * r.y;
+    float z = sqrt(1.0 - r.x);
     pdf = max(z / M_PI, 1e-10f);
-    return vec3(r * vec2(sin(phi), cos(phi)), z);
+    return vec3(radius * vec2(sin(phi), cos(phi)), z);
 }
 
 // http://simonstechblog.blogspot.com/2011/12/microfacet-brdf.html
@@ -192,13 +191,14 @@ float DistributionBeckmann(in vec3 n, in vec3 h, in float m) {
 // See "Microfacet Models for Refraction through Rough Surfaces", eqs 28 and 29
 // Interestingly, "A Microfacet Based Coupled Specular-Matte BRDF Model with Importance Sampling" complains importance sampling the beckmann equation isn't possible, so I might be reading the EGSR 2007 paper incorrectly
 vec3 BeckmannImportanceSample(in float m) {
-    float g = -m * m * log(1 - rand());
+    vec2 r = rand2();
+    float g = -m * m * log(1 - r.x);
     float z2 = 1.0f / (1.0f + g);
     float z = sqrt(z2);
     //pdf = DistributionBeckmann(vec3(0.0f, 0.0f, 1.0f), vec3(0.0f, 0.0f, z), m);
-    float phi = 2 * M_PI * rand();
-    float r = sqrt(1.0 - z2);
-    return vec3(r * vec2(sin(phi), cos(phi)), z);
+    float phi = 2 * M_PI * r.y;
+    float radius = sqrt(1.0 - z2);
+    return vec3(radius * vec2(sin(phi), cos(phi)), z);
 }
 
 // pdf of selecting l given n,v and m is just the distribution since itself is a pdf
@@ -227,6 +227,7 @@ float GSmith(vec3 n, vec3 v, vec3 l, float m) {
 // I'm using a simple BRDF instead of a proper one to make debugging easier 
 // SURFERS FROM FLOATING POINT ACCURACY ISSUES AT HIGH SMOOTHNESS
 vec3 BeckmannCookTorrance(in vec3 albedo, in float metallic, in float roughness, in vec3 n, in vec3 v, in vec3 l) {
+    return albedo / M_PI;
     if (dot(n, v) < 0.0f || dot(n, l) < 0.0f) {
         return vec3(0.0f);
     }

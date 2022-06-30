@@ -15,11 +15,10 @@
 
 using namespace glm;
 constexpr float kExposure = 1.68f;
-constexpr float kMetallic = 1.0f;
-constexpr float kRoughness = 0.01f; // At very low roughness values, there tends to be numerical instability between the beckmann pdf and the distribution term of the brdf, which can be removed by canceling them out but I'm not sure how MIS will like that just yet
+constexpr float kMetallic = 0.0f;
 
 // REFERENCE CPU RENDERER PARAMS
-constexpr uint32_t KNumRefSamples = 8192;// 65536 * 2; // 32k sampling
+constexpr uint32_t KNumRefSamples = 1024;// 8192;// 65536 * 2; // 32k sampling
 constexpr uint32_t kNumWorkers = 7;
 
 /*
@@ -395,7 +394,6 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     iterative.LoadInteger("lightTex", 4);
     iterative.LoadFloat("totalLightArea", scene.totalLightArea);
     iterative.LoadFloat("kMetallic", kMetallic);
-    iterative.LoadFloat("kRoughness", kRoughness);
     iterative.LoadShaderStorageBuffer("samplers", scene.materialsBuf);
     iterative.LoadShaderStorageBuffer("randomState", randomState);
 
@@ -418,7 +416,6 @@ void Renderer::CleanUp(void) {
     quadBuf.Free();
 }
 
-constexpr int kMaxPathLength = 16;
 #define MEMORY_BARRIER_RT GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT | GL_ATOMIC_COUNTER_BARRIER_BIT
 
 void Renderer::RenderFrame(const Camera& camera)  {
@@ -561,6 +558,7 @@ float GSmith(vec3 n, vec3 v, vec3 l, float m) {
 
 // I'm using a simple BRDF instead of a proper one to make debugging easier 
 vec3 BeckmannCookTorrance(vec3 albedo, float roughness, float metallic, vec3 n, vec3 v, vec3 l) {
+    return albedo / M_PI;
     if (dot(n, v) < 0.0f || dot(n, l) < 0.0f) {
         return vec3(0.0f);
     }

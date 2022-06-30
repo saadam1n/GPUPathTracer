@@ -19,59 +19,41 @@ uniform samplerBuffer lightTex;
 uniform float totalLightArea;
 
 uniform float kMetallic;
-uniform float kRoughness;
 
 uniform layout(rgba32f) image2D accum;
 
-Vertex RandomPointOnLight() {
+Vertex RandomPointOnLight() { 
     float selectedArea = rand() * totalLightArea;
 
-    #define BINARY_SEARCH
-    #ifdef BINARY_SEARCH
     // a is lower bound, b is upper bound
-    int a = 0, b = textureSize(lightTex) / 4 - 1;
+    int a = 0, b = textureSize(lightTex) - 1;
+    vec4 data;
     while(b > a) {
         int m = (a + b) / 2;
-        float currArea = texelFetch(lightTex, 4 * m + 3).w;
-        if(currArea > selectedArea)
+        data = texelFetch(lightTex, m); // Reading the who thing instead of just .x is not more expensive because of how GPUs work
+        if(data.x > selectedArea)
             b = m; // We only know that m is *greater* than our target, so we cannot dismiss it via m - 1
         else
             a = m + 1; // We certainly know m cannot be it, so we set the bound to m + 1
     }
-    int idx = 4 * a;
-    #else
-    int idx;
-    for(idx = 0; idx <textureSize(lightTex); idx += 4) {
-        float currArea = texelFetch(lightTex, idx + 3).w;
-        if(currArea > selectedArea) break;
-    }
-    #endif
 
-    vec4 data[4];
+    ivec3 idx = fbs(data.yzw);
 
-    data[0] = texelFetch(lightTex, idx    );
-    data[1] = texelFetch(lightTex, idx + 1);
-    data[2] = texelFetch(lightTex, idx + 2);
-    data[3] = texelFetch(lightTex, idx + 3);
+    Vertex lightVertex = UnpackVertex(FetchVertex(uint(idx.x)));
 
-    vec3 position0, position1, position2;
+    vec3 position0 = lightVertex.Position;
+    vec3 position1 = texelFetch(vertexTex, 3 * idx.y).xyz;
+    vec3 position2 = texelFetch(vertexTex, 3 * idx.z).xyz;
 
-    position0 =      data[0].xyz;
-    position1 = vec3(data[0].w, data[1].xy);
-    position2 = vec3(data[1].zw, data[2].x);
+    vec2 r = rand2();
 
     // https://pharr.org/matt/blog/2019/02/27/triangle-sampling-1
-    float sr = sqrt(rand());
+    float sr = sqrt(r.x);
     float u = 1 - sr;
-    float v = rand() * sr;
+    float v = r.y * sr;
     float t = 1.0f - u - v;
 
-    Vertex lightVertex;
-
-    lightVertex.Position              = position0 * u + position1 * v + position2 * t;
-    lightVertex.Normal                = data[2].yzw;
-    lightVertex.TextureCoordinate     = data[3].xy;
-    lightVertex.MatID                 = fbs(data[3].z);
+    lightVertex.Position = position0 * u + position1 * v + position2 * t;
 
     return lightVertex;
 }
@@ -151,23 +133,27 @@ void main() {
         // Sample the texture
         vec3 albedo = texture(sampler2D(fbu(materialInstance[vertex.MatID].xy)), vertex.TextureCoordinate).xyz;
         float roughness = texture(sampler2D(fbu(materialInstance[vertex.MatID].zw)), vertex.TextureCoordinate).x;
-        roughness *= roughness;
+        roughness = 0.01f;
+        //roughness *= roughness;
 
-        Vertex lightVertex = RandomPointOnLight();
-        float radius = distance(lightVertex.Position, vertex.Position); 
-        vec3 lightDir = normalize(lightVertex.Position - vertex.Position);
-        float bouncePdf = 0.5f * (PdfBeckmann(roughness, vertex.Normal, viewDir, lightDir) + SamplePdfCosine(vertex.Normal, lightDir)) * nndot(lightVertex.Normal, -lightDir) / (radius * radius); // Seach veach 1995, eq 9
-        vec3 lightThroughput = BRDF(albedo, kMetallic, roughness, vertex.Normal, viewDir, lightDir) * throughput * nndot(vertex.Normal, lightDir) * nndot(lightVertex.Normal, -lightDir) * MISWeight(neePdf, bouncePdf) / (neePdf * radius * radius);
-        HitInfo lightHit;
-        lightHit.di.x = radius - 0.005f;
+        if(totalLightArea != 0.0f) {
+            Vertex lightVertex = RandomPointOnLight();
+            float radius = distance(lightVertex.Position, vertex.Position); 
+            vec3 lightDir = normalize(lightVertex.Position - vertex.Position);
+            float bouncePdf = 0.5f * (PdfBeckmann(roughness, vertex.Normal, viewDir, lightDir) + SamplePdfCosine(vertex.Normal, lightDir)) * nndot(lightVertex.Normal, -lightDir) / (radius * radius); // Seach veach 1995, eq 9
+            vec3 lightThroughput = BRDF(albedo, kMetallic, roughness, vertex.Normal, viewDir, lightDir) * throughput * nndot(vertex.Normal, lightDir) * nndot(lightVertex.Normal, -lightDir) * MISWeight(neePdf, bouncePdf) / (neePdf * radius * radius);
+            HitInfo lightHit;
+            lightHit.di.x = radius - 0.005f;
              
-        Ray lightRay;
-        lightRay.origin = vertex.Position + 0.001f * lightDir;
-        lightRay.direction = lightDir;
+            Ray lightRay;
+            lightRay.origin = vertex.Position + 0.001f * lightDir;
+            lightRay.direction = lightDir;
                                
-        if(!AnyHit(lightRay, lightHit)) {
-            contribution += lightThroughput * materialInstance[lightVertex.MatID + 1].xyz;
+            if(!AnyHit(lightRay, lightHit)) {
+                contribution += lightThroughput * materialInstance[lightVertex.MatID + 1].xyz;
+            }
         }
+
 
         // Construct a new ray
         vec3 normcrs = (abs(vertex.Normal.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0));

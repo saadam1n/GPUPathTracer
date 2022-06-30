@@ -57,15 +57,28 @@ float HybridTaus() {
         LCGStep(state.w, 1664525, 1013904223U)
     );
 }
+#define rand() HybridTaus()
 
-const int numStrata = 64;
-float FakeLD() {
-    float r0 = HybridTaus(), r1 = HybridTaus();
-    float base = floor(r0 * numStrata) / numStrata;
-    return base + r1 / numStrata;
+vec2 Random2D() {
+    return vec2(rand(), rand());
 }
 
-#define rand() HybridTaus()
+const int kNumStrataPerSide = 4;
+const int kNumStrata = kNumStrataPerSide * kNumStrataPerSide;
+vec2 Random2DStratified() {
+    // Choose a random strata
+    int stratum = int(rand() * kNumStrata);
+    // Transform our stratum index to an (x, y) offset
+    // Calculations taken from here http://www.cs.uu.nl/docs/vakken/magr/2016-2017/slides/lecture%2008%20-%20variance%20reduction.pdf
+    vec2 offset = vec2(
+        stratum % kNumStrataPerSide,
+        stratum / kNumStrataPerSide
+    );
+    vec2 r = Random2D() +offset;
+    return r / kNumStrataPerSide;
+}
+
+#define rand2() Random2D()
 
 void initRNG(uint ridx) {
     stateIdx = ridx;
