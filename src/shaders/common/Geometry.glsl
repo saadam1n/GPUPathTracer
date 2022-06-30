@@ -244,26 +244,16 @@ Vertex GetInterpolatedVertex(in Ray ray, inout HitInfo intersection) {
     CompactTriangle tri = UnpackCompactTriangle(intersection.intersected);
 
     interpolated.Position = ray.origin + ray.direction * intersection.di.x;
-
-    /*
-    interpolated.Normal = normalize(
-
-        vec3(intersection.intersected.Vertices[1].PN.w, intersection.intersected.Vertices[1].NT.xy) * intersection.di.y +
-        vec3(intersection.intersected.Vertices[2].PN.w, intersection.intersected.Vertices[2].NT.xy) * intersection.di.z +
-        vec3(intersection.intersected.Vertices[0].PN.w, intersection.intersected.Vertices[0].NT.xy) * intersection.di.w);
-        */
-
-    // It is better to use this since in path tracing, the normal MUST be perpendicular to the triangle face to conserve energy
-    interpolated.Normal = tri.normal;;
+    interpolated.Normal = tri.normal; // It is better to use this since in path tracing, the normal MUST be perpendicular to the triangle face to conserve energy
 
     
     interpolated.TextureCoordinate =
 
-        tri.texcoord0 * intersection.di.y + // U
-        tri.texcoord1 * intersection.di.z + // V
-        tri.texcoord2 * intersection.di.w;  // T
+        tri.texcoord1 * intersection.di.y + // U
+        tri.texcoord2 * intersection.di.z + // V
+        tri.texcoord0 * intersection.di.w;  // T
 
-    // T  U  V
+    // T  U  V  -  Y Z W
 
     interpolated.MatID = tri.material;
 
