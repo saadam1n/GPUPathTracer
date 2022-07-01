@@ -1,5 +1,7 @@
 #pragma once
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <SOIL2.h>
 #include "OpenGL.h"
 #include <string>
 #include <glm/glm.hpp>
@@ -25,7 +27,7 @@ public:
 	void CreateBinding();
 	void FreeBinding();
 
-	void LoadTexture(const char* Path);
+	void LoadTexture(const char* Path, int load = SOIL_LOAD_RGBA);
 	void LoadData(GLenum DestinationFormat, GLenum SourceFormat, GLenum SourceType, uint32_t X, uint32_t Y, void* Data);
 	// Data formatting note: currently only RGB unsigned byte and RGBA float are supported for the source, and values are always stored as RGB
 	void SaveData(GLenum SourceType, uint32_t X, uint32_t Y, void* Data);

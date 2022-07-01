@@ -11,7 +11,7 @@ using namespace glm;
 // Mapped to by material ID
 struct MaterialInstance {
 	GLuint64 albedoHandle;
-	GLuint64 roughnessHandle;
+	GLuint64 propertiesHandle; // Best name I could come up with than "metallicRoughnessHandle"
 	vec3 emission;
 	int isEmissive;
 };

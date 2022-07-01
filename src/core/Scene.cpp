@@ -152,7 +152,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
             Texture2D* spectex = new Texture2D;
 
             InitializeTexture(Folder, currtex, mat, aiTextureType_DIFFUSE, albedo);
-            InitializeTexture(Folder, spectex, mat, aiTextureType_SPECULAR, specular);
+            InitializeTexture(Folder, spectex, mat, aiTextureType_UNKNOWN, specular); // pbr metallic roughness
 
             textures.push_back(currtex);
             textures.push_back(spectex);
@@ -163,8 +163,8 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
             newInstance.albedoHandle = glGetTextureHandleARB(currtex->GetHandle());
             glMakeTextureHandleResidentARB(newInstance.albedoHandle);
 
-            newInstance.roughnessHandle = glGetTextureHandleARB(spectex->GetHandle());
-            glMakeTextureHandleResidentARB(newInstance.roughnessHandle);
+            newInstance.propertiesHandle = glGetTextureHandleARB(spectex->GetHandle());
+            glMakeTextureHandleResidentARB(newInstance.propertiesHandle);
 
             if (!hasTextures) {
                 if (emission.r + emission.g + emission.b > 0.001f) {
@@ -272,7 +272,6 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
         totalLightArea += cv.cumulativeArea;
         cv.cumulativeArea = totalLightArea;
     }
-
 
     materialsBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
     materialsBuf.UploadData(materialInstances, GL_STATIC_DRAW);

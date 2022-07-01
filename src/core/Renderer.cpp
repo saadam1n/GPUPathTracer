@@ -14,7 +14,7 @@
 #include <mutex>
 
 using namespace glm;
-constexpr float kExposure = 1.68f;
+constexpr float kExposure = 5.68f;
 constexpr float kMetallic = 0.0f;
 
 // REFERENCE CPU RENDERER PARAMS

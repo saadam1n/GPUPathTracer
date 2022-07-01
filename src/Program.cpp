@@ -22,7 +22,7 @@ uint32_t Width = 1280;
 uint32_t Height = 720;
 
 // Camera params 
-constexpr float kCameraSetting = 1.01f;
+constexpr float kCameraSetting = 0.01f;
 
 constexpr float CameraSpeed = 2000.000f * 0.5f * kCameraSetting;
 constexpr float CameraSensitivity = 0.001f;
@@ -30,7 +30,7 @@ glm::vec2 LastCursorPosition;
 
 
 // I need class here because Intellisense is not detecting the camera type
-Camera camera((float)Width / Height, glm::radians(45.0f), 900.0f * kCameraSetting, 5.0f * kCameraSetting);
+Camera camera((float)Width / Height, glm::radians(45.0f), 0.2f * 900.0f * kCameraSetting, 0.0f * 5.0f * kCameraSetting);
 
 bool needResetSamples = false;
 
@@ -64,7 +64,7 @@ int main(int argc, char** argv) {
 	Window.SetInputCallback(MouseCallback);
 
 	Renderer* renderer = new Renderer;
-	renderer->Initialize(&Window, "res/crytek/sponza.obj", "GENERATE COLOR WHITE"); // // salle_de_bain.obj //res/sky/ibl/NarrowPath_3k.hdr
+	renderer->Initialize(&Window, "res/Sponza/glTF/Sponza.gltf", "GENERATE COLOR WHITE"); // // salle_de_bain.obj //res/sky/ibl/NarrowPath_3k.hdr
 	camera.SetPosition(glm::vec3(-0.25f, 2.79f, 6.0f));
 	//camera.SetPosition(glm::vec3(-4.98805332, 1.38741374, 10.1879292));
 	//camera.SetRotation(glm::vec3(0.724999964, -0.0800005496, 0.0));

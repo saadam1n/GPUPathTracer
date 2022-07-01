@@ -1,7 +1,6 @@
 #include "Texture.h"
 #include "Buffer.h"
-#define STB_IMAGE_IMPLEMENTATION
-#include <SOIL2.h>
+
 #include <stdio.h>
 
 #include <stdlib.h>
@@ -129,13 +128,13 @@ void Texture2D::FreeBinding() {
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-void Texture2D::LoadTexture(const char* Path) {
+void Texture2D::LoadTexture(const char* Path, int load) {
 
 	int Width = 0;
 	int Height = 0;
 	int Channels = 0;
 
-	CacheLoad TextureData = LoadFromCache(Path, Width, Height, Channels, SOIL_LOAD_RGBA);
+	CacheLoad TextureData = LoadFromCache(Path, Width, Height, Channels, load);
 
 	LoadData(GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE, Width, Height, TextureData);
 	SaveData(GL_UNSIGNED_BYTE, Width, Height, TextureData);

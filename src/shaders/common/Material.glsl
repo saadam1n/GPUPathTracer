@@ -227,7 +227,6 @@ float GSmith(vec3 n, vec3 v, vec3 l, float m) {
 // I'm using a simple BRDF instead of a proper one to make debugging easier 
 // SURFERS FROM FLOATING POINT ACCURACY ISSUES AT HIGH SMOOTHNESS
 vec3 BeckmannCookTorrance(in vec3 albedo, in float metallic, in float roughness, in vec3 n, in vec3 v, in vec3 l) {
-    return albedo / M_PI;
     if (dot(n, v) < 0.0f || dot(n, l) < 0.0f) {
         return vec3(0.0f);
     }
