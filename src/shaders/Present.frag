@@ -30,8 +30,7 @@ void main(){
 	color =  texelFetch(directAccum, ivec2(gl_FragCoord.xy), 0).rgb / numSamples;
 	#ifdef TONEMAPPING
 	//color = 1.0 - exp(-exposure * color);
-    color *= exposure;
-    color = ComputeTonemapUncharted2(color);
+    //color = ComputeTonemapUncharted2(exposure * color);
 	#endif
 	// TODO: More accurate sRGB conversion
     color = pow(color, vec3(1.0f / 2.2f));

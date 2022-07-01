@@ -18,8 +18,8 @@ constexpr float kExposure = 5.68f;
 constexpr float kMetallic = 0.0f;
 
 // REFERENCE CPU RENDERER PARAMS
-constexpr uint32_t KNumRefSamples = 128;// 1024;// 8192;// 65536 * 2; // 32k sampling
-constexpr uint32_t kNumWorkers = 7;
+constexpr uint32_t KNumRefSamples = 131072; // 128k SPP
+constexpr uint32_t kNumWorkers = 6; // 6 worker threads, 1 windows thread, 1 thread as breathing room
 
 /*
 When we trace a ray, we don't actually care about the ray, we care about the path
@@ -566,7 +566,6 @@ float GGX_Distribution(vec3 n, vec3 h, float a) {
 
 // I'm using a simple BRDF instead of a proper one to make debugging easier 
 vec3 GGXCookTorrance(vec3 albedo, float roughness, float metallic, vec3 n, vec3 v, vec3 l) {
-    return albedo / M_PI;
     if (dot(n, v) < 0.0f || dot(n, l) < 0.0f) {
         return vec3(0.0f);
     }
@@ -642,13 +641,12 @@ void PathTraceImage(
 
             const Texture2D* tex = (const Texture2D*)textures[2ULL * closest.intersection.matId - 1ULL];
             const Texture2D* mat = (const Texture2D*)textures[2ULL * closest.intersection.matId];
-            vec3 data = mat->Sample(closest.intersection.texcoords);
+            vec3 data = mat->Sample(closest.intersection.texcoord);
 
             float roughness = data.g * data.g;
             float metallic = data.b;
 
-            throughput *= GGXCookTorrance(tex->Sample(closest.intersection.texcoords), roughness, metallic, closest.intersection.normal, viewDir, ray.direction) * 2.0f * M_PI * max(dot(closest.intersection.normal, ray.direction), 0.0f); // BRDF, we need to multiply by M_PI to account for cosine PDF
-
+            throughput *= GGXCookTorrance(tex->Sample(closest.intersection.texcoord), roughness, metallic, closest.intersection.normal, viewDir, ray.direction) * 2.0f * M_PI * max(dot(closest.intersection.normal, ray.direction), 0.0f); // BRDF, we need to multiply by M_PI to account for cosine PDF
 
             float rr = min(max(throughput.x, max(throughput.y, throughput.z)), 1.0f);
             if (HybridTaus(state) > rr)
@@ -659,7 +657,7 @@ void PathTraceImage(
 
     pixel /= KNumRefSamples;
     //pixel = 1.0f - exp(-kExposure * pixel);
-    pixel = ComputeTonemapUncharted2(kExposure * pixel);
+    //pixel = ComputeTonemapUncharted2(kExposure * pixel);
     pixel = pow(pixel, vec3(1.0f / 2.2f));
 
     pixel = clamp(pixel, vec3(0.0), vec3(1.0f));

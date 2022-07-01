@@ -40,9 +40,10 @@ bool Triangle::Intersect(const Ray& ray, HitInfo& closestHit) {
 
     if (attemptHit.depth < closestHit.depth && attemptHit.depth > 0.0f) {
         closestHit = attemptHit;
+        closestHit.t = 1.0f - closestHit.u - closestHit.v;
         closestHit.intersection.position = closestHit.depth * ray.direction + ray.origin;
         closestHit.intersection.normal = Vertices[0].normal;
-        closestHit.intersection.texcoords = Vertices[0].texcoords * closestHit.t + Vertices[1].texcoords * closestHit.u + Vertices[2].texcoords * closestHit.v;
+        closestHit.intersection.texcoord = Vertices[0].texcoord * closestHit.t + Vertices[1].texcoord * closestHit.u + Vertices[2].texcoord * closestHit.v;
         closestHit.intersection.matId = Vertices[0].matId;
 
         return true;
@@ -58,9 +59,9 @@ Triangle CompactTriangle::Decompress() {
     unpacked.Vertices[1].position = position1;
     unpacked.Vertices[2].position = position2;
 
-    unpacked.Vertices[0].texcoords = texcoord0;
-    unpacked.Vertices[1].texcoords = texcoord1;
-    unpacked.Vertices[2].texcoords = texcoord2;
+    unpacked.Vertices[0].texcoord = texcoord0;
+    unpacked.Vertices[1].texcoord = texcoord1;
+    unpacked.Vertices[2].texcoord = texcoord2;
 
     unpacked.Vertices[0].normal = normal;
     unpacked.Vertices[1].normal = normal;

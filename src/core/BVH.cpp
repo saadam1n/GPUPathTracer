@@ -560,7 +560,7 @@ bool NodeSerialized::Intersect(const Ray& ray, HitInfo& hit, const std::vector<C
 
 	bool result = false;
 	for (int k = i; k < j; k++) {
-		auto triangle = triangles[i];
+		auto triangle = triangles[k];
 		result |= triangle.Intersect(ray, hit);
 	}
 

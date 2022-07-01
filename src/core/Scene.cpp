@@ -185,9 +185,9 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
             CurrentVertex.normal = glm::vec3(Normal.x, Normal.y, Normal.z);
 
             if (currMesh->mTextureCoords[0])
-                CurrentVertex.texcoords = glm::vec2(currMesh->mTextureCoords[0][j].x, currMesh->mTextureCoords[0][j].y);
+                CurrentVertex.texcoord = glm::vec2(currMesh->mTextureCoords[0][j].x, currMesh->mTextureCoords[0][j].y);
             else
-                CurrentVertex.texcoords = glm::vec2(0.0f);
+                CurrentVertex.texcoord = glm::vec2(0.0f);
 
             CurrentVertex.matId = currMatID;
 
@@ -220,12 +220,13 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
         CompactTriangle triangle;
 
         triangle.position0 = Vertices[triplet[0]].position;
-        triangle.position1 = Vertices[triplet[1]].position;
-        triangle.position2 = Vertices[triplet[2]].position;
+        triangle.texcoord0 = Vertices[triplet[0]].texcoord;
 
-        triangle.texcoord0 = Vertices[triplet[0]].texcoords;
-        triangle.texcoord1 = Vertices[triplet[1]].texcoords;
-        triangle.texcoord2 = Vertices[triplet[2]].texcoords;
+        triangle.position1 = Vertices[triplet[1]].position;
+        triangle.texcoord1 = Vertices[triplet[1]].texcoord;
+
+        triangle.position2 = Vertices[triplet[2]].position;
+        triangle.texcoord2 = Vertices[triplet[2]].texcoord;
 
         vec3 v01 = triangle.position1 - triangle.position0;
         vec3 v02 = triangle.position2 - triangle.position0;

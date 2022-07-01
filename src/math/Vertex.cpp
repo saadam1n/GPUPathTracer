@@ -7,7 +7,7 @@ Vertex Vertex::operator*(float Value) {
 
 	NewVertex.position = position * Value;
 	NewVertex.normal = normal * Value;
-	NewVertex.texcoords = texcoords * Value;
+	NewVertex.texcoord = texcoord * Value;
 
 	return NewVertex;
 }
@@ -17,7 +17,7 @@ Vertex Vertex::operator+(const Vertex& Value) {
 
 	NewVertex.position = position + Value.position;
 	NewVertex.normal = normal + Value.normal;
-	NewVertex.texcoords = texcoords + Value.texcoords;
+	NewVertex.texcoord = texcoord + Value.texcoord;
 
 	return NewVertex;
 }
