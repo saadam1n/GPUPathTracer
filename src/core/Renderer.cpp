@@ -657,7 +657,7 @@ void PathTraceImage(
 
     pixel /= KNumRefSamples;
     //pixel = 1.0f - exp(-kExposure * pixel);
-    //pixel = ComputeTonemapUncharted2(kExposure * pixel);
+    pixel = ComputeTonemapUncharted2(kExposure * pixel);
     pixel = pow(pixel, vec3(1.0f / 2.2f));
 
     pixel = clamp(pixel, vec3(0.0), vec3(1.0f));

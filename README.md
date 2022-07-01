@@ -38,3 +38,6 @@ Acheived June 20, 2022
 Acheived June 29, 2022
 ![PBR using Beckamn BRDF](images/10PBR-1.png)
 ![PBR using Beckamn BRDF](images/10PBR-2.png)
+
+Acheived July 1st, 2022
+![Direct lighting](images/11DirectLighting.png)

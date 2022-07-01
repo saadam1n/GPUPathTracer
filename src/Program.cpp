@@ -16,7 +16,7 @@
 #include <Windows.h>
 #endif
 
-constexpr bool lockCamera = true ;
+constexpr bool lockCamera = false ;
 
 uint32_t Width = 1280;
 uint32_t Height = 720;
@@ -64,7 +64,7 @@ int main(int argc, char** argv) {
 	Window.SetInputCallback(MouseCallback);
 
 	Renderer* renderer = new Renderer;
-	renderer->Initialize(&Window, "res/glTF/Sponza.gltf", "GENERATE COLOR WHITE"); // // salle_de_bain.obj //res/sky/ibl/NarrowPath_3k.hdr // Topanga_Forest_B_3k
+	renderer->Initialize(&Window, "res/glTF/Sponza.gltf", "res/sky/ibl/Topanga_Forest_B_3k.hdr"); // // salle_de_bain.obj //res/sky/ibl/NarrowPath_3k.hdr // Topanga_Forest_B_3k
 	camera.SetPosition(glm::vec3(6.0f, 2.0f, 0.0f));
 	camera.SetRotation(glm::vec3(glm::radians(-90.0f), 0.0f, 0.0f));
 	//camera.SetPosition(glm::vec3(-0.25f, 2.79f, 6.0f));

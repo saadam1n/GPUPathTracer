@@ -135,15 +135,21 @@ void main() {
 
         // Sample the texture
         vec4 color = texture(sampler2D(fbu(materialInstance[vertex.MatID].xy)), vertex.TextureCoordinate);
-        if(color.a != 1.0f) break;
+        //#define TRANSPARENCY
+        if(color.a != 1.0f) {
+        #ifdef TRANSPARENCY
+            i--;
+            continue;
+        #else
+            break;
+        #endif
+        }
+
         vec3 albedo = color.xyz;
         vec4 materialInfo = texture(sampler2D(fbu(materialInstance[vertex.MatID].zw)), vertex.TextureCoordinate).xyzw;
 
         float roughness = materialInfo.g * materialInfo.g;
         float metalness = materialInfo.b;
-
-        //roughness *= roughness;
-        //roughness = max(roughness, 0.01f);
 
         if(totalLightArea != 0.0f) {
             Vertex lightVertex = RandomPointOnLight();
@@ -160,6 +166,20 @@ void main() {
                                
             if(!AnyHit(lightRay, lightHit)) {
                 contribution += lightThroughput * materialInstance[lightVertex.MatID + 1].xyz;
+            }
+        } else {
+            vec3 lightDir = normalize(vec3(1.0f, 9.0f, 1.0f));
+            HitInfo lightHit;
+            lightHit.di.x = 1e20f;
+
+            Ray lightRay;
+            lightRay.origin = vertex.Position + 0.001f * lightDir;
+            lightRay.direction = lightDir;
+
+            vec3 lightThroughput =  BRDF(albedo, metalness, roughness, vertex.Normal, viewDir, lightDir) * throughput * nndot(vertex.Normal, lightRay.direction);
+
+            if(!AnyHit(lightRay, lightHit)) {
+                contribution += lightThroughput * vec3(10.0f);
             }
         }
 
