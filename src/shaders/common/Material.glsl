@@ -262,7 +262,7 @@ vec3 GGX_ImportanceSample(in float a) {
 
 // Like Beckmann, we multiply by dot(n, h) / (4 * dot(v, h)
 float GGX_PDFH(in vec3 n, in vec3 v, in vec3 h, in float a) {
-    return  max(GGX_Distribution(n, h, a) * nndot(n, h) / (4.0f * nndot(v, h)), 1e-32f);
+    return max(GGX_Distribution(n, h, a) * nndot(n, h) / (4.0f * nndot(v, h)), 1e-32f);
 }
 
 float GGX_PDF(in vec3 n, in vec3 v, in vec3 l, in float a) {
