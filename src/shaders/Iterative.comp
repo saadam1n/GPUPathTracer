@@ -70,6 +70,8 @@ float MISWeightBXDF(float bxdf, float cosine, float metallic) {
     return 0.0f;
 }
 
+const float kRoughness = 1e-5f;
+
 void main() {
 	// Begin by getting to know which pixel we are in	
 	ivec2 PixelCoordinates = ivec2(gl_GlobalInvocationID.xy);
@@ -141,6 +143,7 @@ void main() {
         float roughness = materialInfo.g;
 
         roughness *= roughness;
+        //roughness = max(roughness, 0.01f);
 
         if(totalLightArea != 0.0f) {
             Vertex lightVertex = RandomPointOnLight();
@@ -168,15 +171,17 @@ void main() {
         ray.origin = vertex.Position + 0.001 * vertex.Normal;
 
         float otherPdf;
-        if(rand() > 1.0f) {
+        if(rand() > 0.5f) {
             vec3 h = mat3(tangent, bitangent, vertex.Normal) * GGX_ImportanceSample(roughness);
             ray.direction = reflect(-viewDir, h);
             bxdfPdf = GGX_PDF(vertex.Normal, h, roughness);
             otherPdf = SamplePdfCosine(vertex.Normal, ray.direction);
         } else {
             ray.direction = mat3(tangent, bitangent, vertex.Normal) * ImportanceSampleCosine(bxdfPdf);
-            otherPdf = 0.0f;//GGX_PDF(vertex.Normal, viewDir, ray.direction, roughness);
+            otherPdf = GGX_PDF(vertex.Normal, viewDir, ray.direction, roughness);
         }
+
+        bxdfPdf *= 0.5f; // because wa have a PMF of 50/50 of choosing each sampling method
 
         // Russian roulette
         throughput *= BRDF(albedo, metalness, roughness, vertex.Normal, viewDir, ray.direction) * nndot(vertex.Normal, ray.direction) * MISWeight(bxdfPdf, otherPdf) / bxdfPdf; // I have no idea why we need to multiply by 2 but hey, it works. The way I figured it out was that we needed to average our PDFs as well somehow. We also are sending one sample, not two

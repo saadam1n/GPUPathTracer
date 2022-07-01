@@ -241,7 +241,7 @@ float GGX_Distribution(in vec3 n, in vec3 h, in float a) {
     float noh = nndot(n, h);
     float div = (a2 - 1.0f) * noh * noh + 1.0f;
     float num = a2;
-    return num / (M_PI * div * div);
+    return num / max(M_PI * div * div, 1e-10f);
 }
 
 vec3 GGX_ImportanceSample(in float a) {

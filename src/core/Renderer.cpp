@@ -18,7 +18,7 @@ constexpr float kExposure = 5.68f;
 constexpr float kMetallic = 0.0f;
 
 // REFERENCE CPU RENDERER PARAMS
-constexpr uint32_t KNumRefSamples = 1024;// 8192;// 65536 * 2; // 32k sampling
+constexpr uint32_t KNumRefSamples = 128;// 1024;// 8192;// 65536 * 2; // 32k sampling
 constexpr uint32_t kNumWorkers = 7;
 
 /*
@@ -471,7 +471,7 @@ bool TraverseBVH(Ray ray, HitInfo& intersection, const std::vector<CompactTriang
 
     while (true) {
         NodeSerialized child0 = nodes.at(currentNode);
-        NodeSerialized child1 = nodes.at(currentNode + 1);
+        NodeSerialized child1 = nodes.at(currentNode + 1ULL);
 
         vec2 distance0, distance1;
         bool hit0 = child0.BoundingBox.Intersect(iray, intersection, distance0);
@@ -555,8 +555,17 @@ float GSmith(vec3 n, vec3 v, vec3 l, float m) {
     return G1_Shlick(n, v, k) * G1_Shlick(n, l, k);
 }
 
+// Move to GGX, suggested by adrian (thank you!)
+float GGX_Distribution(vec3 n, vec3 h, float a) {
+    float a2 = a * a;
+    float noh = max(dot(n, h), 0.0f);
+    float div = (a2 - 1.0f) * noh * noh + 1.0f;
+    float num = a2;
+    return num / max(M_PI * div * div, 1e-10f);
+}
+
 // I'm using a simple BRDF instead of a proper one to make debugging easier 
-vec3 BeckmannCookTorrance(vec3 albedo, float roughness, float metallic, vec3 n, vec3 v, vec3 l) {
+vec3 GGXCookTorrance(vec3 albedo, float roughness, float metallic, vec3 n, vec3 v, vec3 l) {
     return albedo / M_PI;
     if (dot(n, v) < 0.0f || dot(n, l) < 0.0f) {
         return vec3(0.0f);
@@ -564,7 +573,7 @@ vec3 BeckmannCookTorrance(vec3 albedo, float roughness, float metallic, vec3 n, 
     // Cook torrance
     vec3 f0 = mix(vec3(0.04f), albedo, metallic);
     vec3 h = normalize(v + l);
-    vec3 specular = FresnelShlick(f0, h, v) * DistributionBeckmann(n, h, roughness) * GSmith(n, v, l, roughness) / max(4.0f * max(dot(n, v), 0.0f) * max(dot(n, l), 0.0f), 1e-10f); // Implicit geometric term
+    vec3 specular = FresnelShlick(f0, h, v) * GGX_Distribution(n, h, roughness) * GSmith(n, v, l, roughness) / max(4.0f * max(dot(n, v), 0.0f) * max(dot(n, l), 0.0f), 1e-10f); // Implicit geometric term
     vec3 diffuse = albedo / M_PI * (1.0f - metallic) * (1.0f - FresnelShlick(f0, n, l)) * (1.0f - FresnelShlick(f0, n, v)); // See pbr discussion by devsh on how to do energy conservation
     return specular + diffuse;
 }
@@ -633,8 +642,12 @@ void PathTraceImage(
 
             const Texture2D* tex = (const Texture2D*)textures[2ULL * closest.intersection.matId - 1ULL];
             const Texture2D* mat = (const Texture2D*)textures[2ULL * closest.intersection.matId];
-            float roughness = mat->Sample(closest.intersection.texcoords).x;
-            throughput *= BeckmannCookTorrance(tex->Sample(closest.intersection.texcoords), roughness * roughness, kMetallic, closest.intersection.normal, viewDir, ray.direction) * 2.0f * M_PI * max(dot(closest.intersection.normal, ray.direction), 0.0f); // BRDF, we need to multiply by M_PI to account for cosine PDF
+            vec3 data = mat->Sample(closest.intersection.texcoords);
+
+            float roughness = data.g * data.g;
+            float metallic = data.b;
+
+            throughput *= GGXCookTorrance(tex->Sample(closest.intersection.texcoords), roughness, metallic, closest.intersection.normal, viewDir, ray.direction) * 2.0f * M_PI * max(dot(closest.intersection.normal, ray.direction), 0.0f); // BRDF, we need to multiply by M_PI to account for cosine PDF
 
 
             float rr = min(max(throughput.x, max(throughput.y, throughput.z)), 1.0f);
