@@ -139,10 +139,10 @@ void main() {
         vec3 albedo = color.xyz;
         vec4 materialInfo = texture(sampler2D(fbu(materialInstance[vertex.MatID].zw)), vertex.TextureCoordinate).xyzw;
 
+        float roughness = materialInfo.g * materialInfo.g;
         float metalness = materialInfo.b;
-        float roughness = materialInfo.g;
 
-        roughness *= roughness;
+        //roughness *= roughness;
         //roughness = max(roughness, 0.01f);
 
         if(totalLightArea != 0.0f) {
@@ -174,17 +174,15 @@ void main() {
         if(rand() > 0.5f) {
             vec3 h = mat3(tangent, bitangent, vertex.Normal) * GGX_ImportanceSample(roughness);
             ray.direction = reflect(-viewDir, h);
-            bxdfPdf = GGX_PDF(vertex.Normal, h, roughness);
+            bxdfPdf = GGX_PDFH(vertex.Normal, viewDir, h, roughness); 
             otherPdf = SamplePdfCosine(vertex.Normal, ray.direction);
         } else {
             ray.direction = mat3(tangent, bitangent, vertex.Normal) * ImportanceSampleCosine(bxdfPdf);
             otherPdf = GGX_PDF(vertex.Normal, viewDir, ray.direction, roughness);
         }
 
-        bxdfPdf *= 0.5f; // because wa have a PMF of 50/50 of choosing each sampling method
-
         // Russian roulette
-        throughput *= BRDF(albedo, metalness, roughness, vertex.Normal, viewDir, ray.direction) * nndot(vertex.Normal, ray.direction) * MISWeight(bxdfPdf, otherPdf) / bxdfPdf; // I have no idea why we need to multiply by 2 but hey, it works. The way I figured it out was that we needed to average our PDFs as well somehow. We also are sending one sample, not two
+        throughput *= BRDF(albedo, metalness, roughness, vertex.Normal, viewDir, ray.direction) * nndot(vertex.Normal, ray.direction) * MISWeight(bxdfPdf, otherPdf) / (0.5f * bxdfPdf); // We multiply the PDF by 0.5 since we had a 50/50 percent chance of choosing it
         float continuation = min(max(throughput.x, max(throughput.y, throughput.z)), 1.0f);
         if(rand() > continuation) {
             break;

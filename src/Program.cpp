@@ -16,7 +16,7 @@
 #include <Windows.h>
 #endif
 
-constexpr bool lockCamera = false ;
+constexpr bool lockCamera = true ;
 
 uint32_t Width = 1280;
 uint32_t Height = 720;

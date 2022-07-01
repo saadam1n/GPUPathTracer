@@ -247,7 +247,7 @@ float GGX_Distribution(in vec3 n, in vec3 h, in float a) {
 vec3 GGX_ImportanceSample(in float a) {
     float a2 = a * a;
     vec2 r = rand2();
-    float nch = (1.0f - r.x) / (r.x * (a2 - 1.0f) + 1.0f);
+    float nch = sqrt((1.0f - r.x) / (r.x * (a2 - 1.0f) + 1.0f));
     float nsh = sqrt(1.0f - nch * nch);
 
     r.y *= 2.0f * M_PI;
@@ -260,14 +260,13 @@ vec3 GGX_ImportanceSample(in float a) {
     return direction;
 }
 
-float GGX_PDF(in vec3 n, in vec3 h, in float a) {
-    float nch = nndot(n, h);
-    float nsh = sqrt(1.0f - nch * nch);
-    return max(nch * nsh * GGX_Distribution(n, h, a), 1e-20f);
+// Like Beckmann, we multiply by dot(n, h) / (4 * dot(v, h)
+float GGX_PDFH(in vec3 n, in vec3 v, in vec3 h, in float a) {
+    return  max(GGX_Distribution(n, h, a) * nndot(n, h) / (4.0f * nndot(v, h)), 1e-32f);
 }
 
 float GGX_PDF(in vec3 n, in vec3 v, in vec3 l, in float a) {
-    return GGX_PDF(n, normalize(v + l), a);
+    return GGX_PDFH(n, v, normalize(v + l), a);
 }
 
 // I'm using a simple BRDF instead of a proper one to make debugging easier 

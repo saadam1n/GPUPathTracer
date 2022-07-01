@@ -18,7 +18,7 @@ constexpr float kExposure = 5.68f;
 constexpr float kMetallic = 0.0f;
 
 // REFERENCE CPU RENDERER PARAMS
-constexpr uint32_t KNumRefSamples = 131072; // 128k SPP
+constexpr uint32_t KNumRefSamples = 32768;
 constexpr uint32_t kNumWorkers = 6; // 6 worker threads, 1 windows thread, 1 thread as breathing room
 
 /*
