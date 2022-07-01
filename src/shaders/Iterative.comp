@@ -146,7 +146,7 @@ void main() {
             Vertex lightVertex = RandomPointOnLight();
             float radius = distance(lightVertex.Position, vertex.Position); 
             vec3 lightDir = normalize(lightVertex.Position - vertex.Position);
-            float bouncePdf = 0.5f * (PdfBeckmann(roughness, vertex.Normal, viewDir, lightDir) + SamplePdfCosine(vertex.Normal, lightDir)) * nndot(lightVertex.Normal, -lightDir) / (radius * radius); // Seach veach 1995, eq 9
+            float bouncePdf = 0.5f * (GGX_PDF(vertex.Normal, viewDir, lightDir, roughness) + SamplePdfCosine(vertex.Normal, lightDir)) * nndot(lightVertex.Normal, -lightDir) / (radius * radius); // Seach veach 1995, eq 9
             vec3 lightThroughput = BRDF(albedo, metalness, roughness, vertex.Normal, viewDir, lightDir) * throughput * nndot(vertex.Normal, lightDir) * nndot(lightVertex.Normal, -lightDir) * MISWeight(neePdf, bouncePdf) / (neePdf * radius * radius);
             HitInfo lightHit;
             lightHit.di.x = radius - 0.005f;
@@ -168,18 +168,18 @@ void main() {
         ray.origin = vertex.Position + 0.001 * vertex.Normal;
 
         float otherPdf;
-        if(rand() > 0.5f) {
-            vec3 h = mat3(tangent, bitangent, vertex.Normal) * BeckmannImportanceSample(roughness);
+        if(rand() > 1.0f) {
+            vec3 h = mat3(tangent, bitangent, vertex.Normal) * GGX_ImportanceSample(roughness);
             ray.direction = reflect(-viewDir, h);
-            bxdfPdf = PdfBeckmannH(roughness, vertex.Normal, viewDir, h);
+            bxdfPdf = GGX_PDF(vertex.Normal, h, roughness);
             otherPdf = SamplePdfCosine(vertex.Normal, ray.direction);
         } else {
             ray.direction = mat3(tangent, bitangent, vertex.Normal) * ImportanceSampleCosine(bxdfPdf);
-            otherPdf = PdfBeckmann(roughness, vertex.Normal, viewDir, ray.direction);
+            otherPdf = 0.0f;//GGX_PDF(vertex.Normal, viewDir, ray.direction, roughness);
         }
 
         // Russian roulette
-        throughput *= BRDF(albedo, metalness, roughness, vertex.Normal, viewDir, ray.direction) * nndot(vertex.Normal, ray.direction) * 2.0f * MISWeight(bxdfPdf, otherPdf) / bxdfPdf; // I have no idea why we need to multiply by 2 but hey, it works. The way I figured it out was that we needed to average our PDFs as well somehow. We also are sending one sample, not two
+        throughput *= BRDF(albedo, metalness, roughness, vertex.Normal, viewDir, ray.direction) * nndot(vertex.Normal, ray.direction) * MISWeight(bxdfPdf, otherPdf) / bxdfPdf; // I have no idea why we need to multiply by 2 but hey, it works. The way I figured it out was that we needed to average our PDFs as well somehow. We also are sending one sample, not two
         float continuation = min(max(throughput.x, max(throughput.y, throughput.z)), 1.0f);
         if(rand() > continuation) {
             break;

@@ -179,7 +179,7 @@ vec3 ImportanceSampleCosine(out float pdf) {
 }
 
 // http://simonstechblog.blogspot.com/2011/12/microfacet-brdf.html
-float DistributionBeckmann(in vec3 n, in vec3 h, in float m) {
+float DistributionBeckmannUNSTABLE(in vec3 n, in vec3 h, in float m) {
     float noh = max(dot(n, h), 0.0f);
     float noh2 = noh * noh;
     float m2 = m * m;
@@ -187,6 +187,17 @@ float DistributionBeckmann(in vec3 n, in vec3 h, in float m) {
     float denom = M_PI * m2 * noh2 * noh2;
     return numer / denom;
 }
+
+// With a bit of highschool logarithm algebra we can make this significantly more stable in no time
+float DistributionBeckmannSTABLE(in vec3 n, in vec3 h, in float m) {
+    float noh = nndot(n, h);
+    float noh2 = noh * noh;
+    float sub = 2.0f * log(sqrt(M_PI) * m * noh);
+    float add = (noh2 - 1.0f) / (noh2 * m * m);
+    return exp(add - sub);
+}
+
+#define DistributionBeckmann(n, h, m) DistributionBeckmannSTABLE(n, h, m)
 
 // See "Microfacet Models for Refraction through Rough Surfaces", eqs 28 and 29
 // Interestingly, "A Microfacet Based Coupled Specular-Matte BRDF Model with Importance Sampling" complains importance sampling the beckmann equation isn't possible, so I might be reading the EGSR 2007 paper incorrectly
@@ -224,16 +235,51 @@ float GSmith(vec3 n, vec3 v, vec3 l, float m) {
     return G1_Shlick(n, v, k) * G1_Shlick(n, l, k);
 }
 
+// Move to GGX, suggested by adrian (thank you!)
+float GGX_Distribution(in vec3 n, in vec3 h, in float a) {
+    float a2 = a * a;
+    float noh = nndot(n, h);
+    float div = (a2 - 1.0f) * noh * noh + 1.0f;
+    float num = a2;
+    return num / (M_PI * div * div);
+}
+
+vec3 GGX_ImportanceSample(in float a) {
+    float a2 = a * a;
+    vec2 r = rand2();
+    float nch = (1.0f - r.x) / (r.x * (a2 - 1.0f) + 1.0f);
+    float nsh = sqrt(1.0f - nch * nch);
+
+    r.y *= 2.0f * M_PI;
+
+    vec3 direction;
+    direction.x = nsh * sin(r.y);
+    direction.y = nsh * cos(r.y);
+    direction.z = nch;
+
+    return direction;
+}
+
+float GGX_PDF(in vec3 n, in vec3 h, in float a) {
+    float nch = nndot(n, h);
+    float nsh = sqrt(1.0f - nch * nch);
+    return max(nch * nsh * GGX_Distribution(n, h, a), 1e-20f);
+}
+
+float GGX_PDF(in vec3 n, in vec3 v, in vec3 l, in float a) {
+    return GGX_PDF(n, normalize(v + l), a);
+}
+
 // I'm using a simple BRDF instead of a proper one to make debugging easier 
 // SURFERS FROM FLOATING POINT ACCURACY ISSUES AT HIGH SMOOTHNESS
-vec3 BeckmannCookTorrance(in vec3 albedo, in float metallic, in float roughness, in vec3 n, in vec3 v, in vec3 l) {
+vec3 GGX_CookTorrance(in vec3 albedo, in float metallic, in float roughness, in vec3 n, in vec3 v, in vec3 l) {
     if (dot(n, v) < 0.0f || dot(n, l) < 0.0f) {
         return vec3(0.0f);
     }
     // Cook torrance
     vec3 f0 = mix(vec3(0.04f), albedo, metallic);
     vec3 h = normalize(v + l);
-    vec3 specular = FresnelShlick(f0, h, v) * DistributionBeckmann(n, h, roughness) * GSmith(n, v, l, roughness) / (4.0f * nndot(n, v) * nndot(n, l));
+    vec3 specular = FresnelShlick(f0, h, v) * GGX_Distribution(n, h, roughness) * GSmith(n, v, l, roughness) / max(4.0f * nndot(n, v) * nndot(n, l), 1e-26f);
     vec3 diffuse = albedo / M_PI * (1.0f - metallic) * (1.0f - FresnelShlick(f0, n, l)) * (1.0f - FresnelShlick(f0, n, v)); // See pbr discussion by devsh on how to do energy conservation
     return specular + diffuse;
 }
@@ -244,6 +290,6 @@ vec3 PhongTest(in vec3 albedo, in float metallic, in float roughness, in vec3 n,
     return albedo * distribution;
 }
 
-#define BRDF(a, m, r, n, v, l) BeckmannCookTorrance(a, m, r, n, v, l)
+#define BRDF(a, m, r, n, v, l) GGX_CookTorrance(a, m, r, n, v, l)
 
 #endif
