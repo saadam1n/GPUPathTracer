@@ -14,11 +14,11 @@
 #include <mutex>
 
 using namespace glm;
-constexpr float kExposure = 5.68f;
+constexpr float kExposure = 1.68f;
 constexpr float kMetallic = 0.0f;
 
 // REFERENCE CPU RENDERER PARAMS
-constexpr uint32_t KNumRefSamples = 32768;
+constexpr uint32_t KNumRefSamples = 256;// 32768;
 constexpr uint32_t kNumWorkers = 6; // 6 worker threads, 1 windows thread, 1 thread as breathing room
 
 /*
@@ -644,9 +644,12 @@ void PathTraceImage(
             vec3 data = mat->Sample(closest.intersection.texcoord);
 
             float roughness = data.g * data.g;
-            float metallic = data.b;
+            float metalness = data.b;
 
-            throughput *= GGXCookTorrance(tex->Sample(closest.intersection.texcoord), roughness, metallic, closest.intersection.normal, viewDir, ray.direction) * 2.0f * M_PI * max(dot(closest.intersection.normal, ray.direction), 0.0f); // BRDF, we need to multiply by M_PI to account for cosine PDF
+            metalness = 0.0f;
+            roughness = 0.3f;
+
+            throughput *= GGXCookTorrance(tex->Sample(closest.intersection.texcoord), roughness, metalness, closest.intersection.normal, viewDir, ray.direction) * 2.0f * M_PI * max(dot(closest.intersection.normal, ray.direction), 0.0f); // BRDF, we need to multiply by M_PI to account for cosine PDF
 
             float rr = min(max(throughput.x, max(throughput.y, throughput.z)), 1.0f);
             if (HybridTaus(state) > rr)
