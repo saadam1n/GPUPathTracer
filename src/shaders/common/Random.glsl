@@ -63,6 +63,9 @@ float HybridTaus() {
     );
 }
 
+// https://blog.demofox.org/2017/05/29/when-random-numbers-are-too-random-low-discrepancy-sequences/
+// might be a good source of info
+
 #define rand() HybridTaus()
 
 vec2 Random2D() {
@@ -82,9 +85,21 @@ vec2 NextPointLD() {
     }
 }
 
-#define rand2() NextPointLD()
+samplerBuffer stratifiedTex;
+uniform int stratumIdx;
+
+const int stride = 16;
+
+vec2 NextStratifiedSample(int idx) {
+    idx *= stride;
+    return texelFetch(stratifiedTex, idx + stratumIdx).xy;
+}
+
+#define rand2() Random2D()
 
 float VanDerCorput(uint n, uint base) {
+#define MY_IMPL
+#ifdef MY_IMPL
     float sum = 0.0f;
     float ibase = 1.0f / base;
 
@@ -100,14 +115,32 @@ float VanDerCorput(uint n, uint base) {
     }
 
     return sum;
+#else
+    float invBase = 1.0 / float(base);
+    float denom = 1.0;
+    float result = 0.0;
+
+    for (uint i = 0u; i < 32u; ++i)
+    {
+        if (n > 0u)
+        {
+            denom = mod(float(n), 2.0);
+            result += denom * invBase;
+            invBase = invBase / 2.0;
+            n = uint(float(n) / 2.0);
+        }
+    }
+
+    return result;
+#endif
 }
 
 vec2 HaltonSequence(in uint n) {
     return vec2(VanDerCorput(n, 2), VanDerCorput(n, 3));
 }
 
-vec2 HammerslySequence(in uint n) {
-    return vec2((n + rand()) / NUM_LD_POINTS, VanDerCorput(n, 2));
+vec2 HammerslySequence(in uint n, in uint offset) {
+    return vec2(float(n + rand()) / float(NUM_LD_POINTS), VanDerCorput(n + offset, 2));
 }
 
 void CreateHaltonSequenceSamples() {
@@ -118,8 +151,9 @@ void CreateHaltonSequenceSamples() {
 }
 
 void CreateHammerslySequenceSamples() {
+    uint offset = HybridTausInteger();
     for (uint i = 0; i < NUM_LD_POINTS; i++) {
-        ldPoints[i] = HammerslySequence(i);
+        ldPoints[i] = HammerslySequence(i, offset);
     }
 }
 
@@ -137,7 +171,7 @@ void CreateGoldenRatioSamples() {
     uint idx = 0;
 
     for (uint i = 0; i < NUM_LD_POINTS; i++) {
-        float x = NextGoldenRatio(seed.x);
+        float x = fract(NextGoldenRatio(seed.x) + rand());
         ldPoints[i].y = x;
         if (x < minval) {
             minval = x;
@@ -177,7 +211,7 @@ void CreateGoldenRatioSamples() {
 
     // Normal golden sequence for next set of points
     for (int i = 0; i < NUM_LD_POINTS; i++) {
-        ldPoints[i].y = NextGoldenRatio(seed.y);
+        ldPoints[i].y = fract(NextGoldenRatio(seed.y) + rand());
     }
 }
 
@@ -187,7 +221,7 @@ void CreateRandomHighDiscrepancySamples() {
     }
 }
 
-#define InitializeLD() CreateHammerslySequenceSamples()
+#define InitializeLD() ;//CreateGoldenRatioSamples()
 
 const int kNumStrataPerSide = 4;
 const int kNumStrata = kNumStrataPerSide * kNumStrataPerSide;

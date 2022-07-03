@@ -19,6 +19,10 @@ public:
 
 	void UploadData(size_t Bytes, const void* Data, GLenum usage);
 
+	template<typename T> void UploadData(const T* data, size_t numElements, GLenum usage) {
+		UploadData(numElements * sizeof(T), data, usage);
+	}
+
 	template<typename T> void UploadData(std::vector<T> vec, GLenum usage) {
 		UploadData(vec.size() * sizeof(T), (const void*)vec.data(), usage);
 	}

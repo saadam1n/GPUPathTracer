@@ -141,12 +141,13 @@ const float kRoughness = 1e-5f;
 void main() {
 	// Begin by getting to know which pixel we are in	
 	ivec2 PixelCoordinates = ivec2(gl_GlobalInvocationID.xy);
-    initRNG(PixelCoordinates.y * width + PixelCoordinates.x);
+    int idx = PixelCoordinates.y * width + PixelCoordinates.x;
+    initRNG(idx);
 
 	// Generate our ray
 	Ray ray;
 
-    vec2 interpolation = (PixelCoordinates + rand2()) / vec2(width, height);
+    vec2 interpolation = (PixelCoordinates + NextStratifiedSample(idx)) / vec2(width, height);
 
     vec2 r = rand2();
     float phi = 2 * M_PI * r.y; 

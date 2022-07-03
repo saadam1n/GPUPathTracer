@@ -180,6 +180,59 @@ void DebugMessageCallback(GLenum source, GLenum type, GLuint id,
         id, _type, _severity, _source, msg);
 }
 
+float HybridTaus(uvec4& state);
+
+// See jacco bikker's lecture http://www.cs.uu.nl/docs/vakken/magr/2016-2017/slides/lecture%2008%20-%20variance%20reduction.pdf
+// Also take a look at PBRT https://www.pbr-book.org/3ed-2018/Sampling_and_Reconstruction/Stratified_Sampling
+constexpr uint32_t kNumStrataPerSide = 4;
+constexpr uint32_t kNumStrata = kNumStrataPerSide * kNumStrataPerSide;
+
+void GenerateStratifiedSamplesForPixel(vec2* samples, uvec4& seed) {
+    for (uint32_t y = 0; y < kNumStrataPerSide; y++) {
+        for (uint32_t x = 0; x < kNumStrataPerSide; x++) {
+            uint32_t index = x + y * kNumStrataPerSide;
+            samples[index] = vec2(x + HybridTaus(seed), y + HybridTaus(seed)) / float(kNumStrataPerSide);
+        }
+    }
+
+    std::shuffle(samples, samples + kNumStrata, std::default_random_engine(seed.x));
+}
+
+void GenerateStratifiedSamples(vec2* samples, uint32_t width, uint32_t height, bool& signal, bool& running) {
+    // Each pixel has its own set of stratified samples to prevent any sort of correlation that might arise due to permuation
+    // The idea is that we keep on updating our samples and then send them over to the GPU every KNumStratifiedSamples frames
+    // To not stress the main rendering thread, I will be doing this on another thread
+    // If signal = true, then that means we have already created our sample set and are waiting for it to be uploaded by the rendering thread
+    // If signal = false, then we need to generate a new sample set
+
+    // Gen initial numbers
+    std::default_random_engine rng;
+    std::uniform_int_distribution<uint32_t> dist(129, UINT32_MAX);
+    uvec4 seed;
+    seed.x = dist(rng);
+    seed.y = dist(rng);
+    seed.z = dist(rng);
+    seed.w = dist(rng);
+
+    while (running) {
+        // Wait until our samples have been uploaded before moving onto the next set of samples
+        while (signal) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+
+        // samples is a very large area of consiting of width * height * KNumStratifiedSamples
+        for (uint32_t y = 0; y < height; y++) {
+            for (uint32_t x = 0; x < width; x++) {
+                uint32_t base = kNumStrata * (x + y * width);
+                GenerateStratifiedSamplesForPixel(samples + base, seed);
+            }
+
+        }
+
+        signal = true;
+    }
+}
+
 void LoadEnvironmnet(TextureCubemap* environment, const std::string& args, VertexArray& arr) {
     std::string extension = args.substr(args.find_last_of('.') + 1);
     if (args.find_first_of("GENERATE") == 0) {
@@ -380,6 +433,21 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     randomState.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
     randomState.UploadData(threadRandomState, GL_DYNAMIC_DRAW);
     
+    running = true;
+    sampleSignal = false;
+    totalNumSamples = viewportWidth * viewportHeight * kNumStrata;
+    stratifiedSamples = new vec2[totalNumSamples];
+
+    // Generate our initial batch of samples
+    sampleGenThread = new std::thread(GenerateStratifiedSamples, stratifiedSamples, viewportWidth, viewportHeight, std::ref(sampleSignal), std::ref(running));
+
+
+    stratifiedBuf.CreateBinding(BUFFER_TARGET_ARRAY);
+    stratifiedBuf.UploadData(stratifiedSamples, totalNumSamples, GL_STATIC_DRAW);
+
+    stratifiedTex.CreateBinding();
+    stratifiedTex.SelectBuffer(&stratifiedBuf, GL_RG32F);
+
     scene.materialsBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 4);
     randomState.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 5);
 
@@ -388,6 +456,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     scene.vertexTex.BindTextureUnit(1, GL_TEXTURE_BUFFER);
     scene.bvh.nodesTex.BindTextureUnit(3, GL_TEXTURE_BUFFER);
     scene.lightTex.BindTextureUnit(4, GL_TEXTURE_BUFFER);
+    stratifiedTex.BindTextureUnit(5, GL_TEXTURE_BUFFER);
 
     iterative.CreateBinding();
     iterative.LoadInteger("accum", 0);
@@ -395,6 +464,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     iterative.LoadInteger("indexTex", 2);
     iterative.LoadInteger("nodesTex", 3);
     iterative.LoadInteger("lightTex", 4);
+    iterative.LoadInteger("stratifiedTex", 5);
     iterative.LoadFloat("totalLightArea", scene.totalLightArea);
     iterative.LoadFloat("kMetallic", kMetallic);
     iterative.LoadShaderStorageBuffer("samplers", scene.materialsBuf);
@@ -425,15 +495,26 @@ void Renderer::CleanUp(void) {
 #define MEMORY_BARRIER_RT GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT | GL_ATOMIC_COUNTER_BARRIER_BIT
 
 void Renderer::RenderFrame(const Camera& camera)  {
+    if (numSamples % kNumStrata == 0) {
+        while (!sampleSignal) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+
+        stratifiedBuf.CreateBinding(BUFFER_TARGET_ARRAY);
+        vec2* ptr = (vec2*)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+        std::copy(stratifiedSamples, stratifiedSamples + totalNumSamples, ptr);
+        glUnmapBuffer(GL_ARRAY_BUFFER);
+
+        sampleSignal = false;
+    }
+
     iterative.CreateBinding();
     iterative.LoadCamera(camera, viewportWidth, viewportHeight);
+    iterative.LoadInteger("stratumIdx", numSamples % kNumStrata);
     glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
     glMemoryBarrier(MEMORY_BARRIER_RT);
     numSamples++;
 }
-
-
-// glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
 
 void Renderer::Present() {
     present.CreateBinding();
@@ -445,6 +526,10 @@ void Renderer::ResetSamples() {
     numSamples = 0;
     float clearcol[4] = { 0.0, 0.0, 0.0, 1.0 };
     glClearTexSubImage(accum.GetHandle(), 0, 0, 0, 0, viewportWidth, viewportHeight, 1, GL_RGBA, GL_FLOAT, clearcol);
+}
+
+uint32_t Renderer::GetNumSamples() {
+    return numSamples;
 }
 
 void Renderer::SaveScreenshot(const std::string& filename) {

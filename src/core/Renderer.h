@@ -7,6 +7,7 @@
 #include "Shader.h"
 #include "Texture.h"
 #include "../math/Camera.h"
+#include <thread>
 
 class Renderer {
 public:
@@ -17,6 +18,7 @@ public:
 	void Present();
 
 	void ResetSamples();
+	uint32_t GetNumSamples();
 
 	void SaveScreenshot(const std::string& filename);
 	void RenderReference(const Camera& camera);
@@ -37,11 +39,16 @@ private:
 
 	Scene scene;
 
+	Buffer stratifiedBuf;
+	TextureBuffer stratifiedTex;
+	vec2* stratifiedSamples;
+	bool sampleSignal;
+	uint32_t totalNumSamples;
+	std::thread* sampleGenThread;
+
 	int frameCounter;
-	int* atomicCounterClear;
-
 	int numSamples;
-
+	bool running;
 };
 
 #endif
