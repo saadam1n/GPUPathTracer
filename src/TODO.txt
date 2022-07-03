@@ -1,6 +1,6 @@
 Revised TODO:
-- Area sunlight sampling
-- LD sampling
+- Area sunlight sampling: DONE
+- LD sampling: in progress
 - CLEAN UP CODE, AND OPTIMIZE STUFF
 - PROPER GLTF SUPPORT
 - Implement GPU reference renderer

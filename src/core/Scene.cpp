@@ -73,7 +73,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
 
     MaterialInstance sky;
     sky.isEmissive = true;
-    sky.emission = 100.0f * glm::vec3(30.0f, 26.0f, 19.0f);
+    sky.emission = 25.0f * glm::vec3(30.0f, 26.0f, 19.0f);
     sky.albedoHandle = glGetTextureHandleARB(environment->GetHandle());
     glMakeTextureHandleResidentARB(sky.albedoHandle);
     materialInstances.push_back(sky);

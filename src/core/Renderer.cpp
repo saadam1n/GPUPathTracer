@@ -20,7 +20,7 @@ constexpr float kMetallic = 0.0f;
 // REFERENCE CPU RENDERER PARAMS
 constexpr uint32_t KNumRefSamples = 32768;
 constexpr uint32_t kNumWorkers = 6; // 6 worker threads, 1 windows thread, 1 thread as breathing room
-const vec3 sunDir = normalize(vec3(2.0f, 9.0f, 12.0f));
+const vec3 sunDir = normalize(vec3(2.0f, 40.0f + 29.0f, 12.0f));
 constexpr float sunAngle = glm::radians(5.0f);
 const float sunRadius = tan(sunAngle);
 const float sunMaxDot = cos(sunAngle);
@@ -534,6 +534,127 @@ float HybridTaus(uvec4& state) {
     );
 }
 
+// Implementation of "Golden Ratio Sequences For Low-Discrepancy Sampling"
+// See https://www.graphics.rwth-aachen.de/media/papers/jgt.pdf
+float NextGoldenRatio(uint32_t& seed) {
+    seed += 2654435840;
+    return 2.3283064365387e-10f * float(seed);
+}
+
+const int kNumLowDiscrepancyPoints = 24;
+
+void CreateGoldenRatioSequence(vec2* points, uint32_t& xgen, uint32_t& ygen) {
+    std::default_random_engine generator;
+    std::uniform_int_distribution<uint32_t> distribution(1, UINT32_MAX);
+
+    xgen = distribution(generator);
+    ygen = distribution(generator);
+
+    float minval = 1.0f;
+    uint idx = 0;
+
+    for (uint i = 0; i < kNumLowDiscrepancyPoints; i++) {
+        float x = NextGoldenRatio(xgen);
+        points[i].y = x;
+        if (x < minval) {
+            minval = x;
+            idx = i;
+        }
+    }
+
+    // Find our increment/decrement variables for our permuation
+    uint f = 1, fp = 1, parity = 0;
+    while (f + fp < kNumLowDiscrepancyPoints) {
+        uint temp = f;
+        f += fp;
+        fp = temp;
+        parity++;
+    }
+    uint inc = fp, dec = f;
+    if (bool(parity & 1)) {
+        inc = f;
+        dec = fp;
+    }
+
+    // sigma(i) is originally the minimum position in the sequence
+    points[0].x = points[idx].y;
+    for (uint i = 1; i < kNumLowDiscrepancyPoints; i++) {
+        // Choose next index
+        if (idx < dec) {
+            idx += inc;
+            if (idx >= kNumLowDiscrepancyPoints) {
+                idx -= dec;
+            }
+        }
+        else {
+            idx -= dec;
+        }
+        points[i].x = points[idx].y;
+    }
+
+    // Normal golden sequence for next set of points
+    for (int i = 0; i < kNumLowDiscrepancyPoints; i++) {
+        points[i].y = NextGoldenRatio(ygen);
+    }
+}
+
+float VanDerCorput(int n, int base) {
+    float sum = 0.0f;
+    float ibase = 1.0f / base;
+
+    while (n > 0) {
+        // What is remaining at this digit?
+        int remaining = (n % base);
+        // Multiply by b^-i
+        sum += remaining * ibase;
+        // Bit shift by on
+        n /= base;
+        // Update to get our new b^-i
+        ibase /= base;
+    }
+
+    return sum;
+}
+
+vec2 HaltonSequence(int n) {
+    return vec2(VanDerCorput(n, 2), VanDerCorput(n, 3));
+}
+
+void CreateHaltonSequenceSamples(vec2* points) {
+    for (int i = 0; i < kNumLowDiscrepancyPoints; i++) {
+        points[i] = HaltonSequence(i);
+    }
+}
+
+void TestGoldenRatio() {
+    uint8_t* img = new uint8_t[256 * 256 * 3];
+    for (int y = 0; y < 256; y++) {
+        for (int x = 0; x < 256; x++) {
+            int i = 3 * (y * 256 + x);
+            img[i] = 255;
+            img[i+1] = 255;
+            img[i+2] = 255;
+        }
+    }
+
+    vec2 points[kNumLowDiscrepancyPoints];
+    uint32_t xgen = rand();
+    uint32_t ygen = rand();
+    CreateHaltonSequenceSamples(points);// , xgen, ygen);
+
+    for (int i = 0; i < kNumLowDiscrepancyPoints; i++) {
+        uint32_t x = 256 * points[i].x;
+        uint32_t y = 256 * points[i].y;
+        int j = 3 * (y * 256 + x);
+        img[j] = 0;
+        img[j + 1] = 0;
+        img[j + 2] = 0;
+    }
+
+    SOIL_save_image("res/outputs/halton_sequence_ld_test0.png", SOIL_SAVE_TYPE_PNG, 256, 256, 3, img);
+    delete[] img;
+}
+
 #define M_PI 3.141592653589793238462643383279f
 
 // http://simonstechblog.blogspot.com/2011/12/microfacet-brdf.html
@@ -656,9 +777,6 @@ void PathTraceImage(
             float roughness = data.g * data.g;
             float metalness = data.b;
 
-            metalness = 0.0f;
-            roughness = 0.3f;
-
             throughput *= GGXCookTorrance(tex->Sample(closest.intersection.texcoord), roughness, metalness, closest.intersection.normal, viewDir, ray.direction) * 2.0f * M_PI * max(dot(closest.intersection.normal, ray.direction), 0.0f); // BRDF, we need to multiply by M_PI to account for cosine PDF
 
             float rr = min(max(throughput.x, max(throughput.y, throughput.z)), 1.0f);
@@ -683,6 +801,7 @@ void PathTraceImage(
 
 // Render the ground truth of the image on the CPU
 void Renderer::RenderReference(const Camera& camera) {
+    TestGoldenRatio();
     auto filename = std::to_string(std::time(nullptr));
     SaveScreenshot("res/screenshots/" + filename + '-' + std::to_string(numSamples) + "-RENDERED.png");
 

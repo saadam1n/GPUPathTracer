@@ -49,19 +49,145 @@ uint LCGStep(inout uint z, uint a, uint c) {
     return z;
 }
 
+uint HybridTausInteger() {
+    return
+        TausStep(state.x, 13, 19, 12, 4294967294U) ^
+        TausStep(state.y, 2, 25, 4, 4294967288U) ^
+        TausStep(state.z, 3, 11, 17, 4294967280U) ^
+        LCGStep(state.w, 1664525, 1013904223U);
+}
+
 float HybridTaus() {
     return 2.3283064365387e-10 * float(
-        TausStep(state.x, 13, 19, 12, 4294967294U) ^ 
-        TausStep(state.y, 2, 25, 4, 4294967288U) ^ 
-        TausStep(state.z, 3, 11, 17, 4294967280U) ^ 
-        LCGStep(state.w, 1664525, 1013904223U)
+        HybridTausInteger()
     );
 }
+
 #define rand() HybridTaus()
 
 vec2 Random2D() {
     return vec2(rand(), rand());
 }
+
+#define NUM_LD_POINTS 24
+vec2 ldPoints[NUM_LD_POINTS];
+int ldNext = 0;
+
+vec2 NextPointLD() {
+    if (ldNext < NUM_LD_POINTS) {
+        return ldPoints[ldNext++];
+    }
+    else {
+        return Random2D();
+    }
+}
+
+#define rand2() NextPointLD()
+
+float VanDerCorput(uint n, uint base) {
+    float sum = 0.0f;
+    float ibase = 1.0f / base;
+
+    while (n > 0) {
+        // What is remaining at this digit?
+        uint remaining = (n % base);
+        // Multiply by b^-i
+        sum += remaining * ibase;
+        // Bit shift by on
+        n /= base;
+        // Update to get our new b^-i
+        ibase /= base;
+    }
+
+    return sum;
+}
+
+vec2 HaltonSequence(in uint n) {
+    return vec2(VanDerCorput(n, 2), VanDerCorput(n, 3));
+}
+
+vec2 HammerslySequence(in uint n) {
+    return vec2((n + rand()) / NUM_LD_POINTS, VanDerCorput(n, 2));
+}
+
+void CreateHaltonSequenceSamples() {
+    uint offset = HybridTausInteger();
+    for (uint i = 0; i < NUM_LD_POINTS; i++) {
+        ldPoints[i] = HaltonSequence(offset + i);
+    }
+}
+
+void CreateHammerslySequenceSamples() {
+    for (uint i = 0; i < NUM_LD_POINTS; i++) {
+        ldPoints[i] = HammerslySequence(i);
+    }
+}
+
+// Implementation of "Golden Ratio Sequences For Low-Discrepancy Sampling"
+// See https://www.graphics.rwth-aachen.de/media/papers/jgt.pdf
+float NextGoldenRatio(inout uint seed) {
+    seed += 2654435769;
+    return 2.3283064365387e-10f * float(seed);
+}
+
+void CreateGoldenRatioSamples() {
+    uvec2 seed = uvec2(HybridTausInteger(), HybridTausInteger());
+
+    float minval = 1.0f;
+    uint idx = 0;
+
+    for (uint i = 0; i < NUM_LD_POINTS; i++) {
+        float x = NextGoldenRatio(seed.x);
+        ldPoints[i].y = x;
+        if (x < minval) {
+            minval = x;
+            idx = i;
+        }
+    }
+
+    // Find our increment/decrement variables for our permuation
+    uint f = 1, fp = 1, parity = 0;
+    while (f + fp < NUM_LD_POINTS) {
+        uint temp = f;
+        f += fp;
+        fp = temp;
+        parity++;
+    }
+    uint inc = fp, dec = f;
+    if (bool(parity & 1)) {
+        inc = f;
+        dec = fp;
+    }
+
+    // sigma(i) is originally the minimum position in the sequence
+    ldPoints[0].x = ldPoints[idx].y;
+    for (uint i = 1; i < NUM_LD_POINTS; i++) {
+        // Choose next index
+        if (idx < dec) {
+            idx += inc;
+            if (idx >= NUM_LD_POINTS) {
+                idx -= dec;
+            }
+        }
+        else {
+            idx -= dec;
+        }
+        ldPoints[i].x = ldPoints[idx].y;
+    }
+
+    // Normal golden sequence for next set of points
+    for (int i = 0; i < NUM_LD_POINTS; i++) {
+        ldPoints[i].y = NextGoldenRatio(seed.y);
+    }
+}
+
+void CreateRandomHighDiscrepancySamples() {
+    for (int i = 0; i < NUM_LD_POINTS; i++) {
+        ldPoints[i] = Random2D();
+    }
+}
+
+#define InitializeLD() CreateHammerslySequenceSamples()
 
 const int kNumStrataPerSide = 4;
 const int kNumStrata = kNumStrataPerSide * kNumStrataPerSide;
@@ -78,11 +204,11 @@ vec2 Random2DStratified() {
     return r / kNumStrataPerSide;
 }
 
-#define rand2() Random2D()
 
 void initRNG(uint ridx) {
     stateIdx = ridx;
     state = states[ridx];
+    InitializeLD();
 }
 
 void freeRNG() {

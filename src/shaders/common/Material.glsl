@@ -279,6 +279,13 @@ vec3 GGX_CookTorrance(in vec3 albedo, in float metallic, in float roughness, in 
     vec3 f0 = mix(vec3(0.04f), albedo, metallic);
     vec3 h = normalize(v + l);
     vec3 specular = FresnelShlick(f0, h, v) * GGX_Distribution(n, h, roughness) * GSmith(n, v, l, roughness) / max(4.0f * nndot(n, v) * nndot(n, l), 1e-26f);
+    // Some changes to what devsh wrote and some ideas:
+    // First of all, when calculating the diffuse, we need to be careful about the internal reflection constant
+    // We need to use the refractive index to get an outgoing ray direction instead of using just v
+    // Then we have to integrate that per each microfacet since they have different half vectors and thus can internally reflect a different amount of light
+    // Finally, in the case of (total) internal reflection, some of the light that is reflected back inside is either absorbed or tries to scatter again
+    // We need to account for this internal reflection or we will loose energy
+    // Unfortunately I am no math genius and I do not want to change this without breaking some rule so I won't touch this but I will leave these thoughts here
     vec3 diffuse = albedo / M_PI * (1.0f - metallic) * (1.0f - FresnelShlick(f0, n, l)) * (1.0f - FresnelShlick(f0, n, v)); // See pbr discussion by devsh on how to do energy conservation
     return specular + diffuse;
 }

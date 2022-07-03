@@ -31,8 +31,9 @@ float MISWeight(in float top, in float bottom) {
     return 1.0f / (1.0f + bottom / top);
 }
 
-const float metalness = 0.0f;
-const float roughness = 0.3f;
+// I will eventually need to move away from global vars
+float metalness;
+float roughness;
 vec3 albedo;
 vec3 viewDir;
 
@@ -145,10 +146,11 @@ void main() {
 	// Generate our ray
 	Ray ray;
 
-    vec2 interpolation = vec2(vec2(PixelCoordinates) + vec2(rand(), rand())) / (vec2(width, height));
-    float phi = 2 * M_PI * rand(); 
-    float r = sqrt(rand());
+    vec2 interpolation = (PixelCoordinates + rand2()) / vec2(width, height);
 
+    vec2 r = rand2();
+    float phi = 2 * M_PI * r.y; 
+    float radius = sqrt(r.x);
     vec2 rd = lens_radius * r * vec2(cos(phi), sin(phi));
     vec3 offset = u * rd.x + v * rd.y;
 
@@ -216,8 +218,8 @@ void main() {
         albedo = color.xyz;
         vec4 materialInfo = texture(sampler2D(fbu(materialInstance[vertex.MatID].zw)), vertex.TextureCoordinate).xyzw;
 
-        //float roughness = materialInfo.g * materialInfo.g;
-        //float metalness = materialInfo.b;
+        roughness = materialInfo.g * materialInfo.g;
+        metalness = materialInfo.b;
         
         HitInfo lightHit;
         vec3 lightThroughput;
@@ -229,11 +231,7 @@ void main() {
             contribution += lightThroughput * materialInstance[lightMatID + 1].xyz;
         }
 
-
         // Construct a new ray
-
-        ray.origin = vertex.Position + 0.001 * vertex.Normal;
-
         float otherPdf;
         if(rand() > 0.5f) {
             vec3 h = ConstructTBN(vertex.Normal) * GGX_ImportanceSample(roughness);
@@ -255,6 +253,7 @@ void main() {
 
         viewDir = -ray.direction;
         lastPosition = vertex.Position;
+        ray.origin = vertex.Position + 0.001 * ray.direction;
     }
 
     vec3 accumContribution = imageLoad(accum, PixelCoordinates).xyz + contribution;
