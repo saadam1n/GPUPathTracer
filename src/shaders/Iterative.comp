@@ -147,7 +147,7 @@ void main() {
 	// Generate our ray
 	Ray ray;
 
-    vec2 interpolation = (PixelCoordinates + NextStratifiedSample(idx)) / vec2(width, height);
+    vec2 interpolation = (PixelCoordinates + rand2()) / vec2(width, height);
 
     vec2 r = rand2();
     float phi = 2 * M_PI * r.y; 

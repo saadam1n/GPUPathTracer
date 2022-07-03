@@ -90,10 +90,6 @@ int main(int argc, char** argv) {
 			needResetSamples = false;
 		}
 
-		if (renderer->GetNumSamples() == 128) {
-			renderer->SaveScreenshot("res/outputs/128_spp_stratified.png");
-		}
-
 		camera.GenerateImagePlane();
 
 		renderer->RenderFrame(camera);

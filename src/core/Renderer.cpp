@@ -495,6 +495,7 @@ void Renderer::CleanUp(void) {
 #define MEMORY_BARRIER_RT GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT | GL_ATOMIC_COUNTER_BARRIER_BIT
 
 void Renderer::RenderFrame(const Camera& camera)  {
+    /*
     if (numSamples % kNumStrata == 0) {
         while (!sampleSignal) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -507,6 +508,7 @@ void Renderer::RenderFrame(const Camera& camera)  {
 
         sampleSignal = false;
     }
+    */
 
     iterative.CreateBinding();
     iterative.LoadCamera(camera, viewportWidth, viewportHeight);
