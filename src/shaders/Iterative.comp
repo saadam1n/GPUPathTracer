@@ -36,7 +36,7 @@ const float roughness = 0.3f;
 vec3 albedo;
 vec3 viewDir;
 
-Ray GenerateLightSample(in Vertex vertex, out HitInfo lightHit, out float lightPdf, in vec3 throughput, out vec3 lightThroughput, out uint lightMatID) { 
+Vertex RandomLightVertex() {
     float selectedArea = rand() * totalLightArea;
 
     // a is lower bound, b is upper bound
@@ -68,14 +68,64 @@ Ray GenerateLightSample(in Vertex vertex, out HitInfo lightHit, out float lightP
     lightVertex.Normal = triangle.normal;
     lightVertex.MatID = triangle.material;
 
+    return lightVertex;
+}
+
+mat3 ConstructTBN(in vec3 normal) {
+    vec3 normcrs = (abs(normal.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0));
+    vec3 tangent = normalize(cross(normcrs, normal));
+    vec3 bitangent = cross(tangent, normal); 
+    return mat3(tangent, bitangent, normal);
+}
+
+// I make the assumption that the sun is a disk with its center just 1 unit away from the vertex
+// We can calculate our sampled point via c + tbn * (random 2d point within a unit circle * radius, 0.0f)
+// Where c is the center of our disk, tbn is its coordinate system, and radius is the radius of the disk, which can easily be obtained from the tanget of a angular radius parameter
+// But this is a very hacky and bad solution, ideally you want to solid angle sample a cone
+// For more details, see "Monte Carlo Techniques for Direct Lighting Calculations" by Shirley et al.
+uniform vec3 sunDir;// = normalize(vec3(2.0f, 9.0f, 12.0f));
+uniform float sunRadius;// = 0.05f;
+uniform float sunMaxDot;
+float sunArea = M_PI * sunRadius * sunRadius;
+Vertex RandomSunVertex(in Vertex vertex) {
+    mat3 sunTBN = ConstructTBN(-sunDir);
+
+    vec2 r = rand2();
+
+    float radius = sunRadius * sqrt(r.x);
+    float phi = 2 * M_PI * r.y;
+
+    vec3 diskPosition = vec3(radius * vec2(cos(phi), sin(phi)), 0.0f);
+
+    Vertex sunVertex;
+
+    sunVertex.Position = vertex.Position + sunDir + sunTBN * diskPosition; 
+    sunVertex.Normal = -sunDir;
+    sunVertex.MatID = 0;
+
+    return sunVertex;
+}
+
+Ray GenerateLightSample(in Vertex vertex, out HitInfo lightHit, out float lightPdf, in vec3 throughput, out vec3 lightThroughput, out uint lightMatID) { 
+    float lightPick = rand();
+    Vertex lightVertex;
+
+    if(lightPick > 0.5f) {
+        lightVertex = RandomLightVertex();
+        lightPdf = 0.5f / totalLightArea;
+        lightHit.di.x = distance(lightVertex.Position, vertex.Position) - 0.005f;
+    } else {
+        lightVertex = RandomSunVertex(vertex);
+        lightPdf = 0.5f / sunArea;
+        lightHit.di.x = 1e20f;//radius - 0.005f;
+    }
+
     Ray lightRay;
 
     float radius = distance(lightVertex.Position, vertex.Position); 
     vec3 lightDir = normalize(lightVertex.Position - vertex.Position); 
-    lightPdf = 1.0f / totalLightArea;
     float bouncePdf = 0.5f * (GGX_PDF(vertex.Normal, viewDir, lightDir, roughness) + SamplePdfCosine(vertex.Normal, lightDir)) * nndot(lightVertex.Normal, -lightDir) / (radius * radius); // Seach veach 1995, eq 9
     lightThroughput = BRDF(albedo, metalness, roughness, vertex.Normal, viewDir, lightDir) * throughput * nndot(vertex.Normal, lightDir) * nndot(lightVertex.Normal, -lightDir) * MISWeight(lightPdf, bouncePdf) / (lightPdf * radius * radius);
-    lightHit.di.x = radius - 0.005f;
              
     lightRay.origin = vertex.Position + 0.001f * lightDir;
     lightRay.direction = lightDir;
@@ -84,22 +134,6 @@ Ray GenerateLightSample(in Vertex vertex, out HitInfo lightHit, out float lightP
 
     return lightRay;
 }
-
-// I make the assumption that the sun is a disk with its center just 1 unit away from the vertex
-// We can calculate our sampled point via c + tbn * (random 2d point within a unit circle * radius, 0.0f)
-// Where c is the center of our disk, tbn is its coordinate system, and radius is the radius of the disk, which can easily be obtained from the tanget of a angular radius parameter
-// Now we need to be careful about 
-//
-/*
-Vertex GenerateSunSample(in Vertex vertex) {
-    Vertex sunVertex;
-
-
-
-    return sunVertex;
-}
-*/
-
 
 const float kRoughness = 1e-5f;
 
@@ -126,7 +160,7 @@ void main() {
 
     Vertex vertex;
     float bxdfPdf = 1.0;
-    float neePdf = 1.0 / totalLightArea;
+    float neePdf = 0.5f / totalLightArea;
 
     // TODO: clean up variable names
     viewDir = -ray.direction;
@@ -148,6 +182,9 @@ void main() {
         if(fbs(materialInstance[vertex.MatID + 1].w) == 1) {
             vec3 emission;
             if(vertex.MatID == 0) {
+                // TODO: figure out how to factor in sunlight here
+                // I think that we would have to weight the skybox and sunlight differently
+                // At least energy loss is minimal atm and I can wait until I do away with area sampling and get into solid angle sampling stuff
                 emission = texture(samplerCube(fbu(materialInstance[0].xy)), ray.direction).xyz;
             } else {
                 emission = materialInstance[vertex.MatID + 1].xyz;
@@ -194,19 +231,17 @@ void main() {
 
 
         // Construct a new ray
-        vec3 normcrs = (abs(vertex.Normal.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0));
-        vec3 tangent = normalize(cross(normcrs, vertex.Normal));
-        vec3 bitangent = cross(tangent, vertex.Normal); 
+
         ray.origin = vertex.Position + 0.001 * vertex.Normal;
 
         float otherPdf;
         if(rand() > 0.5f) {
-            vec3 h = mat3(tangent, bitangent, vertex.Normal) * GGX_ImportanceSample(roughness);
+            vec3 h = ConstructTBN(vertex.Normal) * GGX_ImportanceSample(roughness);
             ray.direction = reflect(-viewDir, h);
             bxdfPdf = GGX_PDFH(vertex.Normal, viewDir, h, roughness); 
             otherPdf = SamplePdfCosine(vertex.Normal, ray.direction);
         } else {
-            ray.direction = mat3(tangent, bitangent, vertex.Normal) * ImportanceSampleCosine(bxdfPdf);
+            ray.direction = ConstructTBN(vertex.Normal) * ImportanceSampleCosine(bxdfPdf);
             otherPdf = GGX_PDF(vertex.Normal, viewDir, ray.direction, roughness);
         }
 

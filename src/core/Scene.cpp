@@ -66,14 +66,14 @@ void InitializeTexture(const std::string& folder, Texture2D* tex, const aiMateri
 }
 
 void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
-    totalLightArea = 0;
+    totalLightArea = 0.0;
     std::vector<MaterialInstance> materialInstances;
     
     textures.push_back(environment);
 
     MaterialInstance sky;
     sky.isEmissive = true;
-    sky.emission = glm::vec3(1.0);
+    sky.emission = 100.0f * glm::vec3(30.0f, 26.0f, 19.0f);
     sky.albedoHandle = glGetTextureHandleARB(environment->GetHandle());
     glMakeTextureHandleResidentARB(sky.albedoHandle);
     materialInstances.push_back(sky);
@@ -85,9 +85,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     // Turn off smooth normals for path tracing to prevent "broken" BRDFs and energy loss.
     const aiScene* Scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenNormals | aiProcess_GenUVCoords);
 
-    
     // Third order of business: load vertices into a megabuffer and transform texcoords to location on atlas
-
     std::vector           <Vertex> Vertices;
     std::vector<TriangleIndexData> Indices;
 

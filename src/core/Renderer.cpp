@@ -18,8 +18,12 @@ constexpr float kExposure = 1.68f;
 constexpr float kMetallic = 0.0f;
 
 // REFERENCE CPU RENDERER PARAMS
-constexpr uint32_t KNumRefSamples = 256;// 32768;
+constexpr uint32_t KNumRefSamples = 32768;
 constexpr uint32_t kNumWorkers = 6; // 6 worker threads, 1 windows thread, 1 thread as breathing room
+const vec3 sunDir = normalize(vec3(2.0f, 9.0f, 12.0f));
+constexpr float sunAngle = glm::radians(5.0f);
+const float sunRadius = tan(sunAngle);
+const float sunMaxDot = cos(sunAngle);
 
 /*
 When we trace a ray, we don't actually care about the ray, we care about the path
@@ -395,6 +399,9 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     iterative.LoadFloat("kMetallic", kMetallic);
     iterative.LoadShaderStorageBuffer("samplers", scene.materialsBuf);
     iterative.LoadShaderStorageBuffer("randomState", randomState);
+    iterative.LoadVector3F32("sunDir", sunDir);
+    iterative.LoadFloat("sunRadius", sunRadius);
+    iterative.LoadFloat("sunMaxDot", sunMaxDot);
 
     present.CreateBinding();
     present.LoadFloat("exposure", kExposure);
@@ -616,6 +623,9 @@ void PathTraceImage(
                 if (closest.intersection.matId == 0) {
                     const TextureCubemap* skybox = (const TextureCubemap*)textures.front();
                     emission = skybox->Sample(ray.direction);
+                    if (dot(ray.direction, sunDir) >  sunMaxDot) {
+                        emission += materials[0].emission;
+                    }
                 }
                 else
                     emission = materials[closest.intersection.matId].emission;
