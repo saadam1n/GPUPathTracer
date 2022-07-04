@@ -34,8 +34,17 @@ struct MaterialInstance {
     vec3 emission;
 };
 
-MaterialInstance ConstructMaterialInstance(in uint materialID) {
+MaterialInstance ConstructMaterialInstance(in uint materialID, in vec2 texcoord) {
     MaterialInstance material;
+    material.emission = materialInstance[materialID + 1].xyz;
+
+    vec4 data0 = texture(sampler2D(fbu(materialInstance[materialID].xy)), texcoord);
+    vec4 data1 = texture(sampler2D(fbu(materialInstance[materialID].zw)), texcoord);
+
+    material.albedo = data0.xyz;
+    material.roughness = data1.g * data1.g;
+    material.metallic = data1.b;
+
     return material;
 }
 

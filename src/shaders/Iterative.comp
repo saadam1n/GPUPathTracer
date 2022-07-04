@@ -179,23 +179,24 @@ void main() {
             vertex.MatID = 0;
         }
 
+        MaterialInstance material = ConstructMaterialInstance(vertex.MatID, vertex.TextureCoordinate);
+
         // Account for L_e
-        vec3 emission, indirectDirectThroughput;
+        vec3 indirectDirectThroughput;
         if(miss) {
             // TODO: figure out how to factor in sunlight here
             // I think that we would have to weight the skybox and sunlight differently
             // At least energy loss is minimal atm and I can wait until I do away with area sampling and get into solid angle sampling stuff
-            emission = texture(samplerCube(fbu(materialInstance[0].xy)), ray.direction).xyz;
+            material.emission = texture(samplerCube(fbu(materialInstance[0].xy)), ray.direction).xyz;
             indirectDirectThroughput = throughput;
         } else {
-            emission = materialInstance[vertex.MatID + 1].xyz;
             if(i != 0) {
                 float dist = distance(lastPosition, vertex.Position);
                 bxdfPdf *= nndot(vertex.Normal, viewDir) / (dist * dist);
                 indirectDirectThroughput = throughput * MISWeight(bxdfPdf, neePdf);
             }
         }
-        contribution += indirectDirectThroughput * emission;
+        contribution += indirectDirectThroughput * material.emission;
 
         // If our ray left the scene, we cannot continue on it anymore
         // Also if we hit a case where our ray hit the back of an object we also have to stop
@@ -203,14 +204,9 @@ void main() {
             break; 
         }
 
-
-        // Sample the texture
-        vec4 color = texture(sampler2D(fbu(materialInstance[vertex.MatID].xy)), vertex.TextureCoordinate);
-        albedo = color.xyz;
-        vec4 materialInfo = texture(sampler2D(fbu(materialInstance[vertex.MatID].zw)), vertex.TextureCoordinate).xyzw;
-
-        roughness = materialInfo.g * materialInfo.g;
-        metalness = materialInfo.b;
+        albedo = material.albedo;
+        roughness = material.roughness;
+        metalness = material.metallic;
         
         HitInfo lightHit;
         vec3 lightThroughput;
