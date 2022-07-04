@@ -90,13 +90,6 @@ int main(int argc, char** argv) {
 			needResetSamples = false;
 		}
 
-		
-		if (renderer->GetNumSamples() == 1024) {
-			renderer->SaveScreenshot("res/outputs/1024_spp_halton_prime_switching_fix.png");
-			return 0;
-		}
-		
-
 		camera.GenerateImagePlane();
 
 		renderer->RenderFrame(camera);

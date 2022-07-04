@@ -164,6 +164,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
             newInstance.propertiesHandle = glGetTextureHandleARB(spectex->GetHandle());
             glMakeTextureHandleResidentARB(newInstance.propertiesHandle);
 
+            newInstance.emission = vec3(0.0f);
             if (!hasTextures) {
                 if (emission.r + emission.g + emission.b > 0.001f) {
                     newInstance.isEmissive = 1;

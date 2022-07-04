@@ -128,18 +128,17 @@ vec2 HaltonSequence(in uint n, in uint b0, in uint b1) {
 }
 
 // Solution to avoid correleation suggested by criver. See PBRT for more details
-const int firstPrimesUpTo100[] = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97}; // 25 prime numbers, so 24 LD samples per path
+const uint primePool[] = {2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97}; // 25 prime numbers, so 24 LD samples per path
 int nextPrime = 0;
 vec2 NextHalton() {
     // We cannot use a prime number more than one or else we will get correlation between samples
     int first = nextPrime, second = nextPrime + 1;
-    if (second >= firstPrimesUpTo100.length()) return Random2D(); // We've run out of LD samples. return a psuedo-random value
-    vec2 halton = HaltonSequence(ldState, firstPrimesUpTo100[first], firstPrimesUpTo100[second]);
+    if (second >= primePool.length()) return Random2D(); // We've run out of LD samples. return a psuedo-random value
+    vec2 halton = HaltonSequence(ldState, primePool[first], primePool[second]);
     nextPrime = second + 1;
     return halton;
 }
 
-#define rand2() NextHalton()
 
 vec2 HammerslySequence(in uint n, in uint offset) {
     return vec2(float(n + rand()) / float(NUM_LD_POINTS), VanDerCorput(n + offset, 2));
@@ -147,10 +146,26 @@ vec2 HammerslySequence(in uint n, in uint offset) {
 
 // Implementation of "Golden Ratio Sequences For Low-Discrepancy Sampling"
 // See https://www.graphics.rwth-aachen.de/media/papers/jgt.pdf
-float NextGoldenRatio(inout uint seed) {
+uint NextGoldenRatioInteger(inout uint seed) {
     seed += 2654435769;
-    return 2.3283064365387e-10f * float(seed);
+    return seed;
 }
+
+float NextGoldenRatio(inout uint seed) {
+    return 2.3283064365387e-10f * float(NextGoldenRatioInteger(seed));
+}
+
+vec2 ImpartialStratifier() {
+    const uint kNumStrataPerSide = 8;
+    const uint kNumStrata = kNumStrataPerSide * kNumStrataPerSide;
+
+    uint index = NextGoldenRatioInteger(ldState) % kNumStrata;
+
+    uvec2 stratum = uvec2(index % kNumStrataPerSide, index / kNumStrataPerSide);
+    return vec2(stratum + Random2D()) / float(kNumStrataPerSide);
+}
+
+#define rand2() NextHalton()
 
 void CreateGoldenRatioSamples() {
     uvec2 seed = uvec2(HybridTausInteger(), HybridTausInteger());

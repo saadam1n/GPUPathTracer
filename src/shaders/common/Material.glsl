@@ -11,6 +11,75 @@ layout(std430) readonly buffer samplers {
     vec4 materialInstance[];
 };
 
+// MATERIAL_TYPE enum
+#define MATERIAL_TYPE_DIFFUSE_SPECULAR 1 // standard cook-torrance BRDF
+#define MATERIAL_TYPE_REFRACTIVE 2       // refractive materials
+#define MATERIAL_TYPE_MIRROR 3           // perfect mirrors (unless I find a way how to do it in trowbridge-reitz without hitting numerical instabilities)
+// End
+
+// I will be following the naming scheme used by Walters et al. 2007 "Microfacet Models for Refraction through Rough Surfaces"
+
+// Mapped to by material ID
+struct MaterialInstance {
+    uint materialType; // Header of our material. This identifies what sorta of material we have here
+
+    vec3 albedo;
+
+    float metallic;
+    float roughness;
+    float roughness2;
+
+    float ior;
+
+    vec3 emission;
+};
+
+MaterialInstance ConstructMaterialInstance(in uint materialID) {
+    MaterialInstance material;
+    return material;
+}
+
+// Interaction between vectors on a surface
+struct SurfaceInteraction {
+    // the vectors that contain the properties of our interaction
+    vec3 normal;     // surface normal. MUST EQUAL GEOMETRIC NORMAL
+    vec3 outgoing;   // view vecotr
+    vec3 incoming;   // light vector
+    vec3 microfacet; // "halfway" sounds like a really ugly variable name and almost has no context behind it
+    // precomputed dots with non-negative values
+    float ndo;
+    float ndi;
+    float ndh;
+    float idh;
+};
+
+// Basically a constructor but the ugly C-way
+SurfaceInteraction ConstructSurfaceInteraction(in vec3 n, in vec3 o, in vec3 i) {
+    SurfaceInteraction construction;
+
+    construction.normal = n;
+    construction.outgoing = o;
+    construction.incoming = i;
+    construction.microfacet = normalize(o + i);
+
+    construction.ndo = nndot(construction.normal, construction.outgoing);
+    construction.ndi = nndot(construction.normal, construction.incoming);
+    construction.ndh = nndot(construction.normal, construction.microfacet);
+    construction.idh = nndot(construction.incoming, construction.microfacet);
+
+    return construction;
+}
+
+float TrowbridgeReitz(in MaterialInstance material, in SurfaceInteraction interaction) {
+    return 1.0f;
+}
+
+vec3 ComputeBSDF(in MaterialInstance material, in SurfaceInteraction interaction) {
+    return vec3(0.0f);
+}
+
+// WARNING: everything below here is messy code. Read at your own peril
+
 //#define LOGL_PBR
 #ifdef LOGL_PBR
 
@@ -297,5 +366,6 @@ vec3 PhongTest(in vec3 albedo, in float metallic, in float roughness, in vec3 n,
 }
 
 #define BRDF(a, m, r, n, v, l) GGX_CookTorrance(a, m, r, n, v, l)
+
 
 #endif

@@ -180,40 +180,32 @@ void main() {
         }
 
         // Account for L_e
-        if(fbs(materialInstance[vertex.MatID + 1].w) == 1) {
-            vec3 emission;
-            if(vertex.MatID == 0) {
-                // TODO: figure out how to factor in sunlight here
-                // I think that we would have to weight the skybox and sunlight differently
-                // At least energy loss is minimal atm and I can wait until I do away with area sampling and get into solid angle sampling stuff
-                emission = texture(samplerCube(fbu(materialInstance[0].xy)), ray.direction).xyz;
-            } else {
-                emission = materialInstance[vertex.MatID + 1].xyz;
-                if(i != 0) {
-                    float dist = distance(lastPosition, vertex.Position);
-                    bxdfPdf *= nndot(vertex.Normal, viewDir) / (dist * dist);
-                    throughput *= MISWeight(bxdfPdf, neePdf);
-                }
+        vec3 emission, indirectDirectThroughput;
+        if(miss) {
+            // TODO: figure out how to factor in sunlight here
+            // I think that we would have to weight the skybox and sunlight differently
+            // At least energy loss is minimal atm and I can wait until I do away with area sampling and get into solid angle sampling stuff
+            emission = texture(samplerCube(fbu(materialInstance[0].xy)), ray.direction).xyz;
+            indirectDirectThroughput = throughput;
+        } else {
+            emission = materialInstance[vertex.MatID + 1].xyz;
+            if(i != 0) {
+                float dist = distance(lastPosition, vertex.Position);
+                bxdfPdf *= nndot(vertex.Normal, viewDir) / (dist * dist);
+                indirectDirectThroughput = throughput * MISWeight(bxdfPdf, neePdf);
             }
-            contribution += throughput * emission;
-            break; // No indirect lighting except for zeroth bounce
         }
-        if(dot(vertex.Normal, viewDir) < 0.0f){
-            break;
+        contribution += indirectDirectThroughput * emission;
+
+        // If our ray left the scene, we cannot continue on it anymore
+        // Also if we hit a case where our ray hit the back of an object we also have to stop
+        if(miss || dot(vertex.Normal, viewDir) < 0.0f) {
+            break; 
         }
+
 
         // Sample the texture
         vec4 color = texture(sampler2D(fbu(materialInstance[vertex.MatID].xy)), vertex.TextureCoordinate);
-        //#define TRANSPARENCY
-        if(color.a != 1.0f) {
-        #ifdef TRANSPARENCY
-            i--;
-            continue;
-        #else
-            break;
-        #endif
-        }
-
         albedo = color.xyz;
         vec4 materialInfo = texture(sampler2D(fbu(materialInstance[vertex.MatID].zw)), vertex.TextureCoordinate).xyzw;
 

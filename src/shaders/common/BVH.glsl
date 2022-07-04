@@ -418,7 +418,6 @@ bool IntersectLeafAny(in BVHNode leaf, in Ray ray, inout HitInfo intersection) {
 #define BVH_STACK_SIZE 27
 
 bool ClosestHit(in Ray ray, inout HitInfo intersection) {
-	debugColor = vec3(0.0f);
 	Ray iray;
 
 	iray.direction = 1.0f / ray.direction;
@@ -437,7 +436,6 @@ bool ClosestHit(in Ray ray, inout HitInfo intersection) {
 	int index = -1;
 
 	while (true) {
-		debugColor++;
 		BVHNode child0 = GetNode(currentNode);
 		BVHNode child1 = GetNode(currentNode + 1);
 
