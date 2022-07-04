@@ -39,12 +39,7 @@ private:
 
 	Scene scene;
 
-	Buffer stratifiedBuf;
-	TextureBuffer stratifiedTex;
-	vec2* stratifiedSamples;
-	bool sampleSignal;
-	uint32_t totalNumSamples;
-	std::thread* sampleGenThread;
+	Buffer ldSamplerStateBuf;
 
 	int frameCounter;
 	int numSamples;

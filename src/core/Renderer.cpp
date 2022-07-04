@@ -433,30 +433,23 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     randomState.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
     randomState.UploadData(threadRandomState, GL_DYNAMIC_DRAW);
     
-    running = true;
-    sampleSignal = false;
-    totalNumSamples = viewportWidth * viewportHeight * kNumStrata;
-    stratifiedSamples = new vec2[totalNumSamples];
+    std::vector<uint32_t> ldSamplerStates(viewportWidth* viewportHeight);
+    for (uint32_t& state : ldSamplerStates) {
+        state = initalRange(stateGenerator);
+    }
 
-    // Generate our initial batch of samples
-    sampleGenThread = new std::thread(GenerateStratifiedSamples, stratifiedSamples, viewportWidth, viewportHeight, std::ref(sampleSignal), std::ref(running));
-
-
-    stratifiedBuf.CreateBinding(BUFFER_TARGET_ARRAY);
-    stratifiedBuf.UploadData(stratifiedSamples, totalNumSamples, GL_STATIC_DRAW);
-
-    stratifiedTex.CreateBinding();
-    stratifiedTex.SelectBuffer(&stratifiedBuf, GL_RG32F);
+    ldSamplerStateBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
+    ldSamplerStateBuf.UploadData(ldSamplerStates, GL_STATIC_DRAW);
 
     scene.materialsBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 4);
     randomState.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 5);
+    ldSamplerStateBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 6);
 
     accum.BindImageUnit(0, GL_RGBA32F);
     accum.BindTextureUnit(0, GL_TEXTURE_2D);
     scene.vertexTex.BindTextureUnit(1, GL_TEXTURE_BUFFER);
     scene.bvh.nodesTex.BindTextureUnit(3, GL_TEXTURE_BUFFER);
     scene.lightTex.BindTextureUnit(4, GL_TEXTURE_BUFFER);
-    stratifiedTex.BindTextureUnit(5, GL_TEXTURE_BUFFER);
 
     iterative.CreateBinding();
     iterative.LoadInteger("accum", 0);
@@ -464,11 +457,10 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     iterative.LoadInteger("indexTex", 2);
     iterative.LoadInteger("nodesTex", 3);
     iterative.LoadInteger("lightTex", 4);
-    iterative.LoadInteger("stratifiedTex", 5);
     iterative.LoadFloat("totalLightArea", scene.totalLightArea);
-    iterative.LoadFloat("kMetallic", kMetallic);
     iterative.LoadShaderStorageBuffer("samplers", scene.materialsBuf);
     iterative.LoadShaderStorageBuffer("randomState", randomState);
+    iterative.LoadShaderStorageBuffer("ldSamplerStateTex", ldSamplerStateBuf);
     iterative.LoadVector3F32("sunDir", sunDir);
     iterative.LoadFloat("sunRadius", sunRadius);
     iterative.LoadFloat("sunMaxDot", sunMaxDot);
@@ -495,21 +487,6 @@ void Renderer::CleanUp(void) {
 #define MEMORY_BARRIER_RT GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT | GL_ATOMIC_COUNTER_BARRIER_BIT
 
 void Renderer::RenderFrame(const Camera& camera)  {
-    /*
-    if (numSamples % kNumStrata == 0) {
-        while (!sampleSignal) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
-
-        stratifiedBuf.CreateBinding(BUFFER_TARGET_ARRAY);
-        vec2* ptr = (vec2*)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-        std::copy(stratifiedSamples, stratifiedSamples + totalNumSamples, ptr);
-        glUnmapBuffer(GL_ARRAY_BUFFER);
-
-        sampleSignal = false;
-    }
-    */
-
     iterative.CreateBinding();
     iterative.LoadCamera(camera, viewportWidth, viewportHeight);
     iterative.LoadInteger("stratumIdx", numSamples % kNumStrata);

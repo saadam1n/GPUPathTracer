@@ -35,8 +35,14 @@ layout(std430) buffer randomState {
     uvec4 states[];
 };
 
+layout(std430) buffer ldSamplerStateTex {
+    uint ldStates[];
+};
+
 uint stateIdx;
 uvec4 state;
+
+uint ldState;
 
 uint TausStep(inout uint z, uint s1, uint s2, uint s3, uint m) {
     uint b = (((z << s1) ^ z) >> s2);
@@ -95,7 +101,6 @@ vec2 NextStratifiedSample(int idx) {
     return texelFetch(stratifiedTex, idx + stratumIdx).xy;
 }
 
-#define rand2() Random2D()
 
 float VanDerCorput(uint n, uint base) {
 #define MY_IMPL
@@ -138,6 +143,12 @@ float VanDerCorput(uint n, uint base) {
 vec2 HaltonSequence(in uint n) {
     return vec2(VanDerCorput(n, 2), VanDerCorput(n, 3));
 }
+
+vec2 NextHalton() {
+    return HaltonSequence(ldState++);
+}
+
+#define rand2() Random2D()
 
 vec2 HammerslySequence(in uint n, in uint offset) {
     return vec2(float(n + rand()) / float(NUM_LD_POINTS), VanDerCorput(n + offset, 2));
@@ -242,11 +253,13 @@ vec2 Random2DStratified() {
 void initRNG(uint ridx) {
     stateIdx = ridx;
     state = states[ridx];
+    ldState = ldStates[ridx];
     InitializeLD();
 }
 
 void freeRNG() {
     states[stateIdx] = state;
+    ldStates[stateIdx] = ldState;
 }
 
 #endif

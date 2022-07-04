@@ -16,7 +16,7 @@
 #include <Windows.h>
 #endif
 
-constexpr bool lockCamera = false ;
+constexpr bool lockCamera = true ;
 
 uint32_t Width = 1280;
 uint32_t Height = 720;
@@ -30,7 +30,7 @@ glm::vec2 LastCursorPosition;
 
 
 // I need class here because Intellisense is not detecting the camera type
-Camera camera((float)Width / Height, glm::radians(45.0f), 0.2f * 900.0f * kCameraSetting, 10.0f * 5.0f * kCameraSetting);
+Camera camera((float)Width / Height, glm::radians(45.0f), 0.2f * 900.0f * kCameraSetting, 0.0f * 5.0f * kCameraSetting);
 
 bool needResetSamples = false;
 
