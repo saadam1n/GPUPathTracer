@@ -32,9 +32,6 @@ float MISWeight(in float top, in float bottom) {
 }
 
 // I will eventually need to move away from global vars
-float metalness;
-float roughness;
-vec3 albedo;
 vec3 viewDir;
 
 Vertex RandomLightVertex() {
@@ -107,7 +104,7 @@ Vertex RandomSunVertex(in Vertex vertex) {
     return sunVertex;
 }
 
-Ray GenerateLightSample(in Vertex vertex, out HitInfo lightHit, out float lightPdf, in vec3 throughput, out vec3 lightThroughput, out uint lightMatID) { 
+Ray GenerateLightSample(in Vertex vertex, in MaterialInstance material, out HitInfo lightHit, out float lightPdf, in vec3 throughput, out vec3 lightThroughput, out uint lightMatID) { 
     float lightPick = rand();
     Vertex lightVertex;
 
@@ -125,8 +122,8 @@ Ray GenerateLightSample(in Vertex vertex, out HitInfo lightHit, out float lightP
 
     float radius = distance(lightVertex.Position, vertex.Position); 
     vec3 lightDir = normalize(lightVertex.Position - vertex.Position); 
-    float bouncePdf = 0.5f * (GGX_PDF(vertex.Normal, viewDir, lightDir, roughness) + SamplePdfCosine(vertex.Normal, lightDir)) * nndot(lightVertex.Normal, -lightDir) / (radius * radius); // Seach veach 1995, eq 9
-    lightThroughput = BRDF(albedo, metalness, roughness, vertex.Normal, viewDir, lightDir) * throughput * nndot(vertex.Normal, lightDir) * nndot(lightVertex.Normal, -lightDir) * MISWeight(lightPdf, bouncePdf) / (lightPdf * radius * radius);
+    float bouncePdf = 0.5f * (GGX_PDF(vertex.Normal, viewDir, lightDir, material.roughness) + SamplePdfCosine(vertex.Normal, lightDir)) * nndot(lightVertex.Normal, -lightDir) / (radius * radius); // Seach veach 1995, eq 9
+    lightThroughput = BRDF(material.albedo, material.metallic, material.roughness, vertex.Normal, viewDir, lightDir) * throughput * nndot(vertex.Normal, lightDir) * nndot(lightVertex.Normal, -lightDir) * MISWeight(lightPdf, bouncePdf) / (lightPdf * radius * radius);
              
     lightRay.origin = vertex.Position + 0.001f * lightDir;
     lightRay.direction = lightDir;
@@ -203,17 +200,13 @@ void main() {
         if(miss || dot(vertex.Normal, viewDir) < 0.0f) {
             break; 
         }
-
-        albedo = material.albedo;
-        roughness = material.roughness;
-        metalness = material.metallic;
         
         HitInfo lightHit;
         vec3 lightThroughput;
         uint lightMatID;
         float lightPdf;
 
-        Ray lightRay = GenerateLightSample(vertex, lightHit, lightPdf, throughput, lightThroughput, lightMatID);                     
+        Ray lightRay = GenerateLightSample(vertex, material, lightHit, lightPdf, throughput, lightThroughput, lightMatID);                     
         if(!AnyHit(lightRay, lightHit)) {
             contribution += lightThroughput * materialInstance[lightMatID + 1].xyz;
         }
@@ -221,17 +214,17 @@ void main() {
         // Construct a new ray
         float otherPdf;
         if(rand() > 0.5f) {
-            vec3 h = ConstructTBN(vertex.Normal) * GGX_ImportanceSample(roughness);
+            vec3 h = ConstructTBN(vertex.Normal) * GGX_ImportanceSample(material.roughness);
             ray.direction = reflect(-viewDir, h);
-            bxdfPdf = GGX_PDFH(vertex.Normal, viewDir, h, roughness); 
+            bxdfPdf = GGX_PDFH(vertex.Normal, viewDir, h, material.roughness); 
             otherPdf = SamplePdfCosine(vertex.Normal, ray.direction);
         } else {
             ray.direction = ConstructTBN(vertex.Normal) * ImportanceSampleCosine(bxdfPdf);
-            otherPdf = GGX_PDF(vertex.Normal, viewDir, ray.direction, roughness);
+            otherPdf = GGX_PDF(vertex.Normal, viewDir, ray.direction, material.roughness);
         }
 
         // Russian roulette
-        throughput *= BRDF(albedo, metalness, roughness, vertex.Normal, viewDir, ray.direction) * nndot(vertex.Normal, ray.direction) * MISWeight(bxdfPdf, otherPdf) / (0.5f * bxdfPdf); // We multiply the PDF by 0.5 since we had a 50/50 percent chance of choosing it
+        throughput *=  BRDF(material.albedo, material.metallic, material.roughness, vertex.Normal, viewDir, ray.direction) * nndot(vertex.Normal, ray.direction) * MISWeight(bxdfPdf, otherPdf) / (0.5f * bxdfPdf); // We multiply the PDF by 0.5 since we had a 50/50 percent chance of choosing it
         float continuation = min(max(throughput.x, max(throughput.y, throughput.z)), 1.0f);
         if(rand() > continuation) {
             break;
