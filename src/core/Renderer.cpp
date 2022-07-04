@@ -436,6 +436,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     std::vector<uint32_t> ldSamplerStates(viewportWidth* viewportHeight);
     for (uint32_t& state : ldSamplerStates) {
         state = initalRange(stateGenerator);
+        //std::cout << "State: " << state << '\n';
     }
 
     ldSamplerStateBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
@@ -460,7 +461,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     iterative.LoadFloat("totalLightArea", scene.totalLightArea);
     iterative.LoadShaderStorageBuffer("samplers", scene.materialsBuf);
     iterative.LoadShaderStorageBuffer("randomState", randomState);
-    iterative.LoadShaderStorageBuffer("ldSamplerStateTex", ldSamplerStateBuf);
+    iterative.LoadShaderStorageBuffer("ldSamplerStateBuf", ldSamplerStateBuf);
     iterative.LoadVector3F32("sunDir", sunDir);
     iterative.LoadFloat("sunRadius", sunRadius);
     iterative.LoadFloat("sunMaxDot", sunMaxDot);
@@ -605,7 +606,7 @@ float NextGoldenRatio(uint32_t& seed) {
     return 2.3283064365387e-10f * float(seed);
 }
 
-const int kNumLowDiscrepancyPoints = 24;
+const int kNumLowDiscrepancyPoints = 2048;
 
 void CreateGoldenRatioSequence(vec2* points, uint32_t& xgen, uint32_t& ygen) {
     std::default_random_engine generator;
@@ -662,13 +663,15 @@ void CreateGoldenRatioSequence(vec2* points, uint32_t& xgen, uint32_t& ygen) {
     }
 }
 
-float VanDerCorput(int n, int base) {
+float VanDerCorput(uint32_t n, uint32_t base) {
+#define MY_IMPL
+#ifdef MY_IMPL
     float sum = 0.0f;
     float ibase = 1.0f / base;
 
     while (n > 0) {
         // What is remaining at this digit?
-        int remaining = (n % base);
+        uint32_t remaining = (n % base);
         // Multiply by b^-i
         sum += remaining * ibase;
         // Bit shift by on
@@ -678,9 +681,20 @@ float VanDerCorput(int n, int base) {
     }
 
     return sum;
+#else
+    double q = 0, bk = (double)1 / base;
+
+    while (n > 0) {
+        q += (n % base) * bk;
+        n /= base;
+        bk /= base;
+    }
+
+    return (float)q;
+#endif
 }
 
-vec2 HaltonSequence(int n) {
+vec2 HaltonSequence(uint32_t n) {
     return vec2(VanDerCorput(n, 2), VanDerCorput(n, 3));
 }
 
@@ -701,21 +715,23 @@ void TestGoldenRatio() {
         }
     }
 
-    vec2 points[kNumLowDiscrepancyPoints];
-    uint32_t xgen = rand();
-    uint32_t ygen = rand();
-    CreateHaltonSequenceSamples(points);// , xgen, ygen);
+    std::default_random_engine rng(time(nullptr));
+    std::uniform_int_distribution<uint32_t> dist(0, UINT32_MAX);
+    uint32_t j = dist(rng);
+
+    std::cout << "Starting halton sampling with index " << j << '\n';
 
     for (int i = 0; i < kNumLowDiscrepancyPoints; i++) {
-        uint32_t x = 256 * points[i].x;
-        uint32_t y = 256 * points[i].y;
+        vec2 sample = HaltonSequence(j++);
+        uint32_t x = 256 * sample.x;
+        uint32_t y = 256 * sample.y;
         int j = 3 * (y * 256 + x);
-        img[j] = 0;
+        img[j    ] = 0;
         img[j + 1] = 0;
         img[j + 2] = 0;
     }
 
-    SOIL_save_image("res/outputs/halton_sequence_ld_test0.png", SOIL_SAVE_TYPE_PNG, 256, 256, 3, img);
+    SOIL_save_image("res/outputs/halton_sequence_ld_test11.png", SOIL_SAVE_TYPE_PNG, 256, 256, 3, img);
     delete[] img;
 }
 

@@ -35,7 +35,7 @@ layout(std430) buffer randomState {
     uvec4 states[];
 };
 
-layout(std430) buffer ldSamplerStateTex {
+layout(std430) buffer ldSamplerStateBuf {
     uint ldStates[];
 };
 
@@ -101,71 +101,48 @@ vec2 NextStratifiedSample(int idx) {
     return texelFetch(stratifiedTex, idx + stratumIdx).xy;
 }
 
-
+// TODO: find a fast van der corput calculation
+// Possible source: "Fast generation of low-discrepancy sequences"
 float VanDerCorput(uint n, uint base) {
-#define MY_IMPL
-#ifdef MY_IMPL
     float sum = 0.0f;
     float ibase = 1.0f / base;
+    // Use multiplication by the rcp instead of division because GPUs are faster at multiplying
+    float divisor = ibase;
 
     while (n > 0) {
         // What is remaining at this digit?
         uint remaining = (n % base);
         // Multiply by b^-i
-        sum += remaining * ibase;
+        sum += remaining * divisor;
         // Bit shift by on
         n /= base;
         // Update to get our new b^-i
-        ibase /= base;
+        divisor *= ibase;
     }
 
     return sum;
-#else
-    float invBase = 1.0 / float(base);
-    float denom = 1.0;
-    float result = 0.0;
-
-    for (uint i = 0u; i < 32u; ++i)
-    {
-        if (n > 0u)
-        {
-            denom = mod(float(n), 2.0);
-            result += denom * invBase;
-            invBase = invBase / 2.0;
-            n = uint(float(n) / 2.0);
-        }
-    }
-
-    return result;
-#endif
 }
 
-vec2 HaltonSequence(in uint n) {
-    return vec2(VanDerCorput(n, 2), VanDerCorput(n, 3));
+vec2 HaltonSequence(in uint n, in uint b0, in uint b1) {
+    return vec2(VanDerCorput(n, b0), VanDerCorput(n, b1));
 }
 
+// Solution to avoid correleation suggested by criver. See PBRT for more details
+const int firstPrimesUpTo100[] = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97}; // 25 prime numbers, so 24 LD samples per path
+int nextPrime = 0;
 vec2 NextHalton() {
-    return HaltonSequence(ldState++);
+    // We cannot use a prime number more than one or else we will get correlation between samples
+    int first = nextPrime, second = nextPrime + 1;
+    if (second >= firstPrimesUpTo100.length()) return Random2D(); // We've run out of LD samples. return a psuedo-random value
+    vec2 halton = HaltonSequence(ldState, firstPrimesUpTo100[first], firstPrimesUpTo100[second]);
+    nextPrime = second + 1;
+    return halton;
 }
 
-#define rand2() Random2D()
+#define rand2() NextHalton()
 
 vec2 HammerslySequence(in uint n, in uint offset) {
     return vec2(float(n + rand()) / float(NUM_LD_POINTS), VanDerCorput(n + offset, 2));
-}
-
-void CreateHaltonSequenceSamples() {
-    uint offset = HybridTausInteger();
-    for (uint i = 0; i < NUM_LD_POINTS; i++) {
-        ldPoints[i] = HaltonSequence(offset + i);
-    }
-}
-
-void CreateHammerslySequenceSamples() {
-    uint offset = HybridTausInteger();
-    for (uint i = 0; i < NUM_LD_POINTS; i++) {
-        ldPoints[i] = HammerslySequence(i, offset);
-    }
 }
 
 // Implementation of "Golden Ratio Sequences For Low-Discrepancy Sampling"
@@ -259,7 +236,7 @@ void initRNG(uint ridx) {
 
 void freeRNG() {
     states[stateIdx] = state;
-    ldStates[stateIdx] = ldState;
+    ldStates[stateIdx] = ++ldState;
 }
 
 #endif

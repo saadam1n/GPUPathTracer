@@ -54,7 +54,7 @@ Vertex RandomLightVertex() {
 
     CompactTriangle triangle = ReadCompactTriangle(fbs(data.y));
 
-    vec2 r = NextHalton();
+    vec2 r = rand2();
 
     // https://pharr.org/matt/blog/2019/02/27/triangle-sampling-1
     float sr = sqrt(r.x);
@@ -91,7 +91,7 @@ float sunArea = M_PI * sunRadius * sunRadius;
 Vertex RandomSunVertex(in Vertex vertex) {
     mat3 sunTBN = ConstructTBN(-sunDir);
 
-    vec2 r = NextHalton();
+    vec2 r = rand2();
 
     float radius = sunRadius * sqrt(r.x);
     float phi = 2 * M_PI * r.y;
@@ -135,8 +135,6 @@ Ray GenerateLightSample(in Vertex vertex, out HitInfo lightHit, out float lightP
 
     return lightRay;
 }
-
-const float kRoughness = 1e-5f;
 
 void main() {
 	// Begin by getting to know which pixel we are in	
