@@ -21,18 +21,18 @@ layout(std430) readonly buffer samplers {
 
 // Mapped to by material ID
 struct MaterialInstance {
-    uint materialType; // Header of our material. This identifies what sorta of material we have here
-
+    // Weird variable ordering to pack stuff into vec4
     vec3 albedo;
-    vec3 emission;
+    uint materialType; 
 
+    vec3 emission;
     float metallic;
-    float roughness;
-    float roughness2;
-    float ior;
 
     vec3 reflectance;
+    float ior;
 
+    float roughness;
+    float roughness2;
 };
 
 // Basically a constructor but the ugly C-way
@@ -57,17 +57,15 @@ MaterialInstance ConstructMaterialInstance(inout uint materialID, inout vec2 tex
 struct SurfaceInteraction {
     // the vectors that contain the properties of our interaction
     vec3 normal;     // surface normal. MUST EQUAL GEOMETRIC NORMAL
-    vec3 outgoing;   // view vecotr
-    vec3 incoming;   // light vector
-    vec3 microfacet; // "halfway" sounds like a really ugly variable name and almost has no context behind it
-    // precomputed dots with non-negative values
-    float ndo;
-    float ndi;
     float ndm;
+    vec3 outgoing;   // view vecotr
+    float ndo;
+    vec3 incoming;   // light vector
+    float ndi;
+    vec3 microfacet; // "halfway" sounds like a really ugly variable name and almost has no context behind it
     float ndm2;
-    float idm;
-    // To quickly transform vectors to the normal's space
     mat3 tbn;
+    float idm;
 };
 
 mat3 ConstructTBN(in vec3 normal) {
