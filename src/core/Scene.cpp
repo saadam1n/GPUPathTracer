@@ -83,7 +83,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     Assimp::Importer importer;
 
     // Turn off smooth normals for path tracing to prevent "broken" BRDFs and energy loss.
-    const aiScene* Scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenNormals | aiProcess_GenUVCoords | aiProcess_PreTransformVertices);
+    const aiScene* Scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenUVCoords | aiProcess_PreTransformVertices);
 
     // Third order of business: load vertices into a megabuffer and transform texcoords to location on atlas
     std::vector           <Vertex> Vertices;
@@ -181,7 +181,6 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
             aiVector3D& Position = currMesh->mVertices[j];
             aiVector3D& Normal = currMesh->mNormals[j];
             CurrentVertex.position = glm::vec3(Position.x, Position.y, Position.z);
-            CurrentVertex.normal = glm::vec3(Normal.x, Normal.y, Normal.z);
 
             if (currMesh->mTextureCoords[0])
                 CurrentVertex.texcoord = glm::vec2(currMesh->mTextureCoords[0][j].x, currMesh->mTextureCoords[0][j].y);
@@ -230,7 +229,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
         vec3 v01 = triangle.position1 - triangle.position0;
         vec3 v02 = triangle.position2 - triangle.position0;
 
-        triangle.normal = normalize(cross(v01, v02));
+        triangle.normal = normalize(cross(normalize(v01), normalize(v02)));
         triangle.material = Vertices[triplet[0]].matId;
 
         compactTriangles.push_back(triangle);

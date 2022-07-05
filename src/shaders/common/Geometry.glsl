@@ -228,7 +228,7 @@ bool IntersectTriangle(in PackedCompactTriangle pct, in Ray ray, inout HitInfo c
     attemptHit.di.x = dot(v02, q) * idet;
 
     if (attemptHit.di.x < closestHit.di.x && attemptHit.di.x > 0.0f) {
-        closestHit.di = attemptHit.di;
+        closestHit.di.xyz = attemptHit.di.xyz;
         closestHit.intersected = pct;
         return true;
     }
