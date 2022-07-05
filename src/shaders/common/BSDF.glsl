@@ -10,7 +10,7 @@ vec3 ComputeBSDF(in MaterialInstance material, in SurfaceInteraction interaction
         return vec3(0.0f);
     }
     // Cook torrance
-    vec3 specular = Fresnel(material, interaction.idh) * MicrofacetDistribution(material, interaction) * GeometricShadowing(material, interaction) / max(4.0f * interaction.ndi * interaction.ndo, 1e-26f);
+    vec3 specular = Fresnel(material, interaction.idm) * MicrofacetDistribution(material, interaction) * GeometricShadowing(material, interaction) / max(4.0f * interaction.ndi * interaction.ndo, 1e-26f);
     // Some changes to what devsh wrote and some ideas:
     // First of all, when calculating the diffuse, we need to be careful about the internal reflection constant
     // We need to use the refractive index to get an outgoing ray direction instead of using just v

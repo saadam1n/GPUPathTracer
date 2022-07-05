@@ -36,7 +36,7 @@ struct MaterialInstance {
 };
 
 // Basically a constructor but the ugly C-way
-MaterialInstance ConstructMaterialInstance(in uint materialID, in vec2 texcoord) {
+MaterialInstance ConstructMaterialInstance(inout uint materialID, inout vec2 texcoord) {
     MaterialInstance material;
     material.emission = materialInstance[materialID + 1].xyz;
 
@@ -63,9 +63,9 @@ struct SurfaceInteraction {
     // precomputed dots with non-negative values
     float ndo;
     float ndi;
-    float ndh;
-    float ndh2;
-    float idh;
+    float ndm;
+    float ndm2;
+    float idm;
     // To quickly transform vectors to the normal's space
     mat3 tbn;
 };
@@ -78,7 +78,7 @@ mat3 ConstructTBN(in vec3 normal) {
 }
 
 // Construct a surface interaction from scratch
-SurfaceInteraction ConstructSurfaceInteraction(in vec3 n, in vec3 o, in vec3 i) {
+SurfaceInteraction ConstructSurfaceInteraction(inout vec3 n, inout vec3 o, inout vec3 i) {
     SurfaceInteraction construction;
 
     construction.normal = n;
@@ -88,9 +88,9 @@ SurfaceInteraction ConstructSurfaceInteraction(in vec3 n, in vec3 o, in vec3 i) 
 
     construction.ndo  = nndot(construction.normal, construction.outgoing);
     construction.ndi  = nndot(construction.normal, construction.incoming);
-    construction.ndh  = nndot(construction.normal, construction.microfacet);
-    construction.ndh2 = construction.ndh * construction.ndh;
-    construction.idh  = nndot(construction.incoming, construction.microfacet);
+    construction.ndm  = nndot(construction.normal, construction.microfacet);
+    construction.ndm2 = construction.ndm * construction.ndm;
+    construction.idm  = nndot(construction.incoming, construction.microfacet);
 
     construction.tbn = ConstructTBN(construction.normal);
 
@@ -98,7 +98,7 @@ SurfaceInteraction ConstructSurfaceInteraction(in vec3 n, in vec3 o, in vec3 i) 
 }
 
 // Construct a surface interaction partially
-SurfaceInteraction ConstructSurfaceInteraction(in vec3 n, in vec3 o) {
+SurfaceInteraction ConstructSurfaceInteraction(inout vec3 n, inout vec3 o) {
     SurfaceInteraction construction;
 
     construction.normal = n;
@@ -116,9 +116,9 @@ void SetIncomingDirection(inout SurfaceInteraction interaction, in vec3 i) {
     interaction.microfacet = normalize(interaction.outgoing + interaction.incoming);
 
     interaction.ndi = nndot(interaction.normal, interaction.incoming);
-    interaction.ndh = nndot(interaction.normal, interaction.microfacet);
-    interaction.ndh2 = interaction.ndh * interaction.ndh;
-    interaction.idh = nndot(interaction.incoming, interaction.microfacet);
+    interaction.ndm = nndot(interaction.normal, interaction.microfacet);
+    interaction.ndm2 = interaction.ndm * interaction.ndm;
+    interaction.idm = nndot(interaction.incoming, interaction.microfacet);
 }
 
 // WARNING: everything below here is messy code. Read at your own peril
