@@ -44,11 +44,11 @@ MaterialInstance ConstructMaterialInstance(inout uint materialID, inout vec2 tex
     vec4 data1 = texture(sampler2D(fbu(materialInstance[materialID].zw)), texcoord);
 
     material.albedo = data0.xyz;
-    material.roughness = min(data1.g * data1.g, 1e-4f); // Solution to TR-GGX NaNs suggested by Jaker. Goodbye, perfect mirrors
+    material.roughness = max(data1.g * data1.g, 1e-4f); // Solution to TR-GGX NaNs suggested by Jaker. Goodbye, perfect mirrors
     material.roughness2 = material.roughness * material.roughness;
     material.metallic = data1.b;
 
-    material.reflectance = mix(vec3(0.0f), material.albedo, material.metallic);
+    material.reflectance = mix(vec3(0.04f), material.albedo, material.metallic);
 
     return material;
 }

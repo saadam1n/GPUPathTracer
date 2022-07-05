@@ -27,7 +27,7 @@ vec3 ComputeTonemapUncharted2(vec3 color) {
 }
 
 void main(){
-	color =  texelFetch(directAccum, ivec2(gl_FragCoord.xy), 0).rgb / numSamples;
+	color =  texelFetch(directAccum, ivec2(gl_FragCoord.xy), 0).rgb;// / numSamples;
 	#ifdef TONEMAPPING
 	//color = 1.0 - exp(-exposure * color);
     color = ComputeTonemapUncharted2(exposure * color);

@@ -83,7 +83,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     Assimp::Importer importer;
 
     // Turn off smooth normals for path tracing to prevent "broken" BRDFs and energy loss.
-    const aiScene* Scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenNormals | aiProcess_GenUVCoords);
+    const aiScene* Scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenNormals | aiProcess_GenUVCoords | aiProcess_PreTransformVertices);
 
     // Third order of business: load vertices into a megabuffer and transform texcoords to location on atlas
     std::vector           <Vertex> Vertices;
@@ -178,7 +178,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
         for (uint32_t j = 0; j < currMesh->mNumVertices; j++) {
             Vertex CurrentVertex;
 
-            aiVector3D& Position = Scene->mRootNode->mTransformation * currMesh->mVertices[j];
+            aiVector3D& Position = currMesh->mVertices[j];
             aiVector3D& Normal = currMesh->mNormals[j];
             CurrentVertex.position = glm::vec3(Position.x, Position.y, Position.z);
             CurrentVertex.normal = glm::vec3(Normal.x, Normal.y, Normal.z);

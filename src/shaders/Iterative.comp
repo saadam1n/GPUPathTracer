@@ -173,6 +173,8 @@ void main() {
         MaterialInstance material = ConstructMaterialInstance(vertex.MatID, vertex.TextureCoordinate);
         SurfaceInteraction interaction = ConstructSurfaceInteraction(vertex.Normal, viewDir);
 
+
+
         // Account for L_e
         vec3 indirectDirectThroughput;
         if(miss) {
@@ -186,16 +188,25 @@ void main() {
                 float dist = distance(lastPosition, vertex.Position);
                 bxdfPdf *= nndot(vertex.Normal, viewDir) / (dist * dist);
                 indirectDirectThroughput = throughput * MISWeight(bxdfPdf, neePdf);
+            } else {
+                indirectDirectThroughput = throughput;
             }
         }
         contribution += indirectDirectThroughput * material.emission;
 
+
+
         // If our ray left the scene, we cannot continue on it anymore
         // Also if we hit a case where our ray hit the back of an object we also have to stop
-        if(miss || dot(vertex.Normal, viewDir) < 0.0f) {
+        if(miss) {
             break; 
         }
         
+                        if(!miss) {
+            contribution = vertex.Normal;
+            break;
+        }
+
         HitInfo lightHit;
         vec3 lightThroughput;
         uint lightMatID;
@@ -221,7 +232,7 @@ void main() {
         ray.origin = vertex.Position + 0.001 * ray.direction;
     }
 
-    vec3 accumContribution = imageLoad(accum, PixelCoordinates).xyz + contribution;
+    vec3 accumContribution = contribution;
     imageStore(accum, PixelCoordinates,vec4(accumContribution, 1.0));
 
     freeRNG();
