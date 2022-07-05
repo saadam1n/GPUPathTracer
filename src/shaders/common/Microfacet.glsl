@@ -39,7 +39,7 @@ float ProbabilityDensityTrowbridgeReitz(inout MaterialInstance material, inout S
 // Microfacet distribution
 float MicrofacetDistributionBeckmann(inout MaterialInstance material, inout SurfaceInteraction interaction) {
     float sub = 2.0f * log(sqrt(M_PI) * material.roughness * interaction.ndm);
-    float add = (interaction.ndm2 - 1.0f) / (interaction.ndm2 * material.roughness * material.roughness);
+    float add = (interaction.ndm2 - 1.0f) / (interaction.ndm2 * material.roughness2);
     return exp(add - sub);
 }
 

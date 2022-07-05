@@ -114,7 +114,7 @@ float VanDerCorput(uint n, uint base) {
         uint remaining = (n % base);
         // Multiply by b^-i
         sum += remaining * divisor;
-        // Bit shift by on
+        // Bit shift by our base
         n /= base;
         // Update to get our new b^-i
         divisor *= ibase;
