@@ -15,7 +15,7 @@ float MicrofacetDistributionTrowbridgeReitz(in MaterialInstance material, in Sur
 }
 
 // Importance sample
-vec3 ImportanceSampleTrowbridgeReitz(in MaterialInstance material, inout SurfaceInteraction interaction) {
+vec3 ImportanceSampleTrowbridgeReitz(in MaterialInstance material) {
     vec2 r = rand2();
     float nch = sqrt((1.0f - r.x) / (r.x * (material.roughness2 - 1.0f) + 1.0f));
     float nsh = sqrt(1.0f - nch * nch);
@@ -27,8 +27,6 @@ vec3 ImportanceSampleTrowbridgeReitz(in MaterialInstance material, inout Surface
     direction.y = nsh * cos(r.y);
     direction.z = nch;
 
-    interaction.microfacet = direction;
-    SetIncomingDirection(interaction, reflect(-interaction.outgoing, interaction.microfacet));
     return direction;
 }
 
@@ -46,7 +44,7 @@ float MicrofacetDistributionBeckmann(in MaterialInstance material, in SurfaceInt
 }
 
 // Importance sample - "Microfacet Models for Refraction through Rough Surfaces", eqs 28 and 29"
-vec3 ImportanceSampleBeckmann(in MaterialInstance material, inout SurfaceInteraction interaction) {
+vec3 ImportanceSampleBeckmann(in MaterialInstance material) {
     vec2 r = rand2();
     float g = -material.roughness2 * log(1 - r.x);
     float z2 = 1.0f / (1.0f + g);
@@ -54,8 +52,6 @@ vec3 ImportanceSampleBeckmann(in MaterialInstance material, inout SurfaceInterac
     float phi = 2 * M_PI * r.y;
     float radius = sqrt(1.0 - z2);
     vec3 direction = vec3(radius * vec2(sin(phi), cos(phi)), z);
-    interaction.microfacet = direction;
-    SetIncomingDirection(interaction, reflect(-interaction.outgoing, interaction.microfacet));
     return direction;
 }
 
@@ -66,7 +62,7 @@ float ProbabilityDensityBeckmann(in MaterialInstance material, inout SurfaceInte
 
 // Macro defines to choose which microfacet model to use
 #define MicrofacetDistribution(m, i) MicrofacetDistributionTrowbridgeReitz(m, i)
-#define ImportanceSampleMicrofacet(m, i) ImportanceSampleTrowbridgeReitz(m, i)
+#define ImportanceSampleMicrofacet(m, i) ImportanceSampleTrowbridgeReitz(m)
 #define ProbabilityDensityMicrofacet(m, i) ProbabilityDensityTrowbridgeReitz(m, i)
 
 // Fernsel functions. The model used depends on the parameters of the material
@@ -114,7 +110,8 @@ float ProbabilityDensityDirection(in MaterialInstance material, in SurfaceIntera
 
 vec3 GenerateImportanceSample(in MaterialInstance material, inout SurfaceInteraction interaction, out float pdf) {
     if (rand() > 0.5f) {
-        ImportanceSampleMicrofacet(material, interaction);
+        interaction.microfacet = interaction.tbn * ImportanceSampleMicrofacet(material, interaction);
+        SetIncomingDirection(interaction, reflect(-interaction.outgoing, interaction.microfacet));
     }
     else {
         SetIncomingDirection(interaction, interaction.tbn * ImportanceSampleCosine());

@@ -113,9 +113,9 @@ SurfaceInteraction ConstructSurfaceInteraction(in vec3 n, in vec3 o) {
 // Set a new incoming direction a surface interaction, and create a new microfacet vector
 void SetIncomingDirection(inout SurfaceInteraction interaction, in vec3 i) {
     interaction.incoming = i;
-    interaction.ndi = nndot(interaction.normal, interaction.incoming);
     interaction.microfacet = normalize(interaction.outgoing + interaction.incoming);
 
+    interaction.ndi = nndot(interaction.normal, interaction.incoming);
     interaction.ndh = nndot(interaction.normal, interaction.microfacet);
     interaction.ndh2 = interaction.ndh * interaction.ndh;
     interaction.idh = nndot(interaction.incoming, interaction.microfacet);

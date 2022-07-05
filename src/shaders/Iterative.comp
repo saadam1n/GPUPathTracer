@@ -117,7 +117,7 @@ Ray GenerateLightSample(in Vertex vertex, in MaterialInstance material, in Surfa
     vec3 lightDir = normalize(lightVertex.Position - vertex.Position); 
     SetIncomingDirection(interaction, lightDir);
     float bouncePdf = ProbabilityDensityDirection(material, interaction) * nndot(lightVertex.Normal, -lightDir) / (radius * radius); // Seach veach 1995, eq 9
-    lightThroughput = ComputeBSDF(material, interaction) * nndot(lightVertex.Normal, -lightDir) * MISWeight(lightPdf, bouncePdf) / (lightPdf * radius * radius);
+    lightThroughput = throughput * ComputeBSDF(material, interaction) * interaction.ndi * nndot(lightVertex.Normal, -lightDir) * MISWeight(lightPdf, bouncePdf) / (lightPdf * radius * radius);
               
     lightRay.origin = vertex.Position + 0.001f * lightDir;
     lightRay.direction = lightDir;
@@ -209,7 +209,7 @@ void main() {
         ray.direction = GenerateImportanceSample(material, interaction, bxdfPdf);
 
         // Russian roulette
-        throughput *= ComputeBSDF(material, interaction) * nndot(vertex.Normal, ray.direction) / bxdfPdf; // We multiply the PDF by 0.5 since we had a 50/50 percent chance of choosing it
+        throughput *= ComputeBSDF(material, interaction) * interaction.ndi / bxdfPdf; // We multiply the PDF by 0.5 since we had a 50/50 percent chance of choosing it
         float continuation = min(max(throughput.x, max(throughput.y, throughput.z)), 1.0f);
         if(rand() > continuation) {
             break;
