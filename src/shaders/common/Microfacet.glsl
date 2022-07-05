@@ -32,7 +32,7 @@ vec3 ImportanceSampleTrowbridgeReitz(in MaterialInstance material) {
 
 // Probability density
 float ProbabilityDensityTrowbridgeReitz(in MaterialInstance material, inout SurfaceInteraction interaction) {
-    return max(MicrofacetDistributionTrowbridgeReitz(material, interaction) * interaction.ndh / 4.0f * interaction.idh, 1e-32f);
+    return max(MicrofacetDistributionTrowbridgeReitz(material, interaction) * interaction.ndh / (4.0f * interaction.idh), 1e-32f);
 }
 
 // Beckmann (Gaussian)
