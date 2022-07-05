@@ -12,7 +12,9 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 #include "common/Constants.glsl"
 #include "common/Util.glsl"
 #include "common/Material.glsl"
-
+#include "common/Microfacet.glsl"
+#include "common/BSDF.glsl"
+ 
 uniform vec3 lower_left, horizontal, vertical, position, u, v;
 uniform int width, height;
 uniform float lens_radius;
@@ -21,18 +23,16 @@ uniform samplerBuffer lightTex;
 uniform float totalLightArea;
 
 uniform float kMetallic;
-
+ 
 uniform layout(rgba32f) image2D accum;
-
-// See madmann's implementation https://github.com/madmann91/sol/blob/master/include/sol/renderer.h#L57
-float MISWeight(in float top, in float bottom) {
-    // Assume for each path we send one nee and one indirect sample, factor out 0.5
-    // return (top) / (top + bottom); // Your screen gets overtaken by NaNs when you are doing specular reflections
-    return 1.0f / (1.0f + bottom / top);
-}
 
 // I will eventually need to move away from global vars
 vec3 viewDir;
+
+// Veach-Guibas balance huestric - based on the numerically stable formula found here https://github.com/madmann91/sol/blob/master/include/sol/renderer.h#L57
+float MISWeight(in float top, in float bottom) {
+    return 1.0f / (1.0f + bottom / top); 
+}
 
 Vertex RandomLightVertex() {
     float selectedArea = rand() * totalLightArea;
@@ -69,13 +69,6 @@ Vertex RandomLightVertex() {
     return lightVertex;
 }
 
-mat3 ConstructTBN(in vec3 normal) {
-    vec3 normcrs = (abs(normal.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0));
-    vec3 tangent = normalize(cross(normcrs, normal));
-    vec3 bitangent = cross(tangent, normal); 
-    return mat3(tangent, bitangent, normal);
-}
-
 // I make the assumption that the sun is a disk with its center just 1 unit away from the vertex
 // We can calculate our sampled point via c + tbn * (random 2d point within a unit circle * radius, 0.0f)
 // Where c is the center of our disk, tbn is its coordinate system, and radius is the radius of the disk, which can easily be obtained from the tanget of a angular radius parameter
@@ -104,7 +97,7 @@ Vertex RandomSunVertex(in Vertex vertex) {
     return sunVertex;
 }
 
-Ray GenerateLightSample(in Vertex vertex, in MaterialInstance material, out HitInfo lightHit, out float lightPdf, in vec3 throughput, out vec3 lightThroughput, out uint lightMatID) { 
+Ray GenerateLightSample(in Vertex vertex, in MaterialInstance material, in SurfaceInteraction interaction, out HitInfo lightHit, out float lightPdf, in vec3 throughput, out vec3 lightThroughput, out uint lightMatID) { 
     float lightPick = rand();
     Vertex lightVertex;
 
@@ -118,13 +111,14 @@ Ray GenerateLightSample(in Vertex vertex, in MaterialInstance material, out HitI
         lightHit.di.x = 1e20f;//radius - 0.005f;
     }
 
-    Ray lightRay;
+    Ray lightRay;  
 
     float radius = distance(lightVertex.Position, vertex.Position); 
     vec3 lightDir = normalize(lightVertex.Position - vertex.Position); 
-    float bouncePdf = 0.5f * (GGX_PDF(vertex.Normal, viewDir, lightDir, material.roughness) + SamplePdfCosine(vertex.Normal, lightDir)) * nndot(lightVertex.Normal, -lightDir) / (radius * radius); // Seach veach 1995, eq 9
-    lightThroughput = BRDF(material.albedo, material.metallic, material.roughness, vertex.Normal, viewDir, lightDir) * throughput * nndot(vertex.Normal, lightDir) * nndot(lightVertex.Normal, -lightDir) * MISWeight(lightPdf, bouncePdf) / (lightPdf * radius * radius);
-             
+    SetIncomingDirection(interaction, lightDir);
+    float bouncePdf = ProbabilityDensityDirection(material, interaction) * nndot(lightVertex.Normal, -lightDir) / (radius * radius); // Seach veach 1995, eq 9
+    lightThroughput = ComputeBSDF(material, interaction) * nndot(lightVertex.Normal, -lightDir) * MISWeight(lightPdf, bouncePdf) / (lightPdf * radius * radius);
+              
     lightRay.origin = vertex.Position + 0.001f * lightDir;
     lightRay.direction = lightDir;
 
@@ -174,9 +168,10 @@ void main() {
         vertex = GetInterpolatedVertex(ray, hit);
         if(miss) {
             vertex.MatID = 0;
-        }
+        } 
 
         MaterialInstance material = ConstructMaterialInstance(vertex.MatID, vertex.TextureCoordinate);
+        SurfaceInteraction interaction = ConstructSurfaceInteraction(vertex.Normal, viewDir);
 
         // Account for L_e
         vec3 indirectDirectThroughput;
@@ -206,25 +201,15 @@ void main() {
         uint lightMatID;
         float lightPdf;
 
-        Ray lightRay = GenerateLightSample(vertex, material, lightHit, lightPdf, throughput, lightThroughput, lightMatID);                     
+        Ray lightRay = GenerateLightSample(vertex, material, interaction, lightHit, lightPdf, throughput, lightThroughput, lightMatID);                     
         if(!AnyHit(lightRay, lightHit)) {
             contribution += lightThroughput * materialInstance[lightMatID + 1].xyz;
         }
 
-        // Construct a new ray
-        float otherPdf;
-        if(rand() > 0.5f) {
-            vec3 h = ConstructTBN(vertex.Normal) * GGX_ImportanceSample(material.roughness);
-            ray.direction = reflect(-viewDir, h);
-            bxdfPdf = GGX_PDFH(vertex.Normal, viewDir, h, material.roughness); 
-            otherPdf = SamplePdfCosine(vertex.Normal, ray.direction);
-        } else {
-            ray.direction = ConstructTBN(vertex.Normal) * ImportanceSampleCosine(bxdfPdf);
-            otherPdf = GGX_PDF(vertex.Normal, viewDir, ray.direction, material.roughness);
-        }
+        ray.direction = GenerateImportanceSample(material, interaction, bxdfPdf);
 
         // Russian roulette
-        throughput *=  BRDF(material.albedo, material.metallic, material.roughness, vertex.Normal, viewDir, ray.direction) * nndot(vertex.Normal, ray.direction) * MISWeight(bxdfPdf, otherPdf) / (0.5f * bxdfPdf); // We multiply the PDF by 0.5 since we had a 50/50 percent chance of choosing it
+        throughput *= ComputeBSDF(material, interaction) * nndot(vertex.Normal, ray.direction) / bxdfPdf; // We multiply the PDF by 0.5 since we had a 50/50 percent chance of choosing it
         float continuation = min(max(throughput.x, max(throughput.y, throughput.z)), 1.0f);
         if(rand() > continuation) {
             break;

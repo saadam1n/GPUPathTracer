@@ -205,7 +205,7 @@ std::ostringstream ParseShader(std::string& Path, std::map<uint32_t, FileLineNum
 	std::string RealPath = (Path.find("src/shaders/") != 0 ? "src/shaders/" + Path : Path);
 	std::string Folder = RealPath.substr(0, RealPath.find_last_of('/') + 1);
 
-	printf("Shader file folder is %s\n", Folder.c_str());
+	//printf("Shader file folder is %s\n", Folder.c_str());
 
 	std::ostringstream ShaderParsedCode;
 
@@ -228,6 +228,7 @@ std::ostringstream ParseShader(std::string& Path, std::map<uint32_t, FileLineNum
 			IncludePath = Folder + IncludePath;
 			CollapseFilePath(IncludePath);
 
+			//std::cout << "Including from: " << Path << '\n';
 			ShaderLine = ParseShader(IncludePath, LineNumbers, GlobalLineIndex).str();
 		}
 
