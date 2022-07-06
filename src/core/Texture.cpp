@@ -95,6 +95,21 @@ GLuint Texture::GetHandle() {
 	return texture;
 }
 
+GLuint64 Texture::MakeBindless() {
+	GLuint64 bindlessHandle = glGetTextureHandleARB(GetHandle());
+	glMakeTextureHandleResidentARB(bindlessHandle);
+	return bindlessHandle;
+}
+
+void Texture2D::SetColor(const vec4& color) {
+	LoadData(GL_RGBA32F, GL_RGBA, GL_FLOAT, 1, 1, (void*)&color.r);
+	SaveData(GL_FLOAT, 1, 1, (void*)&color.r);
+}
+
+void Texture2D::SetColor(const vec3& color) {
+	SetColor(vec4(color, 1.0f));
+}
+
 void Texture::EnsureGeneratedHandle() {
 	if (texture == UINT32_MAX) {
 		glGenTextures(1, &texture);

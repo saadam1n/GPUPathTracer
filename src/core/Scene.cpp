@@ -23,6 +23,11 @@
 //#define TINYGLTF_IMPLEMENTATION
 //#include <tiny_gltf.h>
 
+// Use for obj files
+#define TINYOBJLOADER_IMPLEMENTATION 
+#define TINYOBJLOADER_USE_MAPBOX_EARCUT // Robust triangulation
+#include <tiny_obj_loader.h>
+
 using namespace glm;
 
 // vec4 alignments: 4 8 12 16 of any combination of 4 byte values
@@ -70,188 +75,192 @@ void InitializeTexture(const std::string& folder, Texture2D* tex, const aiMateri
     }
 }
 
-void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
-    totalLightArea = 0.0;
-    std::vector<MaterialInstance> materialInstances;
+/*
+Right now, my ray tracer only supports the UE4-PBR model
+So all I care about when creating a new MaterialInstance object is being able to load the appropriate values for my albedo, my metallic, and my roughness
+Now uploading these values to the shader is the same for every single material format, but reading from the file is different
+For example, obj requires me to set values based on the illumination model
+So this wrapper function only takes care of creating a material instance using given parameters
+Now that I think about it, this is sort of like a constructor
+*/
+MaterialInstance CreateMatInstance(const vec3& albedoCol, const std::string& albedoTex, const vec3& emissive) {
+    MaterialInstance material;
+
+    Texture2D* albedo = new Texture2D;
+    Texture2D* matprop = new Texture2D;
+
+    // For now I do not cache any textures
     
+    albedo->CreateBinding();
+    if (!albedoTex.empty()) {
+        albedo->LoadTexture(albedoTex.c_str());
+    } else {
+        albedo->SetColor(albedoCol);
+    }
+
+    matprop->CreateBinding();
+    matprop->SetColor(vec3(0.0f, 0.0f, 0.0f));
+    
+    material.albedoHandle = albedo->MakeBindless();
+    material.propertiesHandle = matprop->MakeBindless();
+
+    material.isEmissive = (emissive.x + emissive.y + emissive.z > 1e-5f);
+    material.emission = emissive;
+
+    return material;
+}
+
+void LoadOBJ(const std::string& path, std::vector<Vertex>& vertices, std::vector<TriangleIndexData>& indices, std::vector<MaterialInstance>& gpu_materials) {
+
+    auto create_vec2 = [](const float* ptr) -> vec2 {return vec2(ptr[0], ptr[1]); };
+    auto create_vec3 = [](const float* ptr) -> vec3 {return vec3(ptr[0], ptr[1], ptr[2]); };
+
+    tinyobj::ObjReaderConfig reader_config;
+    reader_config.mtl_search_path = ""; // Path to material files
+
+    tinyobj::ObjReader reader;
+
+    if (!reader.ParseFromFile(path, reader_config)) {
+        if (!reader.Error().empty()) {
+            std::cerr << "Errors reading file: " << reader.Error();
+        }
+        exit(1);
+    }
+
+    if (!reader.Warning().empty()) {
+        std::cout << "Warnings reading file: " << reader.Warning();
+    }
+
+    auto& attrib = reader.GetAttrib();
+    auto& shapes = reader.GetShapes();
+    auto& materials = reader.GetMaterials();
+
+
+    std::vector<uint32_t> unpadded_indices;
+
+    constexpr size_t reserveSize = 64 * 1024 * 1024;
+    vertices.reserve(reserveSize); // Being prepared for 64 million triangles should be good enough
+    indices.reserve(reserveSize);
+    unpadded_indices.reserve(reserveSize);
+
+    uint32_t base_counter = 0;
+    uint32_t next_material_id = 1;
+    for (size_t s = 0; s < shapes.size(); s++) {
+        size_t index_offset = 0;
+        uint32_t current_material = 2 * next_material_id++;
+        for (size_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++) {
+            size_t fv = size_t(shapes[s].mesh.num_face_vertices[f]);
+
+            for (size_t v = 0; v < fv; v++) {
+                // access to vertex
+                tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v]; // Index points towards this vertex, which we will need when translating obj indices to indices in vector vertices
+                tinyobj::real_t vx = attrib.vertices[3 * size_t(idx.vertex_index) + 0];
+                tinyobj::real_t vy = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
+                tinyobj::real_t vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
+
+                tinyobj::real_t tx = 0;
+                tinyobj::real_t ty = 0;
+
+                // Check if `texcoord_index` is zero or positive. negative = no texcoord data
+                if (idx.texcoord_index >= 0) {
+                    tx = attrib.texcoords[2 * size_t(idx.texcoord_index) + 0];
+                    ty = attrib.texcoords[2 * size_t(idx.texcoord_index) + 1];
+                }
+
+                Vertex vtx;
+                vtx.position = vec3(vx, vy, vz);
+                vtx.texcoord = vec2(tx, ty);
+                vtx.matId = current_material;
+                vertices.push_back(vtx);
+
+                unpadded_indices.push_back(base_counter++);
+            }
+            index_offset += fv;
+
+
+        }
+        // per-face material
+        auto& mtl = materials[shapes[s].mesh.material_ids[0]];
+        gpu_materials.push_back(CreateMatInstance(create_vec3(mtl.diffuse), "", create_vec3(mtl.emission)));
+    }
+
+    for (uint32_t i = 0; i < unpadded_indices.size();) {
+        TriangleIndexData tid;
+
+        tid[0] = unpadded_indices[i++];
+        tid[1] = unpadded_indices[i++];
+        tid[2] = unpadded_indices[i++];
+
+        indices.push_back(tid);
+    }
+}
+
+void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     textures.push_back(environment);
 
+    std::vector<MaterialInstance> materials;
     MaterialInstance sky;
     sky.isEmissive = true;
     sky.emission = 25.0f * glm::vec3(30.0f, 26.0f, 19.0f);
-    sky.albedoHandle = glGetTextureHandleARB(environment->GetHandle());
-    glMakeTextureHandleResidentARB(sky.albedoHandle);
-    materialInstances.push_back(sky);
+    sky.albedoHandle = environment->MakeBindless();
+    materials.push_back(sky);
 
-    std::string Folder = path.substr(0, path.find_last_of('/') + 1);
+    std::string folder = path.substr(0, path.find_last_of('/') + 1);
+    std::string extension = path.substr(path.find_last_of('.') + 1);
 
-    Assimp::Importer importer;
+    std::vector           <Vertex> vertices;
+    std::vector<TriangleIndexData> indices;
 
-    // Turn off smooth normals for path tracing to prevent "broken" BRDFs and energy loss.
-    const aiScene* Scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenUVCoords | aiProcess_PreTransformVertices);
-
-    // Third order of business: load vertices into a megabuffer and transform texcoords to location on atlas
-    std::vector           <Vertex> Vertices;
-    std::vector<TriangleIndexData> Indices;
-
-    /*
-    Short explanation of why we need base vertex:
-
-    Typically, any graphics program, like my ray tracer, expects that the zeroth index points to the first vertex of the object
-    However, when we stuff many meshes into one buffer, index zero for an object might actually mean index zero for another object
-    So we need to keep tract of what actually us the zzeroth index and add that to each vertex to make this work
-    */
-    int BaseVertex = 0;
-
-    auto PosMod = [](float x, float y) {
-        float md = std::fmod(x, y);
-        if (md < 0) {
-            md += y;
-        }
-        return md;
-    };
-
-    std::map<std::string, int> TexCache;
-    uint32_t nextMatId = 1;
-    
-    for (uint32_t i = 0; i < Scene->mNumMeshes; i++) {
-        const aiMesh* currMesh = Scene->mMeshes[i];
-
-        aiColor3D albedo, emission, specular;
-
-        int currMatID;
-
-        aiMaterial* mat = Scene->mMaterials[Scene->mMeshes[i]->mMaterialIndex];
-        bool hasTextures = (mat->GetTextureCount(aiTextureType_DIFFUSE) != 0);
-        bool hasSpecular = (mat->GetTextureCount(aiTextureType_SPECULAR) != 0);
-        
-        std::string textureKey;
-        if (hasTextures) {
-            aiString localpath;
-            mat->GetTexture(aiTextureType_DIFFUSE, 0, &localpath);
-            textureKey = Folder + localpath.C_Str();
-        } else {
-            mat->Get(AI_MATKEY_COLOR_DIFFUSE , albedo  );
-            mat->Get(AI_MATKEY_COLOR_EMISSIVE, emission);
-            mat->Get(AI_MATKEY_COLOR_SPECULAR, specular);
-
-            std::stringstream triple;
-            triple << albedo.r   << ' ' << albedo.g   << ' ' << albedo.b   << ';';
-            triple << emission.r << ' ' << emission.g << ' ' << emission.b << ';';
-            triple << specular.r << ' ' << specular.g << ' ' << specular.b;
-            textureKey = triple.str();
-        }
-
-        auto result = TexCache.find(textureKey);
-        if (result != TexCache.end()) {
-            currMatID = result->second;
-        }
-        else {
-            currMatID = 2 * nextMatId++;
-            std::cout << currMatID << '\n';
-            TexCache.insert({ textureKey, currMatID });
-
-            Texture2D* currtex = new Texture2D;
-            Texture2D* spectex = new Texture2D;
-
-            InitializeTexture(Folder, currtex, mat, aiTextureType_DIFFUSE, albedo);
-            InitializeTexture(Folder, spectex, mat, aiTextureType_UNKNOWN, specular); // pbr metallic roughness
-
-            textures.push_back(currtex);
-            textures.push_back(spectex);
-
-            MaterialInstance newInstance;
-            newInstance.isEmissive = 0;
-
-            newInstance.albedoHandle = glGetTextureHandleARB(currtex->GetHandle());
-            glMakeTextureHandleResidentARB(newInstance.albedoHandle);
-
-            newInstance.propertiesHandle = glGetTextureHandleARB(spectex->GetHandle());
-            glMakeTextureHandleResidentARB(newInstance.propertiesHandle);
-
-            newInstance.emission = vec3(0.0f);
-            if (!hasTextures) {
-                if (emission.r + emission.g + emission.b > 0.001f) {
-                    newInstance.isEmissive = 1;
-                    newInstance.emission = vec3(emission.r, emission.g, emission.b);
-                }
-            }
-
-            materialInstances.push_back(newInstance);
-        }
-
-        for (uint32_t j = 0; j < currMesh->mNumVertices; j++) {
-            Vertex CurrentVertex;
-
-            aiVector3D& Position = currMesh->mVertices[j];
-            aiVector3D& Normal = currMesh->mNormals[j];
-            CurrentVertex.position = glm::vec3(Position.x, Position.y, Position.z);
-
-            if (currMesh->mTextureCoords[0])
-                CurrentVertex.texcoord = glm::vec2(currMesh->mTextureCoords[0][j].x, currMesh->mTextureCoords[0][j].y);
-            else
-                CurrentVertex.texcoord = glm::vec2(0.0f);
-
-            CurrentVertex.matId = currMatID;
-
-            Vertices.push_back(CurrentVertex);
-        }
-
-        for (uint32_t j = 0; j < currMesh->mNumFaces; j++) {
-            const aiFace& Face = currMesh->mFaces[j];
-
-            TriangleIndexData CurrentIndexData;
-            for (uint32_t k = 0; k < Face.mNumIndices; k++) {
-                CurrentIndexData[k] = BaseVertex + Face.mIndices[k];
-            }
-
-            Indices.push_back(CurrentIndexData);
-
-
-        }
-        BaseVertex += currMesh->mNumVertices;
+    if (extension == "obj") {
+        LoadOBJ(path, vertices, indices, materials);
+    }
+    else {
+        // Maybe worth a shot loading via assimp
+        //Assimp::Importer importer;
+        //const aiScene* Scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_PreTransformVertices | aiProcess_GenUVCoords | aiProcess_FlipUVs);
+        //importer.FreeScene();
+        std::cout << "Unsupported file type: " << extension << '\n';
+        exit(-1);
     }
 
-    // As soon as we are done loading we should ignore it
-    importer.FreeScene();
 
     // Use our vertex index stuff to build a triangle 
-    std::vector<CompactTriangle> compactTriangles;
-    for (auto& triplet : Indices) {
-        uint32_t i = (uint32_t)compactTriangles.size();
+    std::vector<CompactTriangle> triangles;
+    for (auto& triplet : indices) {
+        uint32_t i = (uint32_t)triangles.size();
 
         CompactTriangle triangle;
 
-        triangle.position0 = Vertices[triplet[0]].position;
-        triangle.texcoord0 = Vertices[triplet[0]].texcoord;
+        triangle.position0 = vertices[triplet[0]].position;
+        triangle.texcoord0 = vertices[triplet[0]].texcoord;
 
-        triangle.position1 = Vertices[triplet[1]].position;
-        triangle.texcoord1 = Vertices[triplet[1]].texcoord;
+        triangle.position1 = vertices[triplet[1]].position;
+        triangle.texcoord1 = vertices[triplet[1]].texcoord;
 
-        triangle.position2 = Vertices[triplet[2]].position;
-        triangle.texcoord2 = Vertices[triplet[2]].texcoord;
+        triangle.position2 = vertices[triplet[2]].position;
+        triangle.texcoord2 = vertices[triplet[2]].texcoord;
 
         vec3 v01 = triangle.position1 - triangle.position0;
         vec3 v02 = triangle.position2 - triangle.position0;
 
         triangle.normal = normalize(cross(normalize(v01), normalize(v02)));
-        triangle.material = Vertices[triplet[0]].matId;
+        triangle.material = vertices[triplet[0]].matId;
 
-        compactTriangles.push_back(triangle);
+        triangles.push_back(triangle);
     }
 
-    bvh.Construct(compactTriangles);
+    bvh.Construct(triangles);
 
     struct LightTriangleInfo {
-        float cumulativeArea;
         uint32_t index;
+        float area;
     };
 
-    std::vector<LightTriangleInfo> lightTriangles;
+    std::vector<LightTriangleInfo> emitters;
 
-    for (uint32_t i = 0; i < compactTriangles.size(); i++) {
-        const auto& triangle = compactTriangles[i];
-        if (materialInstances[triangle.material / 2].isEmissive == 1) {
+    for (uint32_t i = 0; i < triangles.size(); i++) {
+        const auto& triangle = triangles[i];
+        if (materials[triangle.material / 2].isEmissive == 1) {
             LightTriangleInfo info;
 
             float a = distance(triangle.position0, triangle.position2);
@@ -259,42 +268,43 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
             float c = distance(triangle.position2, triangle.position1);
 
             float s = (a + b + c) / 2;
-            info.cumulativeArea = sqrtf(s * (s - a) * (s - b) * (s - c));
+            info.area = sqrtf(s * (s - a) * (s - b) * (s - c));
             info.index = i;
 
             //std::cout << "IDX: " << Vertices[triplet[0]].position.x << '\n';
 
-            lightTriangles.push_back(info);
+            emitters.push_back(info);
         }
     }
 
     // Make syre the biggest jumps in area are first so our binary search more often converges to closer locations
-    std::sort(lightTriangles.begin(), lightTriangles.end(), [](const LightTriangleInfo& l, const LightTriangleInfo& r) {
-        return l.cumulativeArea < r.cumulativeArea;
+    std::sort(emitters.begin(), emitters.end(), [](const LightTriangleInfo& l, const LightTriangleInfo& r) {
+        return l.area < r.area;
     });
-    for (LightTriangleInfo& cv : lightTriangles) {
-        totalLightArea += cv.cumulativeArea;
-        cv.cumulativeArea = totalLightArea;
+    totalLightArea = 0.0;
+    for (LightTriangleInfo& cv : emitters) {
+        totalLightArea += cv.area;
+        cv.area = totalLightArea;
     }
 
     materialsBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
-    materialsBuf.UploadData(materialInstances, GL_STATIC_DRAW);
+    materialsBuf.UploadData(materials, GL_STATIC_DRAW);
 
-    materialVec = materialInstances;
+    materialVec = materials;
 
     vertexBuf.CreateBinding(BUFFER_TARGET_ARRAY);
-    vertexBuf.UploadData(compactTriangles, GL_STATIC_DRAW);
+    vertexBuf.UploadData(triangles, GL_STATIC_DRAW);
 
     vertexTex.CreateBinding();
     vertexTex.SelectBuffer(&vertexBuf, GL_RGBA32F);
 
     lightBuf.CreateBinding(BUFFER_TARGET_ARRAY);
-    lightBuf.UploadData(lightTriangles, GL_STATIC_DRAW);
+    lightBuf.UploadData(emitters, GL_STATIC_DRAW);
 
     lightTex.CreateBinding();
     lightTex.SelectBuffer(&lightBuf, GL_RG32F);
 
-    triangleVec = compactTriangles;
+    triangleVec = triangles;
 }
 
 /*
@@ -515,4 +525,110 @@ std::string CXXPath = Path;
     Atlas.LoadData(GL_RGBA, GL_RGBA, GL_UNSIGNED_BYTE, AtlasDims.w, AtlasDims.h, AtlasData);
     delete[] AtlasData;
 
+*/
+
+/*
+
+ int BaseVertex = 0;
+
+    std::map<std::string, int> TexCache;
+    uint32_t nextMatId = 1;
+
+    for (uint32_t i = 0; i < Scene->mNumMeshes; i++) {
+        const aiMesh* currMesh = Scene->mMeshes[i];
+
+        aiColor3D albedo, emission, specular;
+
+        int currMatID;
+
+        aiMaterial* mat = Scene->mMaterials[Scene->mMeshes[i]->mMaterialIndex];
+        bool hasTextures = (mat->GetTextureCount(aiTextureType_DIFFUSE) != 0);
+        bool hasSpecular = (mat->GetTextureCount(aiTextureType_SPECULAR) != 0);
+
+        std::string textureKey;
+        if (hasTextures) {
+            aiString localpath;
+            mat->GetTexture(aiTextureType_DIFFUSE, 0, &localpath);
+            textureKey = Folder + localpath.C_Str();
+        } else {
+            mat->Get(AI_MATKEY_COLOR_DIFFUSE , albedo  );
+            mat->Get(AI_MATKEY_COLOR_EMISSIVE, emission);
+            mat->Get(AI_MATKEY_COLOR_SPECULAR, specular);
+
+            std::stringstream triple;
+            triple << albedo.r   << ' ' << albedo.g   << ' ' << albedo.b   << ';';
+            triple << emission.r << ' ' << emission.g << ' ' << emission.b << ';';
+            triple << specular.r << ' ' << specular.g << ' ' << specular.b;
+            textureKey = triple.str();
+        }
+
+        auto result = TexCache.find(textureKey);
+        if (result != TexCache.end()) {
+            currMatID = result->second;
+        }
+        else {
+            currMatID = 2 * nextMatId++;
+            std::cout << currMatID << '\n';
+            TexCache.insert({ textureKey, currMatID });
+
+            Texture2D* currtex = new Texture2D;
+            Texture2D* spectex = new Texture2D;
+
+            InitializeTexture(Folder, currtex, mat, aiTextureType_DIFFUSE, albedo);
+            InitializeTexture(Folder, spectex, mat, aiTextureType_UNKNOWN, specular); // pbr metallic roughness
+
+            textures.push_back(currtex);
+            textures.push_back(spectex);
+
+            MaterialInstance newInstance;
+            newInstance.isEmissive = 0;
+
+            newInstance.albedoHandle = glGetTextureHandleARB(currtex->GetHandle());
+            glMakeTextureHandleResidentARB(newInstance.albedoHandle);
+
+            newInstance.propertiesHandle = glGetTextureHandleARB(spectex->GetHandle());
+            glMakeTextureHandleResidentARB(newInstance.propertiesHandle);
+
+            newInstance.emission = vec3(0.0f);
+            if (!hasTextures) {
+                if (emission.r + emission.g + emission.b > 0.001f) {
+                    newInstance.isEmissive = 1;
+                    newInstance.emission = vec3(emission.r, emission.g, emission.b);
+                }
+            }
+
+            materialInstances.push_back(newInstance);
+        }
+
+        for (uint32_t j = 0; j < currMesh->mNumVertices; j++) {
+            Vertex CurrentVertex;
+
+            aiVector3D& Position = currMesh->mVertices[j];
+            aiVector3D& Normal = currMesh->mNormals[j];
+            CurrentVertex.position = glm::vec3(Position.x, Position.y, Position.z);
+
+            if (currMesh->mTextureCoords[0])
+                CurrentVertex.texcoord = glm::vec2(currMesh->mTextureCoords[0][j].x, currMesh->mTextureCoords[0][j].y);
+            else
+                CurrentVertex.texcoord = glm::vec2(0.0f);
+
+            CurrentVertex.matId = currMatID;
+
+            Vertices.push_back(CurrentVertex);
+        }
+
+        for (uint32_t j = 0; j < currMesh->mNumFaces; j++) {
+            const aiFace& Face = currMesh->mFaces[j];
+
+            TriangleIndexData CurrentIndexData;
+            for (uint32_t k = 0; k < Face.mNumIndices; k++) {
+                CurrentIndexData[k] = BaseVertex + Face.mIndices[k];
+            }
+
+            Indices.push_back(CurrentIndexData);
+
+
+        }
+        BaseVertex += currMesh->mNumVertices;
+    }
 */

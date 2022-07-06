@@ -12,7 +12,8 @@ public:
 	Texture();
 	void Free();
 
-	GLuint GetHandle(void);
+	GLuint GetHandle();
+	GLuint64 MakeBindless();
 
 	void BindImageUnit(uint32_t Unit, GLenum Format);
 	void BindTextureUnit(uint32_t unit, GLenum target);
@@ -31,6 +32,9 @@ public:
 	void LoadData(GLenum DestinationFormat, GLenum SourceFormat, GLenum SourceType, uint32_t X, uint32_t Y, void* Data);
 	// Data formatting note: currently only RGB unsigned byte and RGBA float are supported for the source, and values are always stored as RGB
 	void SaveData(GLenum SourceType, uint32_t X, uint32_t Y, void* Data);
+
+	void SetColor(const vec4& color);
+	void SetColor(const vec3& color);
 
 	vec3 Sample(const vec2 texcoords) const;
 private:
