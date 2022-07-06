@@ -28,6 +28,7 @@ public:
 	void CreateBinding();
 	void FreeBinding();
 
+	void LoadTexture(const std::string& Path, int load = SOIL_LOAD_RGBA);
 	void LoadTexture(const char* Path, int load = SOIL_LOAD_RGBA);
 	void LoadData(GLenum DestinationFormat, GLenum SourceFormat, GLenum SourceType, uint32_t X, uint32_t Y, void* Data);
 	// Data formatting note: currently only RGB unsigned byte and RGBA float are supported for the source, and values are always stored as RGB

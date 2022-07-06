@@ -22,7 +22,7 @@ uint32_t Width = 1280;
 uint32_t Height = 720;
 
 // Camera params 
-constexpr float kCameraSetting = 0.01f;
+constexpr float kCameraSetting = 0.11f;
 
 constexpr float CameraSpeed = 2000.000f * 0.5f * kCameraSetting;
 constexpr float CameraSensitivity = 0.001f;
@@ -64,7 +64,7 @@ int main(int argc, char** argv) {
 	Window.SetInputCallback(MouseCallback);
 
 	Renderer* renderer = new Renderer;
-	renderer->Initialize(&Window, "res/salle/salle_de_bain.obj", "res/sky/ibl/Topanga_Forest_B_3k.hdr"); // // salle_de_bain.obj //res/sky/ibl/NarrowPath_3k.hdr // Topanga_Forest_B_3k
+	renderer->Initialize(&Window, "res/salle/salle_de_bain.obj", "GENERATE COLOR BLACK"); // // salle_de_bain.obj //res/sky/ibl/NarrowPath_3k.hdr // Topanga_Forest_B_3k
 	camera.SetPosition(glm::vec3(6.0f, 2.0f, 0.0f));
 	camera.SetRotation(glm::vec3(glm::radians(-90.0f), 0.0f, 0.0f));
 	//camera.SetPosition(glm::vec3(-0.25f, 2.79f, 6.0f));

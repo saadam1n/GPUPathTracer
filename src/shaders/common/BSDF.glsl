@@ -6,7 +6,7 @@
 
 // Specular energy has gone wonkers
 vec3 ComputeBSDF(in MaterialInstance material, in SurfaceInteraction interaction) {
-    if (interaction.ndo < 0.0f || interaction.ndi < 0.0f) {
+    if (dot(interaction.normal, interaction.incoming) < 0.0f || dot(interaction.normal, interaction.outgoing) < 0.0f) {
         return vec3(0.0f);
     }
     // Cook torrance

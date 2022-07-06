@@ -160,6 +160,10 @@ void Texture2D::LoadTexture(const char* Path, int load) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 }
 
+void Texture2D::LoadTexture(const std::string& Path, int load) {
+	LoadTexture(Path.c_str(), load);
+}
+
 void Texture2D::LoadData(GLenum DestinationFormat, GLenum SourceFormat, GLenum SourceType, uint32_t X, uint32_t Y, void* Data) {
 	glTexImage2D(GL_TEXTURE_2D, 0, DestinationFormat, X, Y, 0, SourceFormat, SourceType, Data);
 }

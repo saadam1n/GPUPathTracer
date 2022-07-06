@@ -84,11 +84,11 @@ SurfaceInteraction ConstructSurfaceInteraction(inout vec3 n, inout vec3 o, inout
     construction.incoming = i;
     construction.microfacet = normalize(construction.outgoing + construction.incoming);
 
-    construction.ndo  = nndot(construction.normal, construction.outgoing);
-    construction.ndi  = nndot(construction.normal, construction.incoming);
-    construction.ndm  = nndot(construction.normal, construction.microfacet);
+    construction.ndo  = avdot(construction.normal, construction.outgoing);
+    construction.ndi  = avdot(construction.normal, construction.incoming);
+    construction.ndm  = avdot(construction.normal, construction.microfacet);
     construction.ndm2 = construction.ndm * construction.ndm;
-    construction.idm  = nndot(construction.incoming, construction.microfacet);
+    construction.idm  = avdot(construction.incoming, construction.microfacet);
 
     construction.tbn = ConstructTBN(construction.normal);
 
@@ -102,7 +102,7 @@ SurfaceInteraction ConstructSurfaceInteraction(inout vec3 n, inout vec3 o) {
     construction.normal = n;
     construction.outgoing = o;
 
-    construction.ndo = nndot(construction.normal, construction.outgoing);
+    construction.ndo = avdot(construction.normal, construction.outgoing);
     construction.tbn = ConstructTBN(construction.normal);
 
     return construction;
@@ -113,10 +113,10 @@ void SetIncomingDirection(inout SurfaceInteraction interaction, in vec3 i) {
     interaction.incoming = i;
     interaction.microfacet = normalize(interaction.outgoing + interaction.incoming);
 
-    interaction.ndi = nndot(interaction.normal, interaction.incoming);
-    interaction.ndm = nndot(interaction.normal, interaction.microfacet);
+    interaction.ndi = avdot(interaction.normal, interaction.incoming);
+    interaction.ndm = avdot(interaction.normal, interaction.microfacet);
     interaction.ndm2 = interaction.ndm * interaction.ndm;
-    interaction.idm = nndot(interaction.incoming, interaction.microfacet);
+    interaction.idm = avdot(interaction.incoming, interaction.microfacet);
 }
 
 // WARNING: everything below here is messy code. Read at your own peril

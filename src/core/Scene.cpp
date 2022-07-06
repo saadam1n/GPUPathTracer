@@ -83,7 +83,9 @@ For example, obj requires me to set values based on the illumination model
 So this wrapper function only takes care of creating a material instance using given parameters
 Now that I think about it, this is sort of like a constructor
 */
-MaterialInstance CreateMatInstance(const vec3& albedoCol, const std::string& albedoTex, const vec3& emissive) {
+MaterialInstance CreateMatInstance(const std::string& folder, const vec3& albedoCol, const std::string& albedoTex, const vec3& emissive) {
+    std::cout << "before " << glGetError() << " for path " << albedoTex << '\n';
+
     MaterialInstance material;
 
     Texture2D* albedo = new Texture2D;
@@ -93,7 +95,7 @@ MaterialInstance CreateMatInstance(const vec3& albedoCol, const std::string& alb
     
     albedo->CreateBinding();
     if (!albedoTex.empty()) {
-        albedo->LoadTexture(albedoTex.c_str());
+        albedo->LoadTexture(folder + albedoTex);
     } else {
         albedo->SetColor(albedoCol);
     }
@@ -107,10 +109,12 @@ MaterialInstance CreateMatInstance(const vec3& albedoCol, const std::string& alb
     material.isEmissive = (emissive.x + emissive.y + emissive.z > 1e-5f);
     material.emission = emissive;
 
+    std::cout << "after " << glGetError() << '\n';
+
     return material;
 }
 
-void LoadOBJ(const std::string& path, std::vector<Vertex>& vertices, std::vector<TriangleIndexData>& indices, std::vector<MaterialInstance>& gpu_materials) {
+void LoadOBJ(const std::string& path, const std::string& folder, std::vector<Vertex>& vertices, std::vector<TriangleIndexData>& indices, std::vector<MaterialInstance>& gpu_materials) {
 
     auto create_vec2 = [](const float* ptr) -> vec2 {return vec2(ptr[0], ptr[1]); };
     auto create_vec3 = [](const float* ptr) -> vec3 {return vec3(ptr[0], ptr[1], ptr[2]); };
@@ -138,10 +142,10 @@ void LoadOBJ(const std::string& path, std::vector<Vertex>& vertices, std::vector
 
     std::vector<uint32_t> unpadded_indices;
 
-    constexpr size_t reserveSize = 64 * 1024 * 1024;
-    vertices.reserve(reserveSize); // Being prepared for 64 million triangles should be good enough
-    indices.reserve(reserveSize);
-    unpadded_indices.reserve(reserveSize);
+    //constexpr size_t reserveSize = 64 * 1024 * 1024;
+    //vertices.reserve(reserveSize); // Being prepared for 64 million triangles should be good enough
+    //indices.reserve(reserveSize);
+    //unpadded_indices.reserve(reserveSize);
 
     uint32_t base_counter = 0;
     uint32_t next_material_id = 1;
@@ -177,11 +181,10 @@ void LoadOBJ(const std::string& path, std::vector<Vertex>& vertices, std::vector
             }
             index_offset += fv;
 
-
         }
         // per-face material
         auto& mtl = materials[shapes[s].mesh.material_ids[0]];
-        gpu_materials.push_back(CreateMatInstance(create_vec3(mtl.diffuse), "", create_vec3(mtl.emission)));
+        gpu_materials.push_back(CreateMatInstance(folder, create_vec3(mtl.diffuse), mtl.diffuse_texname, create_vec3(mtl.emission)));
     }
 
     for (uint32_t i = 0; i < unpadded_indices.size();) {
@@ -212,7 +215,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     std::vector<TriangleIndexData> indices;
 
     if (extension == "obj") {
-        LoadOBJ(path, vertices, indices, materials);
+        LoadOBJ(path, folder, vertices, indices, materials);
     }
     else {
         // Maybe worth a shot loading via assimp
@@ -252,8 +255,8 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     bvh.Construct(triangles);
 
     struct LightTriangleInfo {
-        uint32_t index;
         float area;
+        uint32_t index;
     };
 
     std::vector<LightTriangleInfo> emitters;
@@ -271,11 +274,16 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
             info.area = sqrtf(s * (s - a) * (s - b) * (s - c));
             info.index = i;
 
+            //std::cout << "emitter: " << i << '\n';
+            //std::cout << "material " << materials[triangle.material / 2].emission.x << '\n';
+
             //std::cout << "IDX: " << Vertices[triplet[0]].position.x << '\n';
 
             emitters.push_back(info);
         }
     }
+
+    std::cout << "Num light vertices " << emitters.size() << '\n';
 
     // Make syre the biggest jumps in area are first so our binary search more often converges to closer locations
     std::sort(emitters.begin(), emitters.end(), [](const LightTriangleInfo& l, const LightTriangleInfo& r) {
