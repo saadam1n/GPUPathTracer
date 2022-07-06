@@ -162,7 +162,7 @@ void LoadOBJ(const std::string& path, const std::string& folder, std::vector<Ver
                 tinyobj::real_t vy = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
                 tinyobj::real_t vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
 
-                tinyobj::real_t nx = 0, ny = 0, nz = 0;
+                tinyobj::real_t nx = 0, ny = 1, nz = 0;
 
                 // Check if `normal_index` is zero or positive. negative = no normal data
                 if (idx.normal_index >= 0) {
@@ -304,7 +304,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     std::sort(emitters.begin(), emitters.end(), [](const LightTriangleInfo& l, const LightTriangleInfo& r) {
         return l.area < r.area;
     });
-    totalLightArea = 0.0;
+    totalLightArea = 0.0f;
     for (LightTriangleInfo& cv : emitters) {
         totalLightArea += cv.area;
         cv.area = totalLightArea;

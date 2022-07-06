@@ -36,10 +36,12 @@ float MISWeight(in float top, in float bottom) {
 
 Vertex RandomLightVertex() {
     float selectedArea = rand() * totalLightArea;
+    vec2 data;
 
     // a is lower bound, b is upper bound
+    #ifdef BINARY_SEARCH
+    // Until I get this working
     int a = 0, b = textureSize(lightTex) - 1;
-    vec2 data;
     while(b > a) {
         int m = (a + b) / 2;
         data = texelFetch(lightTex, m).xy; // Reading the who thing instead of just .x is not more expensive because of how GPUs work
@@ -48,6 +50,15 @@ Vertex RandomLightVertex() {
         else
             a = m + 1; // We certainly know m cannot be it, so we set the bound to m + 1
     }
+
+    #else
+    for(int i = 0; i < textureSize(lightTex); i++) {
+        data = texelFetch(lightTex, i).xy;
+        if(data.x > selectedArea) {
+            break;
+        }
+    }
+    #endif
 
     CompactTriangle triangle = ReadCompactTriangle(fbs(data.y));
 
@@ -210,9 +221,7 @@ void main() {
         float lightPdf;
 
         Ray lightRay = GenerateLightSample(vertex, material, interaction, lightHit, lightPdf, throughput, lightThroughput, lightMatID);     
-     
-        contribution = lightThroughput;
-        break;
+    
 
         if(!AnyHit(lightRay, lightHit)) {
             contribution += lightThroughput * materialInstance[lightMatID + 1].xyz;
