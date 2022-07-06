@@ -83,7 +83,7 @@ For example, obj requires me to set values based on the illumination model
 So this wrapper function only takes care of creating a material instance using given parameters
 Now that I think about it, this is sort of like a constructor
 */
-MaterialInstance CreateMatInstance(const std::string& folder, const vec3& albedoCol, const std::string& albedoTex, const vec3& emissive) {
+MaterialInstance CreateMatInstance(const std::string& folder, const vec3& albedoCol, const std::string& albedoTex, const vec3& emissive, float roughness, float metallic) {
     std::cout << "before " << glGetError() << " for path " << albedoTex << '\n';
 
     MaterialInstance material;
@@ -101,7 +101,7 @@ MaterialInstance CreateMatInstance(const std::string& folder, const vec3& albedo
     }
 
     matprop->CreateBinding();
-    matprop->SetColor(vec3(0.0f, 0.0f, 0.0f));
+    matprop->SetColor(vec3(0.0f, roughness, 0.0f));
     
     material.albedoHandle = albedo->MakeBindless();
     material.propertiesHandle = matprop->MakeBindless();
@@ -193,7 +193,11 @@ void LoadOBJ(const std::string& path, const std::string& folder, std::vector<Ver
         }
         // per-face material
         auto& mtl = materials[shapes[s].mesh.material_ids[0]];
-        gpu_materials.push_back(CreateMatInstance(folder, create_vec3(mtl.diffuse), mtl.diffuse_texname, create_vec3(mtl.emission)));
+
+        float beckmann_roughness = sqrt(2.0f / (mtl.shininess + 2.0f));
+        float metallic = (mtl.illum == 2 ? 0.0f : 1.0f); // the different between illum 2 and 3 is taht 3 requires ray traced reflections, which most likely implies a metallic surface
+
+        gpu_materials.push_back(CreateMatInstance(folder, create_vec3(mtl.diffuse), mtl.diffuse_texname, create_vec3(mtl.emission), beckmann_roughness, metallic));
     }
 
     for (uint32_t i = 0; i < unpadded_indices.size();) {

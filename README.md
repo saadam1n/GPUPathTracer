@@ -41,3 +41,6 @@ Acheived June 29, 2022
 
 Acheived July 1st, 2022
 ![Direct lighting](images/11DirectLighting.png)
+
+Acheived July 5th, 2022
+![Rendering of the "Salle de Bain" scene in 1 minute](images/12BathroomScene.png)
