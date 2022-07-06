@@ -101,7 +101,7 @@ MaterialInstance CreateMatInstance(const std::string& folder, const vec3& albedo
     }
 
     matprop->CreateBinding();
-    matprop->SetColor(vec3(0.0f, roughness, 0.0f));
+    matprop->SetColor(vec3(0.0f, roughness, metallic));
     
     material.albedoHandle = albedo->MakeBindless();
     material.propertiesHandle = matprop->MakeBindless();
@@ -194,7 +194,8 @@ void LoadOBJ(const std::string& path, const std::string& folder, std::vector<Ver
         // per-face material
         auto& mtl = materials[shapes[s].mesh.material_ids[0]];
 
-        float beckmann_roughness = sqrt(2.0f / (mtl.shininess + 2.0f));
+        float tr_ggx_roughness = 2.0f / (mtl.shininess + 2.0f);// pow(2.0f / (mtl.shininess + 2.0f), 0.32f);
+        float beckmann_roughness = sqrt(tr_ggx_roughness);
         float metallic = (mtl.illum == 2 ? 0.0f : 1.0f); // the different between illum 2 and 3 is taht 3 requires ray traced reflections, which most likely implies a metallic surface
 
         gpu_materials.push_back(CreateMatInstance(folder, create_vec3(mtl.diffuse), mtl.diffuse_texname, create_vec3(mtl.emission), beckmann_roughness, metallic));

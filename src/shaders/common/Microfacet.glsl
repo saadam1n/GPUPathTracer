@@ -60,7 +60,39 @@ float ProbabilityDensityBeckmann(inout MaterialInstance material, inout SurfaceI
     return max(MicrofacetDistributionBeckmann(material, interaction) * interaction.ndm / (4.0f * interaction.idm), 1e-32f);
 }
 
+// Blinn-Phong (cosine-power)
+// Conversion from Beckmann
+float ConvertBeckmannToBlinnPhong(inout MaterialInstance material) {
+    return 2.0f / material.roughness - 2.0f;
+}
+
+// Microfacet distribution
+// See "A Microfacet Based Coupled Specular-Matte BRDF Model with Importance Sampling" for a detailed view on the equations
+float MicrofacetDistributionBlinnPhong(inout MaterialInstance material, inout SurfaceInteraction interaction) {
+    float n = ConvertBeckmannToBlinnPhong(material);
+    float normalization = (n + 1.0f) / (2.0f * M_PI);
+    return normalization * pow(interaction.ndm, n);
+}
+
+// Importance sample
+vec3 ImportanceSampleBlinnPhong(inout MaterialInstance material) {
+    vec2 r = rand2();
+    float n = ConvertBeckmannToBlinnPhong(material);
+    float z = pow(r.x, 1.0f / (n + 1.0f));
+    float phi = 2 * M_PI * r.y;
+    float radius = sqrt(1.0f - z * z);
+    vec3 direction = vec3(radius * vec2(sin(phi), cos(phi)), z);
+    return direction;
+}
+
+// Probability density
+float ProbabilityDensityBlinnPhong(inout MaterialInstance material, inout SurfaceInteraction interaction) {
+    return max(MicrofacetDistributionBlinnPhong(material, interaction) * interaction.ndm / (4.0f * interaction.idm), 1e-32f);
+}
+
 // Macro defines to choose which microfacet model to use
+// For obj (which only support blinn-Phong), Beckmann should be used instead due to its similarily with a cosine-power distirubiton
+// In all other cases, use Trowbridge-Reitz (GGX)!
 #define MicrofacetDistribution(m, i) MicrofacetDistributionTrowbridgeReitz(m, i)
 #define ImportanceSampleMicrofacet(m, i) ImportanceSampleTrowbridgeReitz(m)
 #define ProbabilityDensityMicrofacet(m, i) ProbabilityDensityTrowbridgeReitz(m, i)
