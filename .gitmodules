@@ -13,3 +13,6 @@
 [submodule "extern/SOIL2"]
 	path = extern/soil2-cmake
 	url = https://github.com/saada2006/soil2-cmake
+[submodule "extern/tinygltf"]
+	path = extern/tinygltf
+	url = https://github.com/syoyo/tinygltf

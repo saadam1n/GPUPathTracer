@@ -19,6 +19,9 @@
 #include <algorithm>
 
 #include <glm/gtx/matrix_transform_2d.hpp>
+// Use specifically for GLTF models
+//#define TINYGLTF_IMPLEMENTATION
+//#include <tiny_gltf.h>
 
 using namespace glm;
 
@@ -38,6 +41,8 @@ struct CompactVertex {
     float cumulativeArea; 
     // 16 - we just need 4 vec4s
 };
+
+
 
 /*
 matId 0 - skybox    starting at textures[0]
