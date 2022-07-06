@@ -162,8 +162,16 @@ void LoadOBJ(const std::string& path, const std::string& folder, std::vector<Ver
                 tinyobj::real_t vy = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
                 tinyobj::real_t vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
 
-                tinyobj::real_t tx = 0;
-                tinyobj::real_t ty = 0;
+                tinyobj::real_t nx = 0, ny = 0, nz = 0;
+
+                // Check if `normal_index` is zero or positive. negative = no normal data
+                if (idx.normal_index >= 0) {
+                    nx = attrib.normals[3 * size_t(idx.normal_index) + 0];
+                    ny = attrib.normals[3 * size_t(idx.normal_index) + 1];
+                    nz = attrib.normals[3 * size_t(idx.normal_index) + 2];
+                }
+
+                tinyobj::real_t tx = 0, ty = 0;
 
                 // Check if `texcoord_index` is zero or positive. negative = no texcoord data
                 if (idx.texcoord_index >= 0) {
@@ -173,6 +181,7 @@ void LoadOBJ(const std::string& path, const std::string& folder, std::vector<Ver
 
                 Vertex vtx;
                 vtx.position = vec3(vx, vy, vz);
+                vtx.normal = vec3(nx, ny, nz);
                 vtx.texcoord = vec2(tx, ty);
                 vtx.matId = current_material;
                 vertices.push_back(vtx);
@@ -247,6 +256,12 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
         vec3 v02 = triangle.position2 - triangle.position0;
 
         triangle.normal = normalize(cross(normalize(v01), normalize(v02)));
+
+        vec3 average_normal = (vertices[triplet[0]].normal + vertices[triplet[1]].normal + vertices[triplet[2]].normal) / 3.0f;
+        if (dot(triangle.normal, average_normal) < 0.0f) {
+            triangle.normal = -triangle.normal;
+        }
+
         triangle.material = vertices[triplet[0]].matId;
 
         triangles.push_back(triangle);

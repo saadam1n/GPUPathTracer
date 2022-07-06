@@ -123,7 +123,7 @@ Ray GenerateLightSample(in Vertex vertex, in MaterialInstance material, in Surfa
     vec3 lightDir = normalize(lightVertex.Position - vertex.Position); 
     SetIncomingDirection(interaction, lightDir);
     float bouncePdf = ProbabilityDensityDirection(material, interaction) * avdot(lightVertex.Normal, -lightDir) / (radius * radius); // Seach veach 1995, eq 9
-    lightThroughput = throughput * ComputeBSDF(material, interaction) * MISWeight(lightPdf, bouncePdf) / (lightPdf * radius * radius);
+    lightThroughput = throughput * ComputeBSDF(material, interaction) * interaction.ndi * avdot(lightVertex.Normal, -lightDir) * MISWeight(lightPdf, bouncePdf) / (lightPdf * radius * radius);
               
     lightRay.origin = vertex.Position + 0.001f * lightDir;
     lightRay.direction = lightDir;

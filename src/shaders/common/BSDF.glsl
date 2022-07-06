@@ -6,9 +6,6 @@
 
 // Specular energy has gone wonkers
 vec3 ComputeBSDF(in MaterialInstance material, in SurfaceInteraction interaction) {
-    if (dot(interaction.normal, interaction.incoming) < 0.0f || dot(interaction.normal, interaction.outgoing) < 0.0f) {
-        return vec3(0.0f);
-    }
     // Cook torrance
     vec3 specular = Fresnel(material, interaction.idm) * MicrofacetDistribution(material, interaction) * GeometricShadowing(material, interaction) / max(4.0f * interaction.ndi * interaction.ndo, 1e-26f);
     // Some changes to what devsh wrote and some ideas:
