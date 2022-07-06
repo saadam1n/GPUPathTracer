@@ -83,7 +83,7 @@ For example, obj requires me to set values based on the illumination model
 So this wrapper function only takes care of creating a material instance using given parameters
 Now that I think about it, this is sort of like a constructor
 */
-MaterialInstance CreateMatInstance(const std::string& folder, const vec3& albedoCol, const std::string& albedoTex, const vec3& emissive, float roughness, float metallic) {
+MaterialInstance CreateMatInstance(std::vector<Texture*>& textures, const std::string& folder, const vec3& albedoCol, const std::string& albedoTex, const vec3& emissive, float roughness, float metallic) {
     std::cout << "before " << glGetError() << " for path " << albedoTex << '\n';
 
     MaterialInstance material;
@@ -111,10 +111,13 @@ MaterialInstance CreateMatInstance(const std::string& folder, const vec3& albedo
 
     std::cout << "after " << glGetError() << '\n';
 
+    textures.push_back(albedo);
+    textures.push_back(matprop);
+
     return material;
 }
 
-void LoadOBJ(const std::string& path, const std::string& folder, std::vector<Vertex>& vertices, std::vector<TriangleIndexData>& indices, std::vector<MaterialInstance>& gpu_materials) {
+void LoadOBJ(const std::string& path, const std::string& folder, std::vector<Vertex>& vertices, std::vector<TriangleIndexData>& indices, std::vector<Texture*>& textures, std::vector<MaterialInstance>& gpu_materials) {
 
     auto create_vec2 = [](const float* ptr) -> vec2 {return vec2(ptr[0], ptr[1]); };
     auto create_vec3 = [](const float* ptr) -> vec3 {return vec3(ptr[0], ptr[1], ptr[2]); };
@@ -192,13 +195,14 @@ void LoadOBJ(const std::string& path, const std::string& folder, std::vector<Ver
 
         }
         // per-face material
-        auto& mtl = materials[shapes[s].mesh.material_ids[0]];
+        std::cout << materials.size() << ' ' << shapes[s].mesh.material_ids[0] << '\n';
+        auto& mtl = materials.at(shapes[s].mesh.material_ids[0]);
 
         float tr_ggx_roughness = 2.0f / (mtl.shininess + 2.0f);// pow(2.0f / (mtl.shininess + 2.0f), 0.32f);
         float beckmann_roughness = sqrt(tr_ggx_roughness);
         float metallic = (mtl.illum == 2 ? 0.0f : 1.0f); // the different between illum 2 and 3 is taht 3 requires ray traced reflections, which most likely implies a metallic surface
 
-        gpu_materials.push_back(CreateMatInstance(folder, create_vec3(mtl.diffuse), mtl.diffuse_texname, create_vec3(mtl.emission), beckmann_roughness, metallic));
+        gpu_materials.push_back(CreateMatInstance(textures, folder, create_vec3(mtl.diffuse), mtl.diffuse_texname, create_vec3(mtl.emission), beckmann_roughness, metallic));
     }
 
     for (uint32_t i = 0; i < unpadded_indices.size();) {
@@ -229,7 +233,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
     std::vector<TriangleIndexData> indices;
 
     if (extension == "obj") {
-        LoadOBJ(path, folder, vertices, indices, materials);
+        LoadOBJ(path, folder, vertices, indices, textures, materials);
     }
     else {
         // Maybe worth a shot loading via assimp
