@@ -4,6 +4,7 @@
 #include "Random.glsl"
 #include "Material.glsl"
 #include "Constants.glsl"
+#include "MIS.glsl"
 
 // Microfacet distributions, importance sampling strategies, and PDFs
 
@@ -17,17 +18,11 @@ float MicrofacetDistributionTrowbridgeReitz(in MaterialInstance material, in Sur
 // Importance sample
 vec3 ImportanceSampleTrowbridgeReitz(in MaterialInstance material) {
     vec2 r = rand2();
-    float nch = sqrt((1.0f - r.x) / (r.x * (material.roughness2 - 1.0f) + 1.0f));
-    float nsh = sqrt(1.0f - nch * nch);
-
-    r.y *= 2.0f * M_PI;
-
-    vec3 direction;
-    direction.x = nsh * sin(r.y);
-    direction.y = nsh * cos(r.y);
-    direction.z = nch;
-
-    return direction;
+    float z2 = (1.0f - r.x) / (r.x * (material.roughness2 - 1.0f) + 1.0f);
+    float z = sqrt(z2);
+    float phi = 2.0f * M_PI * r.y;
+    float radius = sqrt(1.0f - z2);
+    return vec3(radius * vec2(sin(phi), cos(phi)), z);
 }
 
 // Probability density
@@ -49,10 +44,9 @@ vec3 ImportanceSampleBeckmann(inout MaterialInstance material) {
     float g = -material.roughness2 * log(1 - r.x);
     float z2 = 1.0f / (1.0f + g);
     float z = sqrt(z2);
-    float phi = 2 * M_PI * r.y;
+    float phi = 2.0f * M_PI * r.y;
     float radius = sqrt(1.0 - z2);
-    vec3 direction = vec3(radius * vec2(sin(phi), cos(phi)), z);
-    return direction;
+    return vec3(radius * vec2(sin(phi), cos(phi)), z);
 }
 
 // Probability density
@@ -142,8 +136,7 @@ float ProbabilityDensityDirection(inout MaterialInstance material, in SurfaceInt
 
 vec3 GenerateImportanceSample(inout MaterialInstance material, inout SurfaceInteraction interaction, out float pdf) {
     if (rand() > 0.5f) {
-        interaction.microfacet = interaction.tbn * ImportanceSampleMicrofacet(material, interaction);
-        SetIncomingDirection(interaction, reflect(-interaction.outgoing, interaction.microfacet));
+        SetMicrofacetDirection(interaction, interaction.tbn * normalize(ImportanceSampleMicrofacet(material, interaction)));
     }
     else {
         SetIncomingDirection(interaction, interaction.tbn * ImportanceSampleCosine());

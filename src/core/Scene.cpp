@@ -106,8 +106,8 @@ MaterialInstance CreateMatInstance(std::vector<Texture*>& textures, const std::s
     material.albedoHandle = albedo->MakeBindless();
     material.propertiesHandle = matprop->MakeBindless();
 
-    material.isEmissive = (emissive.x + emissive.y + emissive.z > 1e-5f);
-    material.emission = emissive;
+    material.isEmissive = false;// (emissive.x + emissive.y + emissive.z > 1e-5f);
+    material.emission = 0.0f *  emissive; // some materials weirdly are being lights when the .mtl files say they aren't
 
     std::cout << "after " << glGetError() << '\n';
 
@@ -202,6 +202,8 @@ void LoadOBJ(const std::string& path, const std::string& folder, std::vector<Ver
         float beckmann_roughness = sqrt(tr_ggx_roughness);
         float metallic = (mtl.illum == 2 ? 0.0f : 1.0f); // the different between illum 2 and 3 is taht 3 requires ray traced reflections, which most likely implies a metallic surface
 
+        std::cout << mtl.name << " : " << mtl.emission[0] << '\n';
+
         gpu_materials.push_back(CreateMatInstance(textures, folder, create_vec3(mtl.diffuse), mtl.diffuse_texname, create_vec3(mtl.emission), beckmann_roughness, metallic));
     }
 
@@ -261,11 +263,12 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
         triangle.position2 = vertices[triplet[2]].position;
         triangle.texcoord2 = vertices[triplet[2]].texcoord;
 
+        // generate smooth normals
         vec3 v01 = triangle.position1 - triangle.position0;
         vec3 v02 = triangle.position2 - triangle.position0;
-
         triangle.normal = normalize(cross(normalize(v01), normalize(v02)));
 
+        // make sure our normal is facing out instead of in
         vec3 average_normal = (vertices[triplet[0]].normal + vertices[triplet[1]].normal + vertices[triplet[2]].normal) / 3.0f;
         if (dot(triangle.normal, average_normal) < 0.0f) {
             triangle.normal = -triangle.normal;

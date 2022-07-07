@@ -18,7 +18,7 @@ constexpr float kExposure = 1.68f;
 constexpr float kMetallic = 0.0f;
 
 // REFERENCE CPU RENDERER PARAMS
-constexpr uint32_t KNumRefSamples = 1024;// 32768;
+constexpr uint32_t KNumRefSamples = 8 * 1024;// 32768;
 constexpr uint32_t kNumWorkers = 6; // 6 worker threads, 1 windows thread, 1 thread as breathing room
 const vec3 sunDir = normalize(vec3(2.0f, 40.0f + 29.0f, 12.0f));
 constexpr float sunAngle = glm::radians(5.0f);

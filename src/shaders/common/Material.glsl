@@ -119,6 +119,16 @@ void SetIncomingDirection(inout SurfaceInteraction interaction, in vec3 i) {
     interaction.idm = avdot(interaction.incoming, interaction.microfacet);
 }
 
+void SetMicrofacetDirection(inout SurfaceInteraction interaction, in vec3 m) {
+    interaction.microfacet = m;
+    interaction.incoming = reflect(-interaction.outgoing, interaction.microfacet);
+
+    interaction.ndi = avdot(interaction.normal, interaction.incoming);
+    interaction.ndm = avdot(interaction.normal, interaction.microfacet);
+    interaction.ndm2 = interaction.ndm * interaction.ndm;
+    interaction.idm = avdot(interaction.incoming, interaction.microfacet);
+}
+
 // WARNING: everything below here is messy code. Read at your own peril
 
 /*

@@ -14,7 +14,8 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 #include "common/Material.glsl"
 #include "common/Microfacet.glsl"
 #include "common/BSDF.glsl"
- 
+#include "common/MIS.glsl"
+
 uniform vec3 lower_left, horizontal, vertical, position, u, v;
 uniform int width, height;
 uniform float lens_radius;
@@ -29,10 +30,6 @@ uniform layout(rgba32f) image2D accum;
 // I will eventually need to move away from global vars
 vec3 viewDir;
 
-// Veach-Guibas balance huestric - based on the numerically stable formula found here https://github.com/madmann91/sol/blob/master/include/sol/renderer.h#L57
-float MISWeight(in float top, in float bottom) {
-    return 1.0f / (1.0f + bottom / top); 
-}
 
 Vertex RandomLightVertex() {
     float selectedArea = rand() * totalLightArea;
@@ -209,22 +206,24 @@ void main() {
         }
         contribution += indirectDirectThroughput * material.emission;
 
+
         // If our ray left the scene, we cannot continue on it anymore
         // Also if we hit a case where our ray hit the back of an object we also have to stop
         if(miss) {
             break; 
         }
 
-        HitInfo lightHit;
-        vec3 lightThroughput;
-        uint lightMatID;
-        float lightPdf;
+        if(false && totalLightArea != 0.0f) {
+            HitInfo lightHit;
+            vec3 lightThroughput;
+            uint lightMatID;
+            float lightPdf;
 
-        Ray lightRay = GenerateLightSample(vertex, material, interaction, lightHit, lightPdf, throughput, lightThroughput, lightMatID);     
-    
+            Ray lightRay = GenerateLightSample(vertex, material, interaction, lightHit, lightPdf, throughput, lightThroughput, lightMatID);     
+            if(!AnyHit(lightRay, lightHit)) {
+                contribution += lightThroughput * materialInstance[lightMatID + 1].xyz;
+            }
 
-        if(!AnyHit(lightRay, lightHit)) {
-            contribution += lightThroughput * materialInstance[lightMatID + 1].xyz;
         }
 
         ray.direction = GenerateImportanceSample(material, interaction, bxdfPdf);
@@ -239,7 +238,7 @@ void main() {
 
         viewDir = -ray.direction;
         lastPosition = vertex.Position;
-        ray.origin = vertex.Position + 0.001 * ray.direction;
+        ray.origin = vertex.Position + 0.001 * vertex.Normal;////ray.direction;
     }
 
     vec3 accumContribution = imageLoad(accum, PixelCoordinates).xyz + contribution;
