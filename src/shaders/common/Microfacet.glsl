@@ -133,10 +133,14 @@ vec3 ImportanceSampleCosine() {
 }
 
 // TODO: update this so NEE doesn't break
+float ProbabilityDensityDirection(inout MaterialInstance material, in SurfaceInteraction interaction, float diffusePmf) {
+    return diffusePmf* ProbabilityDensityCosine(interaction) + (1.0f - diffusePmf) * ProbabilityDensityMicrofacet(material, interaction);
+}
+
 float ProbabilityDensityDirection(inout MaterialInstance material, in SurfaceInteraction interaction) {
-    float pdf0 = ProbabilityDensityCosine(interaction);
-    float pdf1 = ProbabilityDensityMicrofacet(material, interaction);
-    return 0.5f * (pdf0 + pdf1);
+    interaction.ndi = 1.0f;
+    float diffusePmf = AverageLuminance(DiffuseEnergyConservation(material, interaction));
+    return ProbabilityDensityDirection(material, interaction, diffusePmf);
 }
 
 vec3 GenerateImportanceSample(inout MaterialInstance material, inout SurfaceInteraction interaction, out float pdf) {
@@ -150,7 +154,7 @@ vec3 GenerateImportanceSample(inout MaterialInstance material, inout SurfaceInte
     else {
         SetMicrofacetDirection(interaction, interaction.tbn * ImportanceSampleMicrofacet(material, interaction));
     }
-    pdf = diffusePmf * ProbabilityDensityCosine(interaction) + (1.0f - diffusePmf) * ProbabilityDensityMicrofacet(material, interaction);
+    pdf = ProbabilityDensityDirection(material, interaction, diffusePmf);
     return interaction.incoming;
 }
 

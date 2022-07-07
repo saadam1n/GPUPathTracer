@@ -213,7 +213,7 @@ void main() {
             break; 
         }
 
-        if(false && totalLightArea != 0.0f) {
+        if(totalLightArea != 0.0f) {
             HitInfo lightHit;
             vec3 lightThroughput;
             uint lightMatID;

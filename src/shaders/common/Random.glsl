@@ -128,7 +128,7 @@ vec2 HaltonSequence(in uint n, in uint b0, in uint b1) {
 }
 
 // Solution to avoid correleation suggested by criver. See PBRT for more details
-const uint primePool[] = {2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97}; // 25 prime numbers, so 24 LD samples per path
+const uint primePool[] = { 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97}; // 25 prime numbers, so 24 LD samples per path
 int nextPrime = 0;
 vec2 NextHalton() {
     // We cannot use a prime number more than one or else we will get correlation between samples

@@ -515,16 +515,6 @@ bool AnyHit(in Ray ray, inout HitInfo intersection) {
 		bool hit0 = ValidateIntersection(distance0);
 		bool hit1 = ValidateIntersection(distance1);
 
-		// If the second node was hit but not the first, swap them to make sure all threads that just need to intersect one child don't branch 
-		if (!hit0 && hit1) {
-			hit0 = true;
-			hit1 = false;
-
-			BVHNode temp = child0;
-			child0 = child1;
-			child1 = temp;
-		}
-
 		if (hit0 && fbs(child0.data[1].w) < 0) {
 			if (IntersectLeafAny(child0, ray, intersection)) {
 				return true;
@@ -541,11 +531,6 @@ bool AnyHit(in Ray ray, inout HitInfo intersection) {
 		}
 
 		if (hit0 && hit1) {
-			if (distance0.x > distance1.x) {
-				BVHNode tmpn = child0;
-				child0 = child1;
-				child1 = tmpn;
-			}
 			stack[++index] = fbs(child1.data[0].w);
 			currentNode = fbs(child0.data[0].w);
 		}
