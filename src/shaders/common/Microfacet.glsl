@@ -140,7 +140,10 @@ float ProbabilityDensityDirection(inout MaterialInstance material, in SurfaceInt
 }
 
 vec3 GenerateImportanceSample(inout MaterialInstance material, inout SurfaceInteraction interaction, out float pdf) {
-    float diffusePmf = 1.0f - material.metallic;// (material.metallic > 0.99f ? 0.5f : 0.0f);
+    // Use best case scenerio for diffuse lighting
+    interaction.ndi = 1.0f;
+    float diffusePmf = AverageLuminance(DiffuseEnergyConservation(material, interaction));
+    // Choose between specular and diffuse based on PDF
     if (rand() < diffusePmf) {
         SetIncomingDirection(interaction, interaction.tbn * ImportanceSampleCosine());
     }
