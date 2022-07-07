@@ -106,8 +106,8 @@ MaterialInstance CreateMatInstance(std::vector<Texture*>& textures, const std::s
     material.albedoHandle = albedo->MakeBindless();
     material.propertiesHandle = matprop->MakeBindless();
 
-    material.isEmissive = false;// (emissive.x + emissive.y + emissive.z > 1e-5f);
-    material.emission = 0.0f *  emissive; // some materials weirdly are being lights when the .mtl files say they aren't
+    material.isEmissive = (emissive.x + emissive.y + emissive.z > 1e-5f);
+    material.emission = emissive; // some materials weirdly are being lights when the .mtl files say they aren't
 
     std::cout << "after " << glGetError() << '\n';
 
