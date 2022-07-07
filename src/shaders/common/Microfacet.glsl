@@ -18,10 +18,10 @@ float MicrofacetDistributionTrowbridgeReitz(in MaterialInstance material, in Sur
 // Importance sample
 vec3 ImportanceSampleTrowbridgeReitz(in MaterialInstance material) {
     vec2 r = rand2();
-    float z2 = (1.0f - r.x) / (r.x * (material.roughness2 - 1.0f) + 1.0f);
+    float z2 = max((1.0f - r.x) / (r.x * (material.roughness2 - 1.0f) + 1.0f), 0.0f);
     float z = sqrt(z2);
     float phi = 2.0f * M_PI * r.y;
-    float radius = sqrt(1.0f - z2);
+    float radius = sqrt(max(1.0f - z2, 0.0f));
     return vec3(radius * vec2(sin(phi), cos(phi)), z);
 }
 
