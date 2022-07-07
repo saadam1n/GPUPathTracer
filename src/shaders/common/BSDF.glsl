@@ -15,7 +15,7 @@ vec3 ComputeBSDF(in MaterialInstance material, in SurfaceInteraction interaction
     // Finally, in the case of (total) internal reflection, some of the light that is reflected back inside is either absorbed or tries to scatter again
     // We need to account for this internal reflection or we will loose energy
     // Unfortunately I am no math genius and I do not want to change this without breaking some rule so I won't touch this but I will leave these thoughts here
-    vec3 diffuse = material.albedo / M_PI * (1.0f - material.metallic)* (1.0f - Fresnel(material, interaction.ndi))* (1.0f - Fresnel(material, interaction.ndo)); // See pbr discussion by devsh on how to do energy conservation
+    vec3 diffuse = material.albedo / M_PI * DiffuseEnergyConservation(material, interaction); // See pbr discussion by devsh on how to do energy conservation
     return specular + diffuse;
 }
 

@@ -27,7 +27,7 @@ vec3 ImportanceSampleTrowbridgeReitz(in MaterialInstance material) {
 
 // Probability density
 float ProbabilityDensityTrowbridgeReitz(inout MaterialInstance material, inout SurfaceInteraction interaction) {
-    return max(MicrofacetDistributionTrowbridgeReitz(material, interaction) * interaction.ndm / (4.0f * interaction.idm), 1e-32f);
+    return max(MicrofacetDistributionTrowbridgeReitz(material, interaction) * interaction.ndm / (4.0f * interaction.idm), 1e-10f);
 }
 
 // Beckmann (Gaussian)
@@ -51,7 +51,7 @@ vec3 ImportanceSampleBeckmann(inout MaterialInstance material) {
 
 // Probability density
 float ProbabilityDensityBeckmann(inout MaterialInstance material, inout SurfaceInteraction interaction) {
-    return max(MicrofacetDistributionBeckmann(material, interaction) * interaction.ndm / (4.0f * interaction.idm), 1e-32f);
+    return max(MicrofacetDistributionBeckmann(material, interaction) * interaction.ndm / (4.0f * interaction.idm), 1e-10f);
 }
 
 // Blinn-Phong (cosine-power)
@@ -81,7 +81,7 @@ vec3 ImportanceSampleBlinnPhong(inout MaterialInstance material) {
 
 // Probability density
 float ProbabilityDensityBlinnPhong(inout MaterialInstance material, inout SurfaceInteraction interaction) {
-    return max(MicrofacetDistributionBlinnPhong(material, interaction) * interaction.ndm / (4.0f * interaction.idm), 1e-32f);
+    return max(MicrofacetDistributionBlinnPhong(material, interaction) * interaction.ndm / (4.0f * interaction.idm), 1e-10f);
 }
 
 // Macro defines to choose which microfacet model to use
@@ -116,6 +116,10 @@ float GeometricShadowingSmith(inout MaterialInstance material, inout SurfaceInte
 
 // Misc
 
+vec3 DiffuseEnergyConservation(inout MaterialInstance material, in SurfaceInteraction interaction) {
+    return (1.0f - material.metallic) * (1.0f - Fresnel(material, interaction.ndi)) * (1.0f - Fresnel(material, interaction.ndo));
+}
+
 float ProbabilityDensityCosine(inout SurfaceInteraction interaction) {
     return interaction.ndi / M_PI;
 }
@@ -128,6 +132,7 @@ vec3 ImportanceSampleCosine() {
     return vec3(radius * vec2(sin(phi), cos(phi)), z);
 }
 
+// TODO: update this so NEE doesn't break
 float ProbabilityDensityDirection(inout MaterialInstance material, in SurfaceInteraction interaction) {
     float pdf0 = ProbabilityDensityCosine(interaction);
     float pdf1 = ProbabilityDensityMicrofacet(material, interaction);
@@ -135,13 +140,14 @@ float ProbabilityDensityDirection(inout MaterialInstance material, in SurfaceInt
 }
 
 vec3 GenerateImportanceSample(inout MaterialInstance material, inout SurfaceInteraction interaction, out float pdf) {
-    if (rand() > 0.5f) {
-        SetMicrofacetDirection(interaction, interaction.tbn * normalize(ImportanceSampleMicrofacet(material, interaction)));
-    }
-    else {
+    float diffusePmf = 1.0f - material.metallic;// (material.metallic > 0.99f ? 0.5f : 0.0f);
+    if (rand() < diffusePmf) {
         SetIncomingDirection(interaction, interaction.tbn * ImportanceSampleCosine());
     }
-    pdf = ProbabilityDensityDirection(material, interaction);
+    else {
+        SetMicrofacetDirection(interaction, interaction.tbn * ImportanceSampleMicrofacet(material, interaction));
+    }
+    pdf = diffusePmf * ProbabilityDensityCosine(interaction) + (1.0f - diffusePmf) * ProbabilityDensityMicrofacet(material, interaction);
     return interaction.incoming;
 }
 
