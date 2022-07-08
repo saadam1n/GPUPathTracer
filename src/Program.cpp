@@ -116,6 +116,16 @@ int main(int argc, char** argv) {
 
 		FrameTimer.End();
 		FrameTimer.DebugTime();
+
+		/*
+		if (renderer->GetNumSamples() == 32) {
+			renderer->SaveScreenshot("res/outputs/32_spp_random.png");
+			return 0;
+		}
+		else {
+			std::cout << "Current sample counter:\t" << renderer->GetNumSamples() << '\n';
+		}
+		*/
 	}
 
 	renderer->CleanUp();

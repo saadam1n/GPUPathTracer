@@ -324,6 +324,15 @@ void LoadEnvironmnet(TextureCubemap* environment, const std::string& args, Verte
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 }
 
+int32_t Compact1By1(int32_t x) {
+    x &= 0x55555555;
+    x = (x ^ (x >> 1)) & 0x33333333;
+    x = (x ^ (x >> 2)) & 0x0f0f0f0f;
+    x = (x ^ (x >> 4)) & 0x00ff00ff;
+    x = (x ^ (x >> 8)) & 0x0000ffff;
+    return x;
+}
+
 void Renderer::Initialize(Window* Window, const char* scenePath, const std::string& env_path) {
     bindedWindow = Window;
     viewportWidth = bindedWindow->Width;
@@ -442,15 +451,38 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     ldSamplerStateBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
     ldSamplerStateBuf.UploadData(ldSamplerStates, GL_STATIC_DRAW);
 
+    globalNextRayBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
+    globalNextRayBuf.UploadData(sizeof(int), nullptr, GL_DYNAMIC_DRAW);
+
+    std::vector<ivec2> mortonOrderPixels;
+    // Gen blocks of 8x8 morton order blocks
+    for (uint32_t y = 0; y < viewportHeight / 8; y++) {
+        uint32_t y_offset = y * 8;
+        for (uint32_t x = 0; x < viewportWidth / 8; x++) {
+            uint32_t x_offset = x * 8;
+            for (uint32_t i = 0; i < 64; i++) {
+                mortonOrderPixels.emplace_back(Compact1By1(i) + x_offset, Compact1By1(i >> 1) + y_offset);
+            }
+        }
+    }
+
+    pixelPoolBuf.CreateBinding(BUFFER_TARGET_ARRAY);
+    pixelPoolBuf.UploadData(mortonOrderPixels, GL_STATIC_DRAW);
+
+    pixelPoolTex.CreateBinding();
+    pixelPoolTex.SelectBuffer(&pixelPoolBuf, GL_RG32I);
+
     scene.materialsBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 4);
     randomState.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 5);
     ldSamplerStateBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 6);
+    globalNextRayBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 7);
 
     accum.BindImageUnit(0, GL_RGBA32F);
     accum.BindTextureUnit(0, GL_TEXTURE_2D);
     scene.vertexTex.BindTextureUnit(1, GL_TEXTURE_BUFFER);
     scene.bvh.nodesTex.BindTextureUnit(3, GL_TEXTURE_BUFFER);
     scene.lightTex.BindTextureUnit(4, GL_TEXTURE_BUFFER);
+    pixelPoolTex.BindTextureUnit(5, GL_TEXTURE_BUFFER);
 
     iterative.CreateBinding();
     iterative.LoadInteger("accum", 0);
@@ -458,10 +490,13 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     iterative.LoadInteger("indexTex", 2);
     iterative.LoadInteger("nodesTex", 3);
     iterative.LoadInteger("lightTex", 4);
+    iterative.LoadInteger("pixelPoolTex", 5);
     iterative.LoadFloat("totalLightArea", scene.totalLightArea);
+    std::cout << scene.totalLightArea << "abcd\n";
     iterative.LoadShaderStorageBuffer("samplers", scene.materialsBuf);
     iterative.LoadShaderStorageBuffer("randomState", randomState);
     iterative.LoadShaderStorageBuffer("ldSamplerStateBuf", ldSamplerStateBuf);
+    iterative.LoadShaderStorageBuffer("globalNextRayBuf", globalNextRayBuf);
     iterative.LoadVector3F32("sunDir", sunDir);
     iterative.LoadFloat("sunRadius", sunRadius);
     iterative.LoadFloat("sunMaxDot", sunMaxDot);
@@ -488,6 +523,11 @@ void Renderer::CleanUp(void) {
 #define MEMORY_BARRIER_RT GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT | GL_ATOMIC_COUNTER_BARRIER_BIT
 
 void Renderer::RenderFrame(const Camera& camera)  {
+    // Clear our atomic buf
+    uint32_t clear = 0;
+    globalNextRayBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &clear);
+
     iterative.CreateBinding();
     iterative.LoadCamera(camera, viewportWidth, viewportHeight);
     iterative.LoadInteger("stratumIdx", numSamples % kNumStrata);

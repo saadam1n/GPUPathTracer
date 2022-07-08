@@ -41,6 +41,11 @@ private:
 
 	Buffer ldSamplerStateBuf;
 
+	Buffer globalNextRayBuf;
+	Buffer pixelPoolBuf;
+	TextureBuffer pixelPoolTex;
+
+
 	int frameCounter;
 	int numSamples;
 	bool running;

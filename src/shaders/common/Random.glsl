@@ -78,19 +78,6 @@ vec2 Random2D() {
     return vec2(rand(), rand());
 }
 
-#define NUM_LD_POINTS 24
-vec2 ldPoints[NUM_LD_POINTS];
-int ldNext = 0;
-
-vec2 NextPointLD() {
-    if (ldNext < NUM_LD_POINTS) {
-        return ldPoints[ldNext++];
-    }
-    else {
-        return Random2D();
-    }
-}
-
 samplerBuffer stratifiedTex;
 uniform int stratumIdx;
 
@@ -139,10 +126,10 @@ vec2 NextHalton() {
     return halton;
 }
 
-
+/*
 vec2 HammerslySequence(in uint n, in uint offset) {
     return vec2(float(n + rand()) / float(NUM_LD_POINTS), VanDerCorput(n + offset, 2));
-}
+}*/
 
 // Implementation of "Golden Ratio Sequences For Low-Discrepancy Sampling"
 // See https://www.graphics.rwth-aachen.de/media/papers/jgt.pdf
@@ -165,8 +152,8 @@ vec2 ImpartialStratifier() {
     return vec2(stratum + Random2D()) / float(kNumStrataPerSide);
 }
 
-#define rand2() NextHalton()
-
+#define rand2() Random2D()
+/*
 void CreateGoldenRatioSamples() {
     uvec2 seed = uvec2(HybridTausInteger(), HybridTausInteger());
 
@@ -223,7 +210,7 @@ void CreateRandomHighDiscrepancySamples() {
         ldPoints[i] = Random2D();
     }
 }
-
+*/
 #define InitializeLD() ;//CreateGoldenRatioSamples()
 
 const int kNumStrataPerSide = 4;

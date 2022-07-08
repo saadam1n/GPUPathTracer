@@ -519,7 +519,6 @@ bool AnyHit(in Ray ray, inout HitInfo intersection) {
 			if (IntersectLeafAny(child0, ray, intersection)) {
 				return true;
 			}
-			
 			hit0 = false;
 		}
 
@@ -543,7 +542,6 @@ bool AnyHit(in Ray ray, inout HitInfo intersection) {
 				break;
 			else
 				currentNode = stack[index--];
-
 	}
 
 	return false;
