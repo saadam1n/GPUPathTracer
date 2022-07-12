@@ -228,7 +228,7 @@ vec3 PathTrace(in ivec2 pixel) {
         if(rand() > continuation) {
             break;
         }
-        throughput /= continuation;
+        throughput /= continuation;                
 
         viewDir = -ray.direction;
         lastPosition = vertex.Position;
