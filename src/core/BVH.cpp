@@ -361,26 +361,17 @@ void BoundingVolumeHierarchy::Construct(std::vector<CompactTriangle>& triangles)
 
 	for (uint32_t i = 0; i < triangles.size(); i++) {
 		CompactTriangle currentTriangle = triangles[i];
-		// Calculate centriod of the triangle. We need this in order to split triangles in the BVH building process
-		TriangleCentroid Centroid;
-
-		Centroid.Index = i;
-
-		Centroid.Position =
-			currentTriangle.position0 +
-			currentTriangle.position1 +
-			currentTriangle.position2;
-
-		Centroid.Position /= 3.0f;
-
-		CentroidList.push_back(Centroid);
 
 		AABB Box;
-
 		Box.Extend(currentTriangle.position0);
 		Box.Extend(currentTriangle.position1);
 		Box.Extend(currentTriangle.position2);
 
+		TriangleCentroid Centroid;
+		Centroid.Index = i;
+		Centroid.Position = 0.5f * (Box.Min + Box.Max);
+
+		CentroidList.push_back(Centroid);
 		TriangleBoundingBoxes.push_back(Box);
 	}
 

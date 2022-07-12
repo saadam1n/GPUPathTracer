@@ -88,7 +88,7 @@ float ProbabilityDensityBlinnPhong(inout MaterialInstance material, inout Surfac
 // For obj (which only support blinn-Phong), Beckmann should be used instead due to its similarily with a cosine-power distirubiton
 // In all other cases, use Trowbridge-Reitz (GGX)!
 #define MicrofacetDistribution(m, i) MicrofacetDistributionTrowbridgeReitz(m, i)
-#define ImportanceSampleMicrofacet(m, i) ImportanceSampleTrowbridgeReitz(m)
+#define ImportanceSampleMicrofacet(m) ImportanceSampleTrowbridgeReitz(m)
 #define ProbabilityDensityMicrofacet(m, i) ProbabilityDensityTrowbridgeReitz(m, i)
 
 // Fernsel functions. The model used depends on the parameters of the material
@@ -161,7 +161,6 @@ float ProbabilityDensityDirection(inout MaterialInstance material, in SurfaceInt
     interaction.ndi = 1.0f;
     float diffusePmf = AverageLuminance(DiffuseEnergyConservation(material, interaction));
 
-    diffusePmf = 0.0f;
     float pdfDiffuse = diffusePmf * ProbabilityDensityCosine(interaction);
     float pdfSpecular = (1.0f - diffusePmf) * ProbabilityDensityMicrofacet(material, interaction);
     float pdf = pdfDiffuse / MISWeight(pdfDiffuse, pdfSpecular);
@@ -169,19 +168,18 @@ float ProbabilityDensityDirection(inout MaterialInstance material, in SurfaceInt
 }
 
 vec3 GenerateImportanceSample(inout MaterialInstance material, inout SurfaceInteraction interaction, out float pdf) {
-    // Use best case scenerio for diffuse lighting
-    interaction.ndi = 1.0f;
-    float diffusePmf = AverageLuminance(DiffuseEnergyConservation(material, interaction));
-    diffusePmf = 0.0f;
+    float diffusePmf = clamp(0.5, 0.0f, 0.75f);
     // Choose between specular and diffuse based on PDF
     if (rand() < diffusePmf) {
+        // Use diffuse PDF
         SetIncomingDirection(interaction, interaction.tbn * ImportanceSampleCosine());
         float pdfDiffuse = diffusePmf * ProbabilityDensityCosine(interaction);
         float pdfSpecular = (1.0f - diffusePmf) * ProbabilityDensityMicrofacet(material, interaction);
         pdf = pdfDiffuse / MISWeight(pdfDiffuse, pdfSpecular);
     }
     else {
-        SetMicrofacetDirection(interaction, interaction.tbn * ImportanceSampleMicrofacet(material, interaction));
+        // Use specular PDF
+        SetMicrofacetDirection(interaction, interaction.tbn * ImportanceSampleMicrofacet(material));
         float pdfDiffuse = diffusePmf * ProbabilityDensityCosine(interaction);
         float pdfSpecular = (1.0f - diffusePmf) * ProbabilityDensityMicrofacet(material, interaction);
         pdf = pdfSpecular / MISWeight(pdfSpecular, pdfDiffuse);
