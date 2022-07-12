@@ -12,7 +12,7 @@
 // Microfacet distribution
 float MicrofacetDistributionTrowbridgeReitz(in MaterialInstance material, in SurfaceInteraction interaction) {
     float divsor = (material.roughness2 - 1.0f) * interaction.ndm2 + 1.0f;
-    return material.roughness2 / max(M_PI * divsor * divsor, 1e-10f);
+    return material.roughness2 / max(M_PI * divsor * divsor, 1e-20f);
 }
 
 // Importance sample
@@ -27,7 +27,7 @@ vec3 ImportanceSampleTrowbridgeReitz(in MaterialInstance material) {
 
 // Probability density
 float ProbabilityDensityTrowbridgeReitz(inout MaterialInstance material, inout SurfaceInteraction interaction) {
-    return max(MicrofacetDistributionTrowbridgeReitz(material, interaction) * interaction.ndm / (4.0f * interaction.idm), 1e-10f);
+    return max(MicrofacetDistributionTrowbridgeReitz(material, interaction) * interaction.ndm / (4.0f * interaction.idm), 1e-20f);
 }
 
 // Beckmann (Gaussian)
@@ -102,17 +102,37 @@ vec3 FresnelSchlick(inout vec3 f0, inout float ndo) {
 
 // Geometry term. There's really just one, and that's the smith/schlick model
 
-float GeometricShadowingSchlick(inout float k, inout float ndo) {
-    return ndo / (ndo * (1.0f - k) + k);
+// Taken from Filament's PBR
+float GeometricShadowingSchlick(inout MaterialInstance material, inout float ndo) {
+    float numer = 2.0f * ndo;
+    float denom = ndo + sqrt(material.roughness2 + (1.0f - material.roughness2) * ndo * ndo);
+    return numer / denom;
 }
 
 float GeometricShadowingSmith(inout MaterialInstance material, inout SurfaceInteraction interaction) {
-    float k = material.roughness + 1.0;
-    k *= k / 8.0f;
-    return GeometricShadowingSchlick(k, interaction.ndi) * GeometricShadowingSchlick(k, interaction.ndo);
+    return GeometricShadowingSchlick(material, interaction.ndi) * GeometricShadowingSchlick(material, interaction.ndo);
+}
+
+float VisibilityGGX(inout MaterialInstance material, inout float ndo) {
+    return 1.0f / (ndo + sqrt(material.roughness2 * (1.0f - material.roughness2) * ndo * ndo));
+}
+
+float VisibilitySmith(inout MaterialInstance material, inout SurfaceInteraction interaction) {
+    return VisibilityGGX(material, interaction.ndi) * VisibilityGGX(material, interaction.ndo) / 4.0f;
+}
+
+float VisibilitySmithCorrelated(inout MaterialInstance material, inout SurfaceInteraction interaction) {
+    float so = interaction.ndi * sqrt(interaction.ndo * interaction.ndo * (1.0 - material.roughness2) + material.roughness2);
+    float si = interaction.ndo * sqrt(interaction.ndi * interaction.ndi * (1.0 - material.roughness2) + material.roughness2);
+    return 0.5f / (so + si);
+}
+
+float VisibilityImplicit(inout MaterialInstance material, inout SurfaceInteraction interaction) {
+    return 1.0f / 4.0f;
 }
 
 #define GeometricShadowing(m, i) GeometricShadowingSmith(m, i)
+#define Visibility(m, i) VisibilitySmith(m, i)
 
 // Misc
 
@@ -134,27 +154,38 @@ vec3 ImportanceSampleCosine() {
 
 // TODO: update this so NEE doesn't break
 float ProbabilityDensityDirection(inout MaterialInstance material, in SurfaceInteraction interaction, float diffusePmf) {
-    return diffusePmf* ProbabilityDensityCosine(interaction) + (1.0f - diffusePmf) * ProbabilityDensityMicrofacet(material, interaction);
+    return diffusePmf * ProbabilityDensityCosine(interaction) + (1.0f - diffusePmf) * ProbabilityDensityMicrofacet(material, interaction);
 }
 
 float ProbabilityDensityDirection(inout MaterialInstance material, in SurfaceInteraction interaction) {
     interaction.ndi = 1.0f;
     float diffusePmf = AverageLuminance(DiffuseEnergyConservation(material, interaction));
-    return ProbabilityDensityDirection(material, interaction, diffusePmf);
+
+    diffusePmf = 0.0f;
+    float pdfDiffuse = diffusePmf * ProbabilityDensityCosine(interaction);
+    float pdfSpecular = (1.0f - diffusePmf) * ProbabilityDensityMicrofacet(material, interaction);
+    float pdf = pdfDiffuse / MISWeight(pdfDiffuse, pdfSpecular);
+    return pdf;
 }
 
 vec3 GenerateImportanceSample(inout MaterialInstance material, inout SurfaceInteraction interaction, out float pdf) {
     // Use best case scenerio for diffuse lighting
     interaction.ndi = 1.0f;
     float diffusePmf = AverageLuminance(DiffuseEnergyConservation(material, interaction));
+    diffusePmf = 0.0f;
     // Choose between specular and diffuse based on PDF
     if (rand() < diffusePmf) {
         SetIncomingDirection(interaction, interaction.tbn * ImportanceSampleCosine());
+        float pdfDiffuse = diffusePmf * ProbabilityDensityCosine(interaction);
+        float pdfSpecular = (1.0f - diffusePmf) * ProbabilityDensityMicrofacet(material, interaction);
+        pdf = pdfDiffuse / MISWeight(pdfDiffuse, pdfSpecular);
     }
     else {
         SetMicrofacetDirection(interaction, interaction.tbn * ImportanceSampleMicrofacet(material, interaction));
+        float pdfDiffuse = diffusePmf * ProbabilityDensityCosine(interaction);
+        float pdfSpecular = (1.0f - diffusePmf) * ProbabilityDensityMicrofacet(material, interaction);
+        pdf = pdfSpecular / MISWeight(pdfSpecular, pdfDiffuse);
     }
-    pdf = ProbabilityDensityDirection(material, interaction, diffusePmf);
     return interaction.incoming;
 }
 

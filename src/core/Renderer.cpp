@@ -15,10 +15,9 @@
 
 using namespace glm;
 constexpr float kExposure = 1.68f;
-constexpr float kMetallic = 0.0f;
 
 // REFERENCE CPU RENDERER PARAMS
-constexpr uint32_t KNumRefSamples = 8 * 1024;// 32768;
+constexpr uint32_t KNumRefSamples = 2 * 32768;// 8 * 1024;// 32768;
 constexpr uint32_t kNumWorkers = 6; // 6 worker threads, 1 windows thread, 1 thread as breathing room
 const vec3 sunDir = normalize(vec3(2.0f, 40.0f + 29.0f, 12.0f));
 constexpr float sunAngle = glm::radians(5.0f);
@@ -803,6 +802,16 @@ float GSmith(vec3 n, vec3 v, vec3 l, float m) {
     return G1_Shlick(n, v, k) * G1_Shlick(n, l, k);
 }
 
+
+float VisibilityGGX(float a2, float ndo) {
+    return 1.0f / (ndo + sqrt(a2 * (1.0f - a2) * ndo * ndo));
+}
+
+float VisibilitySmith(vec3& n, vec3& v, vec3& l, float a) {
+    float a2 = a * a;
+    return VisibilityGGX(a2, max(dot(n, v), 0.0f)) * VisibilityGGX(a2, max(dot(n, l), 0.0f)) / 4.0f;
+}
+
 // Move to GGX, suggested by adrian (thank you!)
 float GGX_Distribution(vec3 n, vec3 h, float a) {
     float a2 = a * a;
@@ -820,7 +829,7 @@ vec3 GGXCookTorrance(vec3 albedo, float roughness, float metallic, vec3 n, vec3 
     // Cook torrance
     vec3 f0 = mix(vec3(0.04f), albedo, metallic);
     vec3 h = normalize(v + l);
-    vec3 specular = FresnelShlick(f0, h, v) * GGX_Distribution(n, h, roughness) * GSmith(n, v, l, roughness) / max(4.0f * max(dot(n, v), 0.0f) * max(dot(n, l), 0.0f), 1e-10f); // Implicit geometric term
+    vec3 specular = FresnelShlick(f0, h, v) * GGX_Distribution(n, h, roughness) * VisibilitySmith(n, v, l, roughness); 
     vec3 diffuse = albedo / M_PI * (1.0f - metallic) * (1.0f - FresnelShlick(f0, n, l)) * (1.0f - FresnelShlick(f0, n, v)); // See pbr discussion by devsh on how to do energy conservation
     return specular + diffuse;
 }

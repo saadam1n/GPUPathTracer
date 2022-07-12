@@ -220,7 +220,7 @@ vec3 PathTrace(in ivec2 pixel) {
 
         }
 
-        ray.direction = GenerateImportanceSample(material, interaction, bxdfPdf);
+        ray.direction = normalize(GenerateImportanceSample(material, interaction, bxdfPdf));
 
         // Russian roulette
         throughput *= ComputeBSDF(material, interaction) * interaction.ndi / bxdfPdf; // We multiply the PDF by 0.5 since we had a 50/50 percent chance of choosing it
@@ -232,7 +232,7 @@ vec3 PathTrace(in ivec2 pixel) {
 
         viewDir = -ray.direction;
         lastPosition = vertex.Position;
-        ray.origin = vertex.Position + 0.001 * vertex.Normal;////ray.direction;
+        ray.origin = vertex.Position + 0.001f * vertex.Normal; // We cannot use the more accurate ray.direction for the bias direction because in some cases the GGX normal vector might reflect into itself
     }
 
     freeRNG();
@@ -258,6 +258,8 @@ layout(std430) buffer globalNextRayBuf {
 };
 
 void main() {  
+//#define PRESISTENT_THREADS
+#ifdef PRESISTENT_THREADS
     uvec2 threadIdx =  gl_LocalInvocationID.xy;
 
     // Initialize all to zero
@@ -284,6 +286,11 @@ void main() {
         vec3 color = PathTrace(pixel);
         imageStore(accum, pixel, vec4(imageLoad(accum, pixel).xyz + color, 1.0));
     }
+#else
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    vec3 color = PathTrace(pixel);
+    imageStore(accum, pixel, vec4(imageLoad(accum, pixel).xyz + color, 1.0));
+#endif
 }
 
 /*
