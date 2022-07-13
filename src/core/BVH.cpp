@@ -456,6 +456,7 @@ void BoundingVolumeHierarchy::Construct(std::vector<CompactTriangle>& triangles)
 		NodeSerialized SerializedNode;
 
 		SerializedNode.BoundingBox = CurrentNode->BoundingBox;
+		SerializedNode.parent = 0;
 
 		if (CurrentNode->Type == NodeType::NODE) {
 			SerializedNode.firstChild = ProcessedNodes.size() + IndexConnectionQueue.size() + 1;
@@ -479,6 +480,9 @@ void BoundingVolumeHierarchy::Construct(std::vector<CompactTriangle>& triangles)
 				std::swap(CurrentNode->Children[0], CurrentNode->Children[1]);
 			}
 
+			// axis takes up at most 2 bits
+			SerializedNode.parent |= (axis << 30);
+
 			IndexConnectionQueue.push(CurrentNode->Children[0]);
 			IndexConnectionQueue.push(CurrentNode->Children[1]);
 		} else {
@@ -492,11 +496,8 @@ void BoundingVolumeHierarchy::Construct(std::vector<CompactTriangle>& triangles)
 		}
 
 		if (CurrentNode->parent) {
-			SerializedNode.parent = CurrentNode->parent->Index;
+			SerializedNode.parent |= CurrentNode->parent->Index;
 		}
-
-
-		
 
 		ProcessedNodes.push_back(SerializedNode);
 	}
