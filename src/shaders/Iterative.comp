@@ -176,7 +176,7 @@ vec3 PathTrace(in ivec2 pixel) {
         // Intersect the scene
         HitInfo hit;
         hit.di.x = 1e20f;
-        bool miss = !StackTraversalClosestHit(ray, hit);
+        bool miss = !RestartTrailClosestHit(ray, hit);
         vertex = GetInterpolatedVertex(ray, hit);
         if(miss) {
             vertex.MatID = 0;
@@ -184,6 +184,9 @@ vec3 PathTrace(in ivec2 pixel) {
 
         MaterialInstance material = ConstructMaterialInstance(vertex.MatID, vertex.TextureCoordinate);
         SurfaceInteraction interaction = ConstructSurfaceInteraction(vertex.Normal, viewDir);
+
+        contribution = vec3(nndot(interaction.normal, viewDir));
+        break;
 
         // Account for L_e
         vec3 indirectDirectThroughput = throughput;

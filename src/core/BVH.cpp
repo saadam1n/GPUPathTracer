@@ -188,7 +188,7 @@ inline Split ChooseBestSplit(const Split& X, const Split& Y, const Split& Z, uin
 	}
 }
 
-NodeUnserialized::NodeUnserialized(void) : Children{ nullptr, nullptr }, Type(NodeType::NODE) {}
+NodeUnserialized::NodeUnserialized(void) : Children{ nullptr, nullptr }, Type(NodeType::NODE), parent(nullptr) {}
 
 Split::Split(void) : SAH(FLT_MAX) {}
 
@@ -457,6 +457,9 @@ void BoundingVolumeHierarchy::Construct(std::vector<CompactTriangle>& triangles)
 			assert(CurrentNode->Children[0]);
 			assert(CurrentNode->Children[1]);
 
+			CurrentNode->Children[0]->parent = CurrentNode;
+			CurrentNode->Children[1]->parent = CurrentNode;
+
 			IndexBuildingQueue.push(CurrentNode->Children[0]);
 			IndexBuildingQueue.push(CurrentNode->Children[1]);
 		}
@@ -491,8 +494,13 @@ void BoundingVolumeHierarchy::Construct(std::vector<CompactTriangle>& triangles)
 				exit(-1);
 			}
 		}
+
+		if(CurrentNode->parent)
+			SerializedNode.parent = CurrentNode->parent->Index;
 		ProcessedNodes.push_back(SerializedNode);
 	}
+
+	
 
 	ConstructionTimer.End();
 	//ConstructionTimer.DebugTime();

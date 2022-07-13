@@ -213,21 +213,11 @@ bool IntersectTriangle(in PackedCompactTriangle pct, in Ray ray, inout HitInfo c
 
     vec3 t = ray.origin - position0;
     attemptHit.di.y = dot(t, p) * idet;
-
-    if (attemptHit.di.y < 0.0f || attemptHit.di.y > 1.0f) {
-        return false;
-    }
-
     vec3 q = cross(t, v01);
     attemptHit.di.z = dot(ray.direction, q) * idet;
-
-    if (attemptHit.di.z < 0.0f || attemptHit.di.y + attemptHit.di.z  > 1.0f) {
-        return false;
-    }
-
     attemptHit.di.x = dot(v02, q) * idet;
 
-    if (attemptHit.di.x < closestHit.di.x && attemptHit.di.x > 0.0f) {
+    if (attemptHit.di.y > 0.0f && attemptHit.di.y < 1.0f && attemptHit.di.z > 0.0f && attemptHit.di.y + attemptHit.di.z < 1.0f && attemptHit.di.x < closestHit.di.x && attemptHit.di.x > 0.0f) {
         closestHit.di.xyz = attemptHit.di.xyz;
         closestHit.intersected = pct;
         return true;

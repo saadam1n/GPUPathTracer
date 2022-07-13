@@ -45,6 +45,7 @@ private:
 	Buffer pixelPoolBuf;
 	TextureBuffer pixelPoolTex;
 
+	Buffer debugBuf;
 
 	int frameCounter;
 	int numSamples;

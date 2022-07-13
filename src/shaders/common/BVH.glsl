@@ -497,12 +497,10 @@ bool StackTraversalClosestHit(in Ray ray, inout HitInfo intersection) {
 
 bool StackTraversalAnyHit(in Ray ray, inout HitInfo intersection) {
 	Ray iray;
-
 	iray.direction = 1.0f / ray.direction;
 	iray.origin = -ray.origin * iray.direction;
 
 	BVHNode root = GetNode(0);
-
 	if (!ValidateIntersection(IntersectNode(root, iray, intersection))) {
 		return false;
 	}
@@ -552,6 +550,121 @@ bool StackTraversalAnyHit(in Ray ray, inout HitInfo intersection) {
 
 	return false;
 }
+
+const int sentinelBit = (1 << 31);
+int shiftRight(int x) {
+	x = (x >> 1);
+	x = x & ~sentinelBit;
+	return x;
+}
+
+bool RestartTrailClosestHit(in Ray ray, inout HitInfo intersection) {
+	Ray iray;
+	iray.direction = 1.0f / ray.direction;
+	iray.origin = -ray.origin * iray.direction;
+
+	int trail = 0;
+	int level = sentinelBit; // most significant bit on 32-bit integers
+	int popLevel = 0; // least significant bit on 32-bit integers
+
+	BVHNode root = GetNode(0);
+	int current = fbs(root.data[0].w);
+	bool result = false;
+
+	while (true) {
+		// Load our nodes from memory
+		BVHNode child0 = GetNode(current);
+		BVHNode child1 = GetNode(current + 1);
+
+		// Run intersection tests
+		vec2 distance0 = IntersectNode(child0, iray, intersection);
+		vec2 distance1 = IntersectNode(child1, iray, intersection);
+		bool hit0 = ValidateIntersection(distance0);
+		bool hit1 = ValidateIntersection(distance1);
+
+		// Go through the leaves
+		if (hit0 && fbs(child0.data[0].w) < 0) {
+			IntersectLeaf(child0, ray, intersection, result);
+			hit0 = false;
+		}
+
+		if (hit1 && fbs(child1.data[0].w) < 0) {
+			IntersectLeaf(child1, ray, intersection, result);
+			hit1 = false;
+		}
+
+		// Traversal logic
+		if (hit0 && hit1) {
+			// Get near and far child
+			int near = fbs(child0.data[0].w);
+			int far = fbs(child1.data[0].w);
+			if (distance0.x > distance1.x) {
+				int temp = near;
+				near = far;
+				far = temp;
+			}
+
+			// Move onto the next level in our heirarchy
+			level = shiftRight(level);
+
+			// Use our trail to move to traversal on to the near or far child
+			if ((trail & level) > 0) {
+				// Move to far
+				current = far;
+			}
+			else {
+				current = near;
+			}
+		}
+		else if (hit0 || hit1) {
+			// Determine if we are re-entering near
+			level = shiftRight(level);
+			if (level != popLevel) {
+				trail = trail | level;
+				current = (hit0 ? fbs(child0.data[0].w) : fbs(child1.data[0].w));
+			}
+			else {
+				// Set highest zero bit
+				trail += level;
+				// Get highest non-zero bit in level
+				int temp = trail >> 1;
+				level = (((temp - 1) ^ temp) + 1);
+				// Clear all bits below level using twos complement
+				trail = trail & -level;
+				// If we are finished with traversal, then break
+				if ((trail & sentinelBit) == sentinelBit) break;
+				// Mark this as the last place we started traversal
+				popLevel = level;
+				// Restart traversal
+				current = fbs(root.data[0].w);
+				level = sentinelBit;
+			}
+		}
+		else {
+			// Set highest zero bit
+			trail += level;
+			// Get highest non-zero bit in level
+			int temp = trail >> 1;
+			level = (((temp - 1) ^ temp) + 1);
+			// Clear all bits below level using twos complement
+			trail = trail & -level;
+			// If we are finished with traversal, then break
+			if ((trail & sentinelBit) == sentinelBit) break;
+			// Mark this as the last place we started traversal
+			popLevel = level;
+			// Restart traversal
+			current = fbs(root.data[0].w);
+			level = sentinelBit;
+		}
+	}
+
+	return result;
+}
+
+bool RestartTrailAnyHit(in Ray ray, inout HitInfo intersection) {
+	return RestartTrailClosestHit(ray, intersection); // lazy way to do it
+}
+
 
 /*
 

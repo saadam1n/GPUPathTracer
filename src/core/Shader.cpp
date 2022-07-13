@@ -276,7 +276,7 @@ void PrintCompileLog(GLuint ShaderHandle, const std::string& ShaderSouceCC, std:
 	}
 
 	printf("%s", CorrectedCompileLog.str().c_str());
-
+	return;
 	//printf("Shader source: \n%s\n", ShaderSouceCC.c_str());
 	printf("Shader source:\n");
 

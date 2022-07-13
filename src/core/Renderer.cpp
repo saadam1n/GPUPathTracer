@@ -12,6 +12,7 @@
 #include <sstream>
 #include <thread>
 #include <mutex>
+#include <bitset>
 
 using namespace glm;
 constexpr float kExposure = 1.68f;
@@ -444,7 +445,6 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     std::vector<uint32_t> ldSamplerStates(viewportWidth* viewportHeight);
     for (uint32_t& state : ldSamplerStates) {
         state = initalRange(stateGenerator);
-        //std::cout << "State: " << state << '\n';
     }
 
     ldSamplerStateBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
@@ -471,10 +471,14 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     pixelPoolTex.CreateBinding();
     pixelPoolTex.SelectBuffer(&pixelPoolBuf, GL_RG32I);
 
-    scene.materialsBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 4);
-    randomState.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 5);
-    ldSamplerStateBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 6);
-    globalNextRayBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 7);
+    debugBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
+    debugBuf.UploadData(sizeof(int) * 1024 * 1024, nullptr, GL_STATIC_DRAW);
+
+    scene.materialsBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 0);
+    randomState.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 1);
+    ldSamplerStateBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 2);
+    globalNextRayBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 3);
+    debugBuf.CreateBlockBinding(BUFFER_TARGET_SHADER_STORAGE, 4);
 
     accum.BindImageUnit(0, GL_RGBA32F);
     accum.BindTextureUnit(0, GL_TEXTURE_2D);
@@ -496,6 +500,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     iterative.LoadShaderStorageBuffer("randomState", randomState);
     iterative.LoadShaderStorageBuffer("ldSamplerStateBuf", ldSamplerStateBuf);
     iterative.LoadShaderStorageBuffer("globalNextRayBuf", globalNextRayBuf);
+    //iterative.LoadShaderStorageBuffer("debugBuf", debugBuf);
     iterative.LoadVector3F32("sunDir", sunDir);
     iterative.LoadFloat("sunRadius", sunRadius);
     iterative.LoadFloat("sunMaxDot", sunMaxDot);
@@ -533,6 +538,21 @@ void Renderer::RenderFrame(const Camera& camera)  {
     glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
     glMemoryBarrier(MEMORY_BARRIER_RT);
     numSamples++;
+
+    if (bindedWindow->GetKey(GLFW_KEY_P)) {
+        debugBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
+        int* ptr = (int*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+        auto sentinel = std::bitset<32>((1 << 31));
+        for (int i = 0; i < 1024; i++) {
+            // Print our binary traversal steps
+            std::cout << "BELOW:\n";
+            std::cout << std::bitset<32>(ptr[2 * i]) << '\n';
+            std::cout << std::bitset<32>(ptr[2 * i + 1]) << '\n';
+        }
+        glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+        std::cout << "Sentinel Bit: " << sentinel << '\n';
+        exit(0);
+    }
 }
 
 void Renderer::Present() {

@@ -58,6 +58,7 @@ struct NodeUnserialized {
 
 	std::vector<TriangleCentroid> Centroids;
 
+	NodeUnserialized* parent;
 	//union {
 		NodeUnserialized* Children[2];
 		LeafPointer Leaf;
