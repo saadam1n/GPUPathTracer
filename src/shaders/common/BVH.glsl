@@ -551,8 +551,9 @@ bool StackTraversalAnyHit(in Ray ray, inout HitInfo intersection) {
 	return false;
 }
 
-const int sentinelBit = (1 << 31);
-int shiftRight(int x) {
+const uint sentinelBit = (1 << 31);
+// Shift with bew bits being zeroes
+uint shiftRight(uint x) {
 	x = (x >> 1);
 	x = x & ~sentinelBit;
 	return x;
@@ -563,9 +564,9 @@ bool RestartTrailClosestHit(in Ray ray, inout HitInfo intersection) {
 	iray.direction = 1.0f / ray.direction;
 	iray.origin = -ray.origin * iray.direction;
 
-	int trail = 0;
-	int level = sentinelBit; // most significant bit on 32-bit integers
-	int popLevel = 0; // least significant bit on 32-bit integers
+	uint trail = 0;
+	uint level = sentinelBit; // most significant bit on 32-bit integers
+	uint popLevel = 0; // least significant bit on 32-bit integers
 
 	BVHNode root = GetNode(0);
 	int current = fbs(root.data[0].w);
@@ -627,12 +628,12 @@ bool RestartTrailClosestHit(in Ray ray, inout HitInfo intersection) {
 				// Set highest zero bit
 				trail += level;
 				// Get highest non-zero bit in level
-				int temp = trail >> 1;
+				uint temp = shiftRight(trail);
 				level = (((temp - 1) ^ temp) + 1);
 				// Clear all bits below level using twos complement
 				trail = trail & -level;
 				// If we are finished with traversal, then break
-				if ((trail & sentinelBit) == sentinelBit) break;
+				if ((trail & sentinelBit) > 0) break;
 				// Mark this as the last place we started traversal
 				popLevel = level;
 				// Restart traversal
@@ -644,12 +645,12 @@ bool RestartTrailClosestHit(in Ray ray, inout HitInfo intersection) {
 			// Set highest zero bit
 			trail += level;
 			// Get highest non-zero bit in level
-			int temp = trail >> 1;
+			uint temp = shiftRight(trail);
 			level = (((temp - 1) ^ temp) + 1);
 			// Clear all bits below level using twos complement
 			trail = trail & -level;
 			// If we are finished with traversal, then break
-			if ((trail & sentinelBit) == sentinelBit) break;
+			if ((trail & sentinelBit) > 0) break;
 			// Mark this as the last place we started traversal
 			popLevel = level;
 			// Restart traversal
