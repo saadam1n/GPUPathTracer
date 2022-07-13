@@ -185,9 +185,6 @@ vec3 PathTrace(in ivec2 pixel) {
         MaterialInstance material = ConstructMaterialInstance(vertex.MatID, vertex.TextureCoordinate);
         SurfaceInteraction interaction = ConstructSurfaceInteraction(vertex.Normal, viewDir);
 
-        contribution = vertex.Position / 100.0f;
-        break;
-
         // Account for L_e
         vec3 indirectDirectThroughput = throughput;
         if(miss) {

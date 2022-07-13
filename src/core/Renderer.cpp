@@ -500,7 +500,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     iterative.LoadShaderStorageBuffer("randomState", randomState);
     iterative.LoadShaderStorageBuffer("ldSamplerStateBuf", ldSamplerStateBuf);
     iterative.LoadShaderStorageBuffer("globalNextRayBuf", globalNextRayBuf);
-    //iterative.LoadShaderStorageBuffer("debugBuf", debugBuf);
+    iterative.LoadShaderStorageBuffer("debugBuf", debugBuf);
     iterative.LoadVector3F32("sunDir", sunDir);
     iterative.LoadFloat("sunRadius", sunRadius);
     iterative.LoadFloat("sunMaxDot", sunMaxDot);
@@ -539,15 +539,16 @@ void Renderer::RenderFrame(const Camera& camera)  {
     glMemoryBarrier(MEMORY_BARRIER_RT);
     numSamples++;
 
-    if (bindedWindow->GetKey(GLFW_KEY_P)) {
+    if (bindedWindow->GetKey(GLFW_KEY_P)) { 
         debugBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
         int* ptr = (int*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
         auto sentinel = std::bitset<32>((1 << 31));
         for (int i = 0; i < 1024; i++) {
             // Print our binary traversal steps
-            std::cout << "BELOW:\n";
-            std::cout << std::bitset<32>(ptr[2 * i]) << '\n';
-            std::cout << std::bitset<32>(ptr[2 * i + 1]) << '\n';
+            std::cout << "BELOW:\n"; 
+            std::cout << std::bitset<32>(ptr[3 * i]) << '\n';
+            std::cout << std::bitset<32>(ptr[3 * i + 1]) << '\n';
+            std::cout << std::bitset<32>(ptr[3 * i + 2]) << '\n';
         }
         glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
         std::cout << "Sentinel Bit: " << sentinel << '\n';

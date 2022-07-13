@@ -559,6 +559,10 @@ uint shiftRight(uint x) {
 	return x;
 }
 
+layout(std430) buffer debugBuf {
+	uint debug[];
+};
+
 bool RestartTrailClosestHit(in Ray ray, inout HitInfo intersection) {
 	Ray iray;
 	iray.direction = 1.0f / ray.direction;
@@ -571,7 +575,6 @@ bool RestartTrailClosestHit(in Ray ray, inout HitInfo intersection) {
 	BVHNode root = GetNode(0);
 	int current = fbs(root.data[0].w);
 	bool result = false;
-
 	while (true) {
 		// Load our nodes from memory
 		BVHNode child0 = GetNode(current);
@@ -625,13 +628,13 @@ bool RestartTrailClosestHit(in Ray ray, inout HitInfo intersection) {
 				current = (hit0 ? fbs(child0.data[0].w) : fbs(child1.data[0].w));
 			}
 			else {
-				// Set highest zero bit
+				// Clear any bits below level (which is useful if we pop before we get to our node)
+				trail = trail & -level;
+				// Clear all bits up until our first zero bit from level, and flip that bit
 				trail += level;
-				// Get highest non-zero bit in level
+				// Set level to the lowest on bit in trail
 				uint temp = shiftRight(trail);
 				level = (((temp - 1) ^ temp) + 1);
-				// Clear all bits below level using twos complement
-				trail = trail & -level;
 				// If we are finished with traversal, then break
 				if ((trail & sentinelBit) > 0) break;
 				// Mark this as the last place we started traversal
@@ -642,13 +645,13 @@ bool RestartTrailClosestHit(in Ray ray, inout HitInfo intersection) {
 			}
 		}
 		else {
-			// Set highest zero bit
+			// Clear any bits below level (which is useful if we pop before we get to our node)
+			trail = trail & -level;
+			// Clear all bits up until our first zero bit from level, and flip that bit
 			trail += level;
-			// Get highest non-zero bit in level
+			// Set level to the lowest on bit in trail
 			uint temp = shiftRight(trail);
 			level = (((temp - 1) ^ temp) + 1);
-			// Clear all bits below level using twos complement
-			trail = trail & -level;
 			// If we are finished with traversal, then break
 			if ((trail & sentinelBit) > 0) break;
 			// Mark this as the last place we started traversal
