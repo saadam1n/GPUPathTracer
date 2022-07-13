@@ -295,7 +295,7 @@ void ParallelConstructionTask(
 		);
 
 		// Subdivision termination taken from Jacco Bikker, "The Perfect BVH", slide #12
-		if (BestSplit.SAH > CurrentNode.DataPtr->ComputeSAH()) {
+		if (CurrentNode.DataPtr->Centroids.size() <= MAX_LEAF_TRIANGLES && BestSplit.SAH > CurrentNode.DataPtr->ComputeSAH()) {
 			MakeLeaf(CurrentNode, LBuf, LBufMutex);
 		} else {
 			// Construct children nodes
@@ -478,14 +478,18 @@ void BoundingVolumeHierarchy::Construct(std::vector<CompactTriangle>& triangles)
 		SerializedNode.BoundingBox = CurrentNode->BoundingBox;
 
 		if (CurrentNode->Type == NodeType::NODE) {
-			SerializedNode.ChildrenNodes[0] = CurrentNode->Children[0]->Index;
-			SerializedNode.ChildrenNodes[1] = CurrentNode->Children[1]->Index;
+			SerializedNode.firstChild = CurrentNode->Children[0]->Index;
 
 			IndexConnectionQueue.push(CurrentNode->Children[0]);
 			IndexConnectionQueue.push(CurrentNode->Children[1]);
 		} else {
-			SerializedNode.Leaf = CurrentNode->Leaf;
+			SerializedNode.triangleRange = (CurrentNode->Leaf.Size & 15) | (CurrentNode->Leaf.Offset << 4);
 			SerializedNode.MakeLeaf();
+
+			int range = -SerializedNode.triangleRange;
+			if ((range >> 4) != CurrentNode->Leaf.Offset || (range & 15) != CurrentNode->Leaf.Size) {
+				exit(-1);
+			}
 		}
 		ProcessedNodes.push_back(SerializedNode);
 	}
@@ -514,9 +518,9 @@ void BoundingVolumeHierarchy::Construct(std::vector<CompactTriangle>& triangles)
 		} temp;
 
 		temp.min = node.BoundingBox.Min;
-		temp.data0 = node.ChildrenNodes[0];
+		temp.data0 = node.firstChild;
 		temp.max = node.BoundingBox.Max;
-		temp.data1 = node.ChildrenNodes[1];
+		temp.data1 = node.parent;
 
 		NewLayout* ptr = (NewLayout*)&node;
 		*ptr = temp;
@@ -538,16 +542,16 @@ void BoundingVolumeHierarchy::Construct(std::vector<CompactTriangle>& triangles)
 
 
 void NodeSerialized::MakeLeaf(void) {
-	Leaf.Size = -Leaf.Size;
+	triangleRange = -triangleRange;
 }
 
 NodeType NodeSerialized::GetType(void) {
-	return Leaf.Size < 0 ? NodeType::LEAF : NodeType::NODE;
+	return triangleRange < 0 ? NodeType::LEAF : NodeType::NODE;
 }
 
 bool NodeSerialized::Intersect(const Ray& ray, HitInfo& hit, const std::vector<CompactTriangle>& triangles) {
-	int i = Leaf.Offset;
-	int j = i - Leaf.Size;
+	int i = triangleRange;
+	int j = i - triangleRange;
 
 	bool result = false;
 	for (int k = i; k < j; k++) {
@@ -563,6 +567,8 @@ void IndentDebugBVH(int32_t TabCount) {
 		printf("\t");
 	}
 }
+
+/*
 
 void DebugPrintBVH(const std::vector<NodeSerialized>& Nodes, const std::vector<int32_t>& LeafContents) {
 	struct NodeStackPrintItem {
@@ -597,23 +603,23 @@ void DebugPrintBVH(const std::vector<NodeSerialized>& Nodes, const std::vector<i
 
 			NodeStackPrintItem ChildItems[2];
 
-			ChildItems[0].Node = Nodes[CurrentItem.Node.ChildrenNodes[0]];
+			ChildItems[0].Node = Nodes[CurrentItem.Node.firstChild[0]];
 			ChildItems[0].Depth = CurrentDepth;
 
-			ChildItems[1].Node = Nodes[CurrentItem.Node.ChildrenNodes[1]];
+			ChildItems[1].Node = Nodes[CurrentItem.Node.firstChild[1]];
 			ChildItems[1].Depth = CurrentDepth;
 
 			NodeStack.push(ChildItems[0]);
 			NodeStack.push(ChildItems[1]);
 		}
 		else {
-			printf("Leaf: Offset %i\tSize %i\n", CurrentItem.Node.Leaf.Offset + 1, -CurrentItem.Node.Leaf.Size);
+			printf("Leaf: Offset %i\tSize %i\n", CurrentItem.Node.triangleRange.Offset + 1, -CurrentItem.Node.triangleRange.Size);
 
 			IndentDebugBVH(NumTabs);
 
 			printf("Contents: ");
 
-			for (int32_t TriCounter = CurrentItem.Node.Leaf.Offset; TriCounter < CurrentItem.Node.Leaf.Offset - CurrentItem.Node.Leaf.Size; TriCounter++) {
+			for (int32_t TriCounter = CurrentItem.Node.triangleRange.Offset; TriCounter < CurrentItem.Node.triangleRange.Offset - CurrentItem.Node.triangleRange.Size; TriCounter++) {
 				printf("%i ", LeafContents[TriCounter]);
 			}
 
@@ -628,6 +634,7 @@ void DebugPrintBVH(const std::vector<NodeSerialized>& Nodes, const std::vector<i
 		);
 	}
 }
+*/
 
 // Use negative indices to differentiate between leaves and nodes. We use size here since size shouldn't be 0 but offset could be 0.
 	// Decrement to fix weird triangle front face culling bug

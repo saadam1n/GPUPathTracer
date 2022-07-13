@@ -392,9 +392,15 @@ bool IterateAllTriangles(in Ray ray, inout HitInfo intersection) {
 	return result;
 }
 
+void UnpackTriangleRange(in int range, out int i, out int j) {
+	range = -range;
+	i = range >> 4;
+	j = i + (range & 15);
+}
+
 void IntersectLeaf(in BVHNode leaf, in Ray ray, inout HitInfo intersection, inout bool result) {
-	int i = fbs(leaf.data[0].w);
-	int j = i - fbs(leaf.data[1].w);
+	int i, j;
+	UnpackTriangleRange(fbs(leaf.data[0].w), i, j);
 
 	for(int k = i; k < j; k++){
 		bool hit = IntersectTriangle(ReadPackedCompactTriangle(k), ray, intersection);
@@ -403,8 +409,8 @@ void IntersectLeaf(in BVHNode leaf, in Ray ray, inout HitInfo intersection, inou
 }
 
 bool IntersectLeafAny(in BVHNode leaf, in Ray ray, inout HitInfo intersection) {
-	int i = fbs(leaf.data[0].w);
-	int j = i - fbs(leaf.data[1].w);
+	int i, j;
+	UnpackTriangleRange(fbs(leaf.data[0].w), i, j);
 
 	for (int k = i; k < j; k++) {
 		if (IntersectTriangle(ReadPackedCompactTriangle(k), ray, intersection)) {
@@ -417,7 +423,7 @@ bool IntersectLeafAny(in BVHNode leaf, in Ray ray, inout HitInfo intersection) {
 
 #define BVH_STACK_SIZE 27
 
-bool ClosestHit(in Ray ray, inout HitInfo intersection) {
+bool StackTraversalClosestHit(in Ray ray, inout HitInfo intersection) {
 	Ray iray;
 
 	iray.direction = 1.0f / ray.direction;
@@ -455,12 +461,12 @@ bool ClosestHit(in Ray ray, inout HitInfo intersection) {
 			child1 = temp;
 		}
 
-		if (hit0 && fbs(child0.data[1].w) < 0) {
+		if (hit0 && fbs(child0.data[0].w) < 0) {
 			IntersectLeaf(child0, ray, intersection, result);
 			hit0 = false;
 		}
 
-		if (hit1 && fbs(child1.data[1].w) < 0) {
+		if (hit1 && fbs(child1.data[0].w) < 0) {
 			IntersectLeaf(child1, ray, intersection, result);
 			hit1 = false;
 		}
@@ -489,7 +495,7 @@ bool ClosestHit(in Ray ray, inout HitInfo intersection) {
 	return result;
 }
 
-bool AnyHit(in Ray ray, inout HitInfo intersection) {
+bool StackTraversalAnyHit(in Ray ray, inout HitInfo intersection) {
 	Ray iray;
 
 	iray.direction = 1.0f / ray.direction;
@@ -515,14 +521,14 @@ bool AnyHit(in Ray ray, inout HitInfo intersection) {
 		bool hit0 = ValidateIntersection(distance0);
 		bool hit1 = ValidateIntersection(distance1);
 
-		if (hit0 && fbs(child0.data[1].w) < 0) {
+		if (hit0 && fbs(child0.data[0].w) < 0) {
 			if (IntersectLeafAny(child0, ray, intersection)) {
 				return true;
 			}
 			hit0 = false;
 		}
 
-		if (hit1 && fbs(child1.data[1].w) < 0) {
+		if (hit1 && fbs(child1.data[0].w) < 0) {
 			if(IntersectLeafAny(child1, ray, intersection)) {
 				return true;
 			}

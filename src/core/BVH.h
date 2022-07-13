@@ -27,6 +27,7 @@ enum class NodeType {
 	NODE
 };
 
+#define MAX_LEAF_TRIANGLES 15
 struct NodeSerialized : public Hittable {
 
 	void MakeLeaf(void);
@@ -35,9 +36,11 @@ struct NodeSerialized : public Hittable {
 	AABB BoundingBox;
 
 	union {
-		int32_t ChildrenNodes[2];
-		LeafPointer Leaf;
+		uint32_t firstChild; // 1 bit leaf flag
+		int32_t triangleRange; // 1 bit leaf flag, 27 bits triangle array offset, 4 bits triangle subarray length (15 triangles max per leaf)
 	};
+
+	int32_t parent;
 
 	bool Intersect(const Ray& ray, HitInfo& hit, const std::vector<CompactTriangle>& triangles);
 };

@@ -176,7 +176,7 @@ vec3 PathTrace(in ivec2 pixel) {
         // Intersect the scene
         HitInfo hit;
         hit.di.x = 1e20f;
-        bool miss = !ClosestHit(ray, hit);
+        bool miss = !StackTraversalClosestHit(ray, hit);
         vertex = GetInterpolatedVertex(ray, hit);
         if(miss) {
             vertex.MatID = 0;
@@ -200,7 +200,6 @@ vec3 PathTrace(in ivec2 pixel) {
         }
         contribution += indirectDirectThroughput * material.emission;
 
-
         // If our ray left the scene, we cannot continue on it anymore
         // Also if we hit a case where our ray hit the back of an object we also have to stop
         if(miss) {
@@ -214,7 +213,7 @@ vec3 PathTrace(in ivec2 pixel) {
             float lightPdf;
 
             Ray lightRay = GenerateLightSample(vertex, material, interaction, lightHit, lightPdf, throughput, lightThroughput, lightMatID);     
-            if(!AnyHit(lightRay, lightHit)) {
+            if(!StackTraversalAnyHit(lightRay, lightHit)) {
                 contribution += lightThroughput * materialInstance[lightMatID + 1].xyz;
             }
 

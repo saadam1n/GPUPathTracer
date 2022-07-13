@@ -576,7 +576,7 @@ bool TraverseBVH(Ray ray, HitInfo& intersection, const std::vector<CompactTriang
 
     bool result = false;
 
-    int currentNode = root.ChildrenNodes[0];
+    int currentNode = root.firstChild;
     int stack[BVH_STACK_SIZE];
     int index = -1;
 
@@ -588,12 +588,12 @@ bool TraverseBVH(Ray ray, HitInfo& intersection, const std::vector<CompactTriang
         bool hit0 = child0.BoundingBox.Intersect(iray, intersection, distance0);
         bool hit1 = child1.BoundingBox.Intersect(iray, intersection, distance1);
 
-        if (hit0 && child0.Leaf.Size < 0) {
+        if (hit0 && child0.triangleRange < 0) {
             result |= child0.Intersect(ray, intersection, triangles);
             hit0 = false;
         }
 
-        if (hit1 && child1.Leaf.Size < 0) {
+        if (hit1 && child1.triangleRange < 0) {
             result |= child1.Intersect(ray, intersection, triangles);
             hit1 = false;
         }
@@ -601,13 +601,13 @@ bool TraverseBVH(Ray ray, HitInfo& intersection, const std::vector<CompactTriang
         if (hit0 && hit1) {
             if (distance0.x > distance1.x)
                 std::swap(child0, child1);
-            stack[++index] = child1.ChildrenNodes[0];
-            currentNode = child0.ChildrenNodes[0];
+            stack[++index] = child1.firstChild;
+            currentNode = child0.firstChild;
         }
         else if (hit0)
-            currentNode = child0.ChildrenNodes[0];
+            currentNode = child0.firstChild;
         else if (hit1)
-            currentNode = child1.ChildrenNodes[0];
+            currentNode = child1.firstChild;
         else
             if (index == -1)
                 break;

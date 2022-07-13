@@ -161,6 +161,14 @@ void LoadOBJ(const std::string& path, const std::string& folder, std::vector<Ver
         float beckmann_roughness = sqrt(tr_ggx_roughness);
         float metallic = (mtl.illum == 2 ? 0.0f : 1.0f); // the different between illum 2 and 3 is taht 3 requires ray traced reflections, which most likely implies a metallic surface
 
+        vec3 specular = create_vec3(mtl.specular);
+        if (max(specular.r, max(specular.g, specular.b)) > 0.3f) {
+            metallic = 1.0f;
+        }
+        else {
+            metallic = 0.0f;
+        }
+
         std::cout << mtl.name << " : " << mtl.emission[0] << '\n';
 
         gpu_materials.push_back(CreateMatInstance(textures, folder, create_vec3(mtl.diffuse), mtl.diffuse_texname, create_vec3(mtl.emission), beckmann_roughness, metallic));
@@ -171,7 +179,7 @@ void LoadOBJ(const std::string& path, const std::string& folder, std::vector<Ver
         size_t index_offset = 0;
         for (size_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++) {
             size_t fv = size_t(shapes[s].mesh.num_face_vertices[f]);
-            uint32_t current_material = materialIndices[shapes[s].mesh.material_ids[f]];
+            uint32_t current_material = materialIndices[shapes[s].mesh.material_ids[0]];
             for (size_t v = 0; v < fv; v++) {
                 // access to vertex
                 tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v]; // Index points towards this vertex, which we will need when translating obj indices to indices in vector vertices
