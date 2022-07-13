@@ -15,6 +15,8 @@ struct AABB : public Hittable {
 	void Extend(const glm::vec3& Pos);
 	void Extend(const AABB& BBox);
 
+	vec3 Center();
+
 	float SurfaceArea(void);
 	float SurfaceAreaHalf(void);
 

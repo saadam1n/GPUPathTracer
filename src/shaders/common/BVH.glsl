@@ -716,6 +716,8 @@ bool RestartTrailAnyHit(in Ray ray, inout HitInfo intersection) {
 }
 
 
+
+
 /*
 
 bool TraverseMesh(in Ray R, inout HitInfo I){

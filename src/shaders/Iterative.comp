@@ -176,7 +176,7 @@ vec3 PathTrace(in ivec2 pixel) {
         // Intersect the scene
         HitInfo hit;
         hit.di.x = 1e20f;
-        bool miss = !RestartTrailClosestHit(ray, hit);
+        bool miss = !StackTraversalClosestHit(ray, hit);
         vertex = GetInterpolatedVertex(ray, hit);
         if(miss) {
             vertex.MatID = 0;

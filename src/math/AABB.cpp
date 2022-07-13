@@ -112,3 +112,7 @@ bool AABB::Intersect(const Ray& iray, HitInfo& hit) {
 	vec2 junk;
 	return Intersect(iray, hit, junk);
 }
+
+vec3 AABB::Center() {
+	return (Min + Max) * 0.5f;
+}

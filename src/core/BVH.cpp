@@ -369,7 +369,7 @@ void BoundingVolumeHierarchy::Construct(std::vector<CompactTriangle>& triangles)
 
 		TriangleCentroid Centroid;
 		Centroid.Index = i;
-		Centroid.Position = 0.5f * (Box.Min + Box.Max);
+		Centroid.Position = Box.Center();
 
 		CentroidList.push_back(Centroid);
 		TriangleBoundingBoxes.push_back(Box);
@@ -442,29 +442,6 @@ void BoundingVolumeHierarchy::Construct(std::vector<CompactTriangle>& triangles)
 	//ConstructionTimer.DebugTime();
 	ConstructionTimer.Begin();
 
-	std::queue<NodeUnserialized*> IndexBuildingQueue;
-	IndexBuildingQueue.push(RootNode);
-
-	int32_t IndexCounter = 0;
-
-	while (!IndexBuildingQueue.empty()) {
-		NodeUnserialized* CurrentNode = IndexBuildingQueue.front();
-		IndexBuildingQueue.pop();
-
-		CurrentNode->Index = IndexCounter++;
-
-		if (CurrentNode->Type == NodeType::NODE) {
-			assert(CurrentNode->Children[0]);
-			assert(CurrentNode->Children[1]);
-
-			CurrentNode->Children[0]->parent = CurrentNode;
-			CurrentNode->Children[1]->parent = CurrentNode;
-
-			IndexBuildingQueue.push(CurrentNode->Children[0]);
-			IndexBuildingQueue.push(CurrentNode->Children[1]);
-		}
-	}
-
 	std::queue<NodeUnserialized*> IndexConnectionQueue;
 	IndexConnectionQueue.push(RootNode);
 
@@ -481,7 +458,26 @@ void BoundingVolumeHierarchy::Construct(std::vector<CompactTriangle>& triangles)
 		SerializedNode.BoundingBox = CurrentNode->BoundingBox;
 
 		if (CurrentNode->Type == NodeType::NODE) {
-			SerializedNode.firstChild = CurrentNode->Children[0]->Index;
+			SerializedNode.firstChild = ProcessedNodes.size() + IndexConnectionQueue.size() + 1;
+
+			vec3 seperation = (CurrentNode->Children[1]->BoundingBox.Center() - CurrentNode->Children[0]->BoundingBox.Center());
+			vec3 magnitude = abs(seperation);
+
+			int axis;
+			if (magnitude.x > magnitude.y&& magnitude.x > magnitude.z) {
+				axis = 0;
+			}
+			else if (magnitude.y > magnitude.x&& magnitude.y > magnitude.z) {
+				axis = 1;
+			}
+			else {
+				axis = 2;
+			}
+
+			// Assuming that the first node is closer to positive, the other one closer to the negative (normal traversal seems to prefer it)
+			if (seperation[axis] < 0) {
+				std::swap(CurrentNode->Children[0], CurrentNode->Children[1]);
+			}
 
 			IndexConnectionQueue.push(CurrentNode->Children[0]);
 			IndexConnectionQueue.push(CurrentNode->Children[1]);
@@ -495,12 +491,19 @@ void BoundingVolumeHierarchy::Construct(std::vector<CompactTriangle>& triangles)
 			}
 		}
 
-		if(CurrentNode->parent)
+		if (CurrentNode->parent) {
 			SerializedNode.parent = CurrentNode->parent->Index;
+		}
+
+
+		
+
 		ProcessedNodes.push_back(SerializedNode);
 	}
 
-	
+	for (int i = 0; i < 16; i++) {
+		std::cout << ProcessedNodes[i].firstChild  << '\t' << ProcessedNodes[ProcessedNodes[i].firstChild].firstChild << '\n';
+	}
 
 	ConstructionTimer.End();
 	//ConstructionTimer.DebugTime();
@@ -547,6 +550,42 @@ void BoundingVolumeHierarchy::Construct(std::vector<CompactTriangle>& triangles)
 
 	//std::cout << "End of BVH construction" << std::endl;
 }
+
+/*
+1       5
+5       9
+3       13
+13      17
+11      21
+9       25
+7       29
+29      33
+27      37
+25      41
+23      45
+21      49
+19      53
+17      57
+15      61
+61      65
+
+1       3
+3       7
+5       11
+7       15
+9       19
+11      23
+13      27
+15      31
+17      35
+19      39
+21      43
+23      47
+25      51
+27      55
+29      59
+31      63
+*/
 
 
 void NodeSerialized::MakeLeaf(void) {
