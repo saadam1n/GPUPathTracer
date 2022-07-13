@@ -563,6 +563,32 @@ layout(std430) buffer debugBuf {
 	uint debug[];
 };
 
+#define RESTART_TRAIL_SHORT_STACK_SIZE 3 
+
+/*
+Short stack design:
+
+Laine 2010 says that we basically keep a few topmost elements on the stack (typically 3), and pop them to avoid a restart
+
+To pop an element from the stack, we check if the stack is empty. If it is, we need to restart. If it isn't, we grab the topmost node and decrement our index
+
+The technical details:
+We need to maintain two indices: a tail and a head
+The tail represents the bottom of the stack, and the head represents the top
+Assuming hte tail and the head are both at zero, we want to increment the head normally
+If the head moves up to the stack size (ie the stack is full) we want to loop back around again, and push the tail up
+
+A possible way to do this is to maintain two signed integers:
+int tail, which maintins the bottom of our stack, bounded from [0, int_max], which is initialized to zero
+int head, which maintains the location of the next item to be pushed onto the stack, bounded from [0, int_max], which is initialized to zero
+
+If we want to add a new item to the stack, we insert it into stack[head % 3] and then increment head
+Then we see if the difference between tail and head exceeds 3, in which case tail is incremented
+
+If we want to pop an item, we decrement head. If head is equal to tail, then the stack is empty (since our next node is actually at -1, which is an invalid index), and a restart is required
+Otherwsie we decrement our head, and grab the node at the new location
+*/
+
 bool RestartTrailClosestHit(in Ray ray, inout HitInfo intersection) {
 	Ray iray;
 	iray.direction = 1.0f / ray.direction;
@@ -575,6 +601,11 @@ bool RestartTrailClosestHit(in Ray ray, inout HitInfo intersection) {
 	BVHNode root = GetNode(0);
 	int current = fbs(root.data[0].w);
 	bool result = false;
+
+	int stack[RESTART_TRAIL_SHORT_STACK_SIZE];
+	int head = 0;
+	int tail = 0;
+
 	while (true) {
 		// Load our nodes from memory
 		BVHNode child0 = GetNode(current);
@@ -618,6 +649,11 @@ bool RestartTrailClosestHit(in Ray ray, inout HitInfo intersection) {
 			}
 			else {
 				current = near;
+				// Push to short stack
+				stack[head++ % RESTART_TRAIL_SHORT_STACK_SIZE] = far;
+				if (head - tail == RESTART_TRAIL_SHORT_STACK_SIZE) {
+					tail++;
+				}
 			}
 		}
 		else if (hit0 || hit1) {
@@ -640,8 +676,13 @@ bool RestartTrailClosestHit(in Ray ray, inout HitInfo intersection) {
 				// Mark this as the last place we started traversal
 				popLevel = level;
 				// Restart traversal
-				current = fbs(root.data[0].w);
-				level = sentinelBit;
+				if (head == tail) {
+					current = fbs(root.data[0].w);
+					level = sentinelBit;
+				}
+				else {
+					current = stack[--head % RESTART_TRAIL_SHORT_STACK_SIZE];
+				}
 			}
 		}
 		else {
@@ -657,8 +698,13 @@ bool RestartTrailClosestHit(in Ray ray, inout HitInfo intersection) {
 			// Mark this as the last place we started traversal
 			popLevel = level;
 			// Restart traversal
-			current = fbs(root.data[0].w);
-			level = sentinelBit;
+			if (head == tail) {
+				current = fbs(root.data[0].w);
+				level = sentinelBit;
+			}
+			else {
+				current = stack[--head % RESTART_TRAIL_SHORT_STACK_SIZE];
+			}
 		}
 	}
 
