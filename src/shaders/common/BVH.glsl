@@ -398,14 +398,18 @@ void UnpackTriangleRange(in int range, out int i, out int j) {
 	j = i + (range & 15);
 }
 
-void IntersectLeaf(in BVHNode leaf, in Ray ray, inout HitInfo intersection, inout bool result) {
+void IntersectLeaf(in int leaf, in Ray ray, inout HitInfo intersection, inout bool result) {
 	int i, j;
-	UnpackTriangleRange(fbs(leaf.data[0].w), i, j);
+	UnpackTriangleRange(leaf, i, j);
 
-	for(int k = i; k < j; k++){
+	for (int k = i; k < j; k++) {
 		bool hit = IntersectTriangle(ReadPackedCompactTriangle(k), ray, intersection);
 		result = result || hit;
 	}
+}
+
+void IntersectLeaf(in BVHNode leaf, in Ray ray, inout HitInfo intersection, inout bool result) {
+	IntersectLeaf(fbs(leaf.data[0].w), ray, intersection, result);
 }
 
 bool IntersectLeafAny(in BVHNode leaf, in Ray ray, inout HitInfo intersection) {
@@ -551,7 +555,10 @@ bool StackTraversalAnyHit(in Ray ray, inout HitInfo intersection) {
 	return false;
 }
 
-#define IsLeaf(node) (fbs(node.data[0].w) < 0)
+#define FirstChildOf(node) fbs(node.data[0].w)
+#define IsLeafVal(x) (x < 0)
+#define IsLeaf(node) IsLeafVal(fbs(node.data[0].w))
+#define ififPop() if (next == -1) {break;} current = stack[next--];
 
 bool IfIfClosestHit(in Ray ray, inout HitInfo intersection) {
 	/*
@@ -574,24 +581,29 @@ bool IfIfClosestHit(in Ray ray, inout HitInfo intersection) {
 
 	Once we proceed to the next node, we must check if it is a leaf. If it is a leaf, we need to test all primitives in it (assuming we are not using speculative traversal)
 	Now given that our node is processed, we need to get a new node to process for the next iteration of our loop, which must come from the stack (exit traversal if it is empty)
+
+	After implementation: 
+	I theorize that memory bandwidth and excessive copying/loading/unloading of nodes is the bottleneck. I somehow need to replace the stack with an index.
+	One thing we can notice is that we just need the node's data0 integer in using it
+	If we use it as a parent, then we just need to use the integer in loading our children
+	If we use it as a leaf, we just need the integer in loading our determining our triangle range
+	In both cases we use the integer in checking if it a leaf or not
 	*/
 
 	Ray iray;
 	iray.direction = 1.0f / ray.direction;
 	iray.origin = -ray.origin * iray.direction;
 
-	BVHNode current = GetNode(0);
+	int current = FirstChildOf(GetNode(0));
 
-	BVHNode stack[32];
+	int stack[32];
 	int next = -1;
 
 	bool result = false;
 	while (true) {
-		if (!IsLeaf(current)) {
-			int index = fbs(current.data[0].w);
-
-			BVHNode child0 = GetNode(index);
-			BVHNode child1 = GetNode(index + 1);
+		if (!IsLeafVal(current)) {
+			BVHNode child0 = GetNode(current);
+			BVHNode child1 = GetNode(current + 1);
 
 			vec2 distance0 = IntersectNode(child0, iray, intersection);
 			vec2 distance1 = IntersectNode(child1, iray, intersection);
@@ -601,31 +613,27 @@ bool IfIfClosestHit(in Ray ray, inout HitInfo intersection) {
 
 			if (hit0 && hit1) {
 				// Sort by distance 
+				int near = FirstChildOf(child0);
+				int far = FirstChildOf(child1);
+
 				if (distance0.x > distance1.x) {
-					BVHNode tmpn = child0;
-					child0 = child1;
-					child1 = tmpn;
+					near = FirstChildOf(child1);
+					far = FirstChildOf(child0);
 				}
 
-				current = child0;
-				stack[++next] = child1;
+				current = near;
+				stack[++next] = far;
 			}
 			else if (hit0 ^^ hit1) {
-				current = (hit0 ? child0 : child1);
+				current = (hit0 ? FirstChildOf(child0) : FirstChildOf(child1));
 			}
 			else {
-				if (next == -1) {
-					break;
-				}
-				current = stack[next--];
+				ififPop();
 			}
 		}
-		if (IsLeaf(current)) {
+		if (IsLeafVal(current)) {
 			IntersectLeaf(current, ray, intersection, result);
-			if (next == -1) {
-				break;
-			}
-			current = stack[next--];
+			ififPop();
 		}
 	}
 
