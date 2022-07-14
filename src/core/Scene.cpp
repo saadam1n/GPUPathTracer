@@ -334,6 +334,12 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
         cv.area = totalLightArea;
     }
 
+    // Precompute MT information; it is always posssible to get the actual positions backa gain using the first vertex
+    for (auto& tri : triangles) {
+        tri.position1 = tri.position1 - tri.position0;
+        tri.position2 = tri.position2 - tri.position0;
+    }
+
     materialsBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
     materialsBuf.UploadData(materials, GL_STATIC_DRAW);
 

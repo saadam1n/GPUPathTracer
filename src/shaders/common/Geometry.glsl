@@ -200,11 +200,9 @@ bool IntersectTriangle(in PackedCompactTriangle pct, in Ray ray, inout HitInfo c
     HitInfo attemptHit;
 
     vec3 position0 = vec3(pct.data[0].xyz);
-    vec3 position1 = vec3(pct.data[0].w, pct.data[1].xy);
-    vec3 position2 = vec3(pct.data[1].zw, pct.data[2].x);
 
-    vec3 v01 = position1 - position0;
-    vec3 v02 = position2 - position0;
+    vec3 v01 = vec3(pct.data[0].w, pct.data[1].xy);
+    vec3 v02 = vec3(pct.data[1].zw, pct.data[2].x);
 
     vec3 p = cross(ray.direction, v02);
 
@@ -224,6 +222,58 @@ bool IntersectTriangle(in PackedCompactTriangle pct, in Ray ray, inout HitInfo c
     }
     else
         return false;
+}
+
+// Taken from https://github.com/saada2006/GPURayTracer/blob/master/src/shaders/common/Geometry.glsl
+bool IntersectTriangleAilaLaine(in PackedCompactTriangle pct, in Ray ray, inout HitInfo closestHit) {
+    const float EPSILON = 0.00001f; // works better
+
+    float raytmin = 0.0f;
+    float raytmax = closestHit.di.x;
+
+    vec3 position0 = vec3(pct.data[0].xyz);
+
+    vec3 edge1 = vec3(pct.data[0].w, pct.data[1].xy) - position0;
+    vec3 edge2 = vec3(pct.data[1].zw, pct.data[2].x) - position0;
+
+    vec3 tvec = ray.origin - position0;
+    vec3 pvec = cross(ray.direction, edge2);
+    float det = dot(edge1, pvec);
+
+    float invdet = 1.0f / det;
+
+    float u = dot(tvec, pvec) * invdet;
+
+    vec3 qvec = cross(tvec, edge1);
+
+    float v = dot(ray.direction, qvec) * invdet;
+
+    if (det > EPSILON)
+    {
+        if (u < 0.0f || u > 1.0f) return false; // 1.0 want = det * 1/det  
+        if (v < 0.0f || (u + v) > 1.0f) return false;
+        // if u and v are within these bounds, continue and go to float t = dot(...	           
+    }
+
+    else if (det < -EPSILON)
+    {
+        if (u > 0.0f || u < 1.0f) return false;
+        if (v > 0.0f || (u + v) < 1.0f) return false;
+        // else continue
+    }
+
+    else // if det is not larger (more positive) than EPSILON or not smaller (more negative) than -EPSILON, there is a "miss"
+        return false;
+
+    float t = dot(edge2, qvec) * invdet;
+
+    if (t < closestHit.di.x) {
+        closestHit.di = vec4(t, u, v, 1.0f - u - v);
+        closestHit.intersected = pct;
+        return true;
+    }
+
+    return false;
 }
 
 Vertex GetInterpolatedVertex(in Ray ray, inout HitInfo intersection) {
