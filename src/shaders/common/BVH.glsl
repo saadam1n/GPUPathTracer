@@ -551,6 +551,87 @@ bool StackTraversalAnyHit(in Ray ray, inout HitInfo intersection) {
 	return false;
 }
 
+#define IsLeaf(node) (fbs(node.data[0].w) < 0)
+
+bool IfIfClosestHit(in Ray ray, inout HitInfo intersection) {
+	/*
+	Alia and Laine's original model
+
+	while ray is not terminated
+		if node is not a leaf
+			proceed to next node
+		if node is a leaf
+			test intersection with leaf
+
+	We need to make a few modifcations before we can implement this
+
+	We begin by saying our current node is the root node
+
+	If our node is not a leaf, that means it is a parent with its own subtree. THis is important for proceeding to the next node
+	The next node is either the closest child that was hit or the next node on the stack (if the stack is empty, then we exit traversal)
+
+	If both children in node's subtree were hit, we proceed to the near child and push the far child onto the stack. If one was hit, we choose the hitten child. If none were hit, we go to the stack
+
+	Once we proceed to the next node, we must check if it is a leaf. If it is a leaf, we need to test all primitives in it (assuming we are not using speculative traversal)
+	Now given that our node is processed, we need to get a new node to process for the next iteration of our loop, which must come from the stack (exit traversal if it is empty)
+	*/
+
+	Ray iray;
+	iray.direction = 1.0f / ray.direction;
+	iray.origin = -ray.origin * iray.direction;
+
+	BVHNode current = GetNode(0);
+
+	BVHNode stack[32];
+	int next = -1;
+
+	bool result = false;
+	while (true) {
+		if (!IsLeaf(current)) {
+			int index = fbs(current.data[0].w);
+
+			BVHNode child0 = GetNode(index);
+			BVHNode child1 = GetNode(index + 1);
+
+			vec2 distance0 = IntersectNode(child0, iray, intersection);
+			vec2 distance1 = IntersectNode(child1, iray, intersection);
+
+			bool hit0 = ValidateIntersection(distance0);
+			bool hit1 = ValidateIntersection(distance1);
+
+			if (hit0 && hit1) {
+				// Sort by distance 
+				if (distance0.x > distance1.x) {
+					BVHNode tmpn = child0;
+					child0 = child1;
+					child1 = tmpn;
+				}
+
+				current = child0;
+				stack[++next] = child1;
+			}
+			else if (hit0 ^^ hit1) {
+				current = (hit0 ? child0 : child1);
+			}
+			else {
+				if (next == -1) {
+					break;
+				}
+				current = stack[next--];
+			}
+		}
+		if (IsLeaf(current)) {
+			IntersectLeaf(current, ray, intersection, result);
+			if (next == -1) {
+				break;
+			}
+			current = stack[next--];
+		}
+	}
+
+	return result;
+}
+
 const uint sentinelBit = (1 << 31);
 // Shift with bew bits being zeroes
 uint shiftRight(uint x) {
