@@ -375,6 +375,20 @@ vec2 IntersectNode(in BVHNode node, in Ray iray, in HitInfo intersect) {
 	return vec2(t_entry, t_exit);
 }
 
+float IntersectNodeFast(in BVHNode node, in Ray iray, in HitInfo intersect, out bool hit) {
+	vec3 t_node_min = node.data[0].xyz * iray.direction + iray.origin;
+	vec3 t_node_max = node.data[1].xyz * iray.direction + iray.origin;
+
+	vec3 t_min = min(t_node_min, t_node_max);
+	vec3 t_max = max(t_node_min, t_node_max);
+
+	float t_entry = max(t_min.x, max(t_min.y, t_min.z));
+	float t_exit = min(t_max.x, min(t_max.y, min(t_max.z, intersect.di.x)));
+
+	hit = (t_entry <= t_exit && t_exit > 0.0f);
+	return t_entry;
+}
+
 // assert intersection
 bool ValidateIntersection(in vec2 distances) {
 	return distances.x <= distances.y && distances.y > 0.0f;
@@ -558,7 +572,8 @@ bool StackTraversalAnyHit(in Ray ray, inout HitInfo intersection) {
 #define FirstChildOf(node) fbs(node.data[0].w)
 #define IsLeafVal(x) (x < 0)
 #define IsLeaf(node) IsLeafVal(fbs(node.data[0].w))
-#define ififPop() if (next == -1) {break;} current = stack[next--];
+#define ififPop() if (next == 0) {break;} current = stack[--next];
+#define ififPush(far) stack[next++] = far;
 
 bool IfIfClosestHit(in Ray ray, inout HitInfo intersection) {
 	/*
@@ -596,36 +611,38 @@ bool IfIfClosestHit(in Ray ray, inout HitInfo intersection) {
 
 	int current = FirstChildOf(GetNode(0));
 
-	int stack[32];
-	int next = -1;
+	int stack[BVH_STACK_SIZE];
+	int next = 0;
 
 	bool result = false;
 	while (true) {
 		if (!IsLeafVal(current)) {
+			// Texture reads right after the other for best texture cache access
 			BVHNode child0 = GetNode(current);
 			BVHNode child1 = GetNode(current + 1);
 
-			vec2 distance0 = IntersectNode(child0, iray, intersection);
-			vec2 distance1 = IntersectNode(child1, iray, intersection);
+			// Process each node indiviaully 
+			int subtree0 = FirstChildOf(child0);
+			bool hit0;
+			float distance0 = IntersectNodeFast(child0, iray, intersection, hit0);
 
-			bool hit0 = ValidateIntersection(distance0);
-			bool hit1 = ValidateIntersection(distance1);
+			int subtree1 = FirstChildOf(child1);
+			bool hit1;
+			float distance1 = IntersectNodeFast(child1, iray, intersection, hit1);
 
 			if (hit0 && hit1) {
-				// Sort by distance 
-				int near = FirstChildOf(child0);
-				int far = FirstChildOf(child1);
-
-				if (distance0.x > distance1.x) {
-					near = FirstChildOf(child1);
-					far = FirstChildOf(child0);
+				// Sort by distance, GPUs seem to like swapping the order
+				if (distance0 > distance1) {
+					current = subtree1;
+					ififPush(subtree0);
 				}
-
-				current = near;
-				stack[++next] = far;
+				else {
+					current = subtree0;
+					ififPush(subtree1);
+				}
 			}
-			else if (hit0 ^^ hit1) {
-				current = (hit0 ? FirstChildOf(child0) : FirstChildOf(child1));
+			else if (hit0 ^^ hit1) { // We do not need to use a xor here, but I think xor is faster since it is just like adding
+				current = (hit0 ? subtree0 : subtree1);
 			}
 			else {
 				ififPop();
