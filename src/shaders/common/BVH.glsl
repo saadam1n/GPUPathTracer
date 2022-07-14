@@ -575,6 +575,8 @@ bool StackTraversalAnyHit(in Ray ray, inout HitInfo intersection) {
 #define ififPop() if (next == 0) {break;} current = stack[--next];
 #define ififPush(far) stack[next++] = far;
 
+#define POSTPONEMENT_BUFFER_SIZE 16
+
 bool IfIfClosestHit(in Ray ray, inout HitInfo intersection) {
 	/*
 	Alia and Laine's original model
@@ -614,6 +616,11 @@ bool IfIfClosestHit(in Ray ray, inout HitInfo intersection) {
 	int stack[BVH_STACK_SIZE];
 	int next = 0;
 
+#ifdef CRAPPY_SPECULATIVE
+	int postponedLeaves[POSTPONEMENT_BUFFER_SIZE];
+	int nextPostponement = 0;
+#endif
+
 	bool result = false;
 	while (true) {
 		if (!IsLeafVal(current)) {
@@ -649,7 +656,21 @@ bool IfIfClosestHit(in Ray ray, inout HitInfo intersection) {
 			}
 		}
 		if (IsLeafVal(current)) {
+#ifdef CRAPPY_SPECULATIVE
+			if (nextPostponement == POSTPONEMENT_BUFFER_SIZE) {
+				// Postponement buffer is full, iterate through it and the current one
+				IntersectLeaf(current, ray, intersection, result);
+				while (nextPostponement > 0) {
+					IntersectLeaf(postponedLeaves[--nextPostponement], ray, intersection, result);
+				}
+			}
+			else {
+				// We have space in the postponement buffer. Push our leaf to it
+				postponedLeaves[nextPostponement++] = current;
+			}
+#else
 			IntersectLeaf(current, ray, intersection, result);
+#endif
 			ififPop();
 		}
 	}
