@@ -1,14 +1,14 @@
 #include "AABB.h"
 #include <stdint.h>
 
-AABB::AABB(void) : Min(FLT_MAX), Max(-FLT_MAX) {}
+AABB::AABB(void) : min(FLT_MAX), max(-FLT_MAX) {}
 
 void AABB::ExtendMax(const glm::vec3& Val) {
-	Max = glm::max(Max, Val);
+	max = glm::max(max, Val);
 }
 
 void AABB::ExtendMin(const glm::vec3& Val) {
-	Min = glm::min(Min, Val);
+	min = glm::min(min, Val);
 }
 
 void AABB::Extend(const glm::vec3& Pos) {
@@ -57,7 +57,7 @@ float AABB::SurfaceArea(void) {
 
 // Taken from madman's blog. Seriously, that guy has some really good stuff on BVHs
 float AABB::SurfaceAreaHalf(void) {
-	glm::vec3 SideLengths = Max - Min;
+	glm::vec3 SideLengths = max - min;
 
 	return
 		SideLengths.x * (SideLengths.y + SideLengths.z) +
@@ -65,11 +65,11 @@ float AABB::SurfaceAreaHalf(void) {
 }
 
 void AABB::Extend(const AABB& BBox) {
-	ExtendMax(BBox.Max);
-	ExtendMin(BBox.Min);
+	ExtendMax(BBox.max);
+	ExtendMin(BBox.min);
 }
 
-AABB::AABB(const glm::vec3& Mi, const glm::vec3& Ma) : Min(Mi), Max(Ma) {}
+AABB::AABB(const glm::vec3& Mi, const glm::vec3& Ma) : min(Mi), max(Ma) {}
 
 /*
 	// Maybe if we stored each value in a vector before multiplying we could use vectorization
@@ -95,14 +95,14 @@ Area =
 
 // AABB test by madmann
 bool AABB::Intersect(const Ray& iray, HitInfo& hit, vec2& distances) {
-	vec3 t_node_min = Min * iray.direction + iray.origin;
-	vec3 t_node_max = Max * iray.direction + iray.origin;
+	vec3 t_node_min = min * iray.direction + iray.origin;
+	vec3 t_node_max = max * iray.direction + iray.origin;
 
-	vec3 t_min = min(t_node_min, t_node_max);
-	vec3 t_max = max(t_node_min, t_node_max);
+	vec3 t_min = glm::min(t_node_min, t_node_max);
+	vec3 t_max = glm::max(t_node_min, t_node_max);
 
-	float t_entry = max(t_min.x, max(t_min.y, t_min.z));
-	float t_exit = min(t_max.x, min(t_max.y, min(t_max.z, hit.depth)));
+	float t_entry = glm::max(t_min.x, glm::max(t_min.y, t_min.z));
+	float t_exit = glm::min(t_max.x, glm::min(t_max.y, glm::min(t_max.z, hit.depth)));
 	distances =  vec2(t_entry, t_exit);
 	return distances.x <= distances.y && distances.y > 0.0f;
 }
@@ -114,5 +114,5 @@ bool AABB::Intersect(const Ray& iray, HitInfo& hit) {
 }
 
 vec3 AABB::Center() {
-	return (Min + Max) * 0.5f;
+	return (min + max) * 0.5f;
 }

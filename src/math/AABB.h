@@ -20,8 +20,8 @@ struct AABB : public Hittable {
 	float SurfaceArea(void);
 	float SurfaceAreaHalf(void);
 
-	glm::vec3 Min;
-	glm::vec3 Max;
+	glm::vec3 min;
+	glm::vec3 max;
 
 	bool Intersect(const Ray& ray, HitInfo& hit);
 	bool Intersect(const Ray& ray, HitInfo& hit, vec2& distances);
