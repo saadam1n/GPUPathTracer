@@ -1524,6 +1524,12 @@ inline Split FindBestSplit(const std::vector<TriangleCentroid>& Centroids, const
 
 */
 
+constexpr uint32_t kNumBins = 8;
+int ComputeBin(float x, float offset, float range) {
+	constexpr float bias = 1.0f - 1e-6f;
+	return (int)(kNumBins * bias * (x - offset) / range);
+}
+
 struct TriangleReference {
 	int32_t index;
 	AABB box;
@@ -1533,14 +1539,23 @@ struct TriangleReference {
 struct ReferenceContainer {
 	AABB box;
 	std::vector<TriangleReference> references;
+	uint32_t size;
+
+	ReferenceContainer() : size(0) {}
 
 	void Insert(const TriangleReference& reference) {
 		references.push_back(reference);
 		box.Extend(reference.box);
+		size++;
 	}
 };
 
-typedef ReferenceContainer Bin;
+struct Bin : public ReferenceContainer {
+	int32_t entry, exit; // For use in SBVH construction only
+	Bin() : entry(0), exit(0) {}
+
+
+};
 
 struct BuilderNode : public ReferenceContainer {
 	BuilderNode* children;
@@ -1551,16 +1566,128 @@ struct BuilderNode : public ReferenceContainer {
 	// For lack of a better word (the nodes "consume" the bins
 	void Consume(const Bin& bin) {
 		box.Extend(bin.box);
+	}
+
+	void CopyBin(const Bin& bin) {
 		references.reserve(references.size() + bin.references.size());
 		references.insert(references.end(), bin.references.begin(), bin.references.end());
 	}
 
 	float ComputeSAH() {
-		return box.SurfaceArea() * references.size();
+		return box.SurfaceArea() * size;
 	}
 };
 
-constexpr uint32_t kNumBins = 8;
+std::vector<uint32_t> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode* root) {
+	// The first node we need to process is the root
+	std::vector<uint32_t> references;
+	std::stack<BuilderNode*> unprocessedSubtrees;
+	unprocessedSubtrees.push(root);
+
+	// Loop through each unprocessed subtree and subdivide it or make it a leaf
+	while (!unprocessedSubtrees.empty()) {
+		BuilderNode& node = *unprocessedSubtrees.top();
+		unprocessedSubtrees.pop();
+
+		BuilderNode bestLeft, bestRight;
+		float bestSah = FLT_MAX;
+
+		// Find our best object partioning canidate
+		// TODO: fall back to full sweep when the number of triangles is less than the number of bins
+		{
+			uint32_t bestBin = 1, bestAxis = 0;
+			Bin bins[3][kNumBins];
+			for (uint32_t i = 0; i < 3; i++) {
+				// Initialize our bins
+				float offset = node.box.Min[i];
+				float range = max(node.box.Max[i] - offset, 1e-5f);
+				for (const auto& ref : node.references) {
+					float projection = (ref.centroid[i] - offset) / range;
+					int binID = ComputeBin(ref.centroid[i], offset, range);
+					bins[i][binID].Insert(ref);
+				}
+
+				// For each bin, there are k - 1 splits: [0, i) for the left and [i, kNumBins) for the right
+				for (int j = 1; j < kNumBins; j++) {
+
+					BuilderNode left, right;
+					for (int k = 0; k < j; k++) {
+						left.Consume(bins[i][k]);
+						left.size += bins[i][k].references.size();
+					}
+
+					for (int k = j; k < kNumBins; k++) {
+						right.Consume(bins[i][k]);
+						right.size += bins[i][k].references.size();
+					}
+
+					float sah = left.ComputeSAH() + right.ComputeSAH();
+					if (sah < bestSah) {
+						bestLeft = left;
+						bestRight = right;
+						bestSah = sah;
+						bestBin = j;
+						bestAxis = i;
+
+					}
+				}
+			}
+
+			for (int k = 0; k < bestBin; k++) {
+				bestLeft.CopyBin(bins[bestAxis][k]);
+			}
+
+			for (int k = bestBin; k < kNumBins; k++) {
+				bestRight.CopyBin(bins[bestAxis][k]);
+			}
+		}
+		
+
+		// Subdivide our node if it is efficient to do so
+		if (bestSah < node.ComputeSAH()) {
+			node.children = new BuilderNode[2];
+			node.children[0] = bestLeft;
+			node.children[1] = bestRight;
+
+			unprocessedSubtrees.push(&node.children[0]);
+			unprocessedSubtrees.push(&node.children[1]);
+
+			node.references.clear();
+		}
+		else {
+			// Our traversal expects to handle duplicated references, so we must have a second reference buffer that points to locations in our triangle buffer
+			// This doesn't terrible affect caching performance, as measured in my expriments where I created a new triangle buffer to perfectly match the references to create an upper bound on caching (or at least a very close one)
+			// The difference was negligible, and I hypothesize that this is a result of most leaves having one triangle
+			// However, a possible way to further improver performance is to reorder according to spatial locality, which is a big win for coherent rays
+			node.offset = references.size();
+			for (const auto& ref : node.references) {
+				references.push_back(ref.index);
+			}
+		}
+	}
+
+	return references;
+}
+
+/*
+			// Spatial partioning
+			{
+				// Initialize our bins again, but use spatial partioning.
+				// To do this, we must maintain two types of bins: entry and exit bins
+				// Entry bins are where triangles begin, and exit bins are where they end
+				//
+				Bin bins[kNumBins];
+				float offset = node.box.Min[i];
+				float range = max(node.box.Max[i] - offset, 1e-5f);
+				for (const auto& ref : node.references) {
+					float projection = (ref.centroid[i] - offset) / range;
+					int binID = ComputeBin(ref.centroid[i], offset, range);
+					bins[binID].Insert(ref);
+				}
+
+
+			}*/
+
 void BoundingVolumeHierarchy::BinnedSAH(std::vector<CompactTriangle>& triangles) {
 	// Build the BVH over references
 	BuilderNode root;
@@ -1577,84 +1704,7 @@ void BoundingVolumeHierarchy::BinnedSAH(std::vector<CompactTriangle>& triangles)
 		root.Insert(reference);
 	}
 
-	std::cout << "Total num tris in root: " << root.box.Max.x << '\n';
-
-	// The first node we need to process is the root
-	std::vector<uint32_t> references;
-	std::stack<BuilderNode*> unprocessedSubtrees;
-	unprocessedSubtrees.push(&root);
-
-	int total = 0, num = 0;
-
-	// Loop through each unprocessed subtree and subdivide it or make it a leaf
-	while (!unprocessedSubtrees.empty()) {
-		BuilderNode& node = *unprocessedSubtrees.top();
-		unprocessedSubtrees.pop();
-
-		// Find the best split on each axis
-		BuilderNode bestLeft, bestRight;
-		float bestSah = FLT_MAX;
-		for (uint32_t i = 0; i < 3; i++) {
-
-			// Initialize our bins
-			Bin bins[kNumBins];
-			float minimumExtent = node.box.Min[i];
-			float range = max(node.box.Max[i] - minimumExtent, 1e-5f);
-			constexpr float bias = 1.0f - 1e-6f;
-			for (const auto& ref : node.references) {
-				float projection = (ref.centroid[i] - minimumExtent) / range;
-				int binID = (int)(bias * kNumBins * projection);
-				bins[binID].Insert(ref);
-			}
-
-			// For each bin, there are k - 1 splits: [0, i) for the left and [i, kNumBins) for the right
-			for (int i = 1; i < kNumBins; i++) {
-				
-				BuilderNode left, right;
-				for (int j = 0; j < i; j++) {
-					left.Consume(bins[j]);
-				}
-
-				for (int j = i; j < kNumBins; j++) {
-					right.Consume(bins[j]);
-				}
-
-				float sah = left.ComputeSAH() + right.ComputeSAH();
-				if (sah < bestSah) {
-					bestLeft = left;
-					bestRight = right;
-					bestSah = sah;
-				}
-
-			}
-		}
-		
-		// Subdivide our node if it is efficient to do so
-		if(bestSah < node.ComputeSAH()) {
-			node.children = new BuilderNode[2];
-			node.children[0] = bestLeft;
-			node.children[1] = bestRight;
-
-			unprocessedSubtrees.push(&node.children[0]);
-			unprocessedSubtrees.push(&node.children[1]);
-			
-			node.references.clear();
-		}
-		else {
-			// Our traversal expects to handle duplicated references, so we must have a second reference buffer that points to locations in our triangle buffer
-			// This doesn't terrible affect caching performance, as measured in my expriments where I created a new triangle buffer to perfectly match the references to create an upper bound on caching (or at least a very close one)
-			// The difference was negligible, and I hypothesize that this is a result of most leaves having one triangle
-			// However, a possible way to further improver performance is to reorder according to spatial locality, which is a big win for coherent rays
-			node.offset = references.size();
-			for (const auto& ref : node.references) {
-				references.push_back(ref.index);
-			}
-			total++;
-			num += node.references.size();
-		}
-	}
-
-	std::cout << "Average: " << (float)num / total << '\n';
+	auto references = BuildSBVH(triangles, &root);
 
 	// Serealize our nodes
 	std::vector<BuilderNode*> allocationRegistry;
@@ -1679,7 +1729,7 @@ void BoundingVolumeHierarchy::BinnedSAH(std::vector<CompactTriangle>& triangles)
 			allocationRegistry.push_back(buildOutput.children);
 		}
 		else {
-			gpuReadableNode.triangleRange = -((((int)buildOutput.references.size()) & 15) | (buildOutput.offset << 4));
+			gpuReadableNode.triangleRange = -((buildOutput.size & 15) | (buildOutput.offset << 4));
 		}
 
 		serealizedNodes.push_back(gpuReadableNode);
@@ -1719,3 +1769,4 @@ void BoundingVolumeHierarchy::BinnedSAH(std::vector<CompactTriangle>& triangles)
 	referenceTex.CreateBinding();
 	referenceTex.SelectBuffer(&referenceBuf, GL_R32F);
 }
+
