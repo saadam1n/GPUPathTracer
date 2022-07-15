@@ -1578,11 +1578,14 @@ struct ReferenceContainer {
 	}
 };
 
-struct Bin : public ReferenceContainer {
-	int32_t entry, exit; // For use in SBVH construction only
-	Bin() : entry(0), exit(0) {}
-
-
+struct Bin {
+	AABB box;
+	uint32_t numReferences;
+	Bin() : numReferences(0) {}
+	void Insert(const TriangleReference& reference) {
+		box.Extend(reference.box);
+		numReferences++;
+	}
 };
 
 struct BuilderNode : public ReferenceContainer {
@@ -1594,11 +1597,6 @@ struct BuilderNode : public ReferenceContainer {
 	// For lack of a better word (the nodes "consume" the bins
 	void Consume(const Bin& bin) {
 		box.Extend(bin.box);
-	}
-
-	void CopyBin(const Bin& bin) {
-		references.reserve(references.size() + bin.references.size());
-		references.insert(references.end(), bin.references.begin(), bin.references.end());
 	}
 
 	float ComputeSAH() {
@@ -1626,12 +1624,12 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 				BuilderNode left, right;
 				for (int k = 0; k < j; k++) {
 					left.Consume(bins[i][k]);
-					left.size += bins[i][k].references.size();
+					left.size += bins[i][k].numReferences;
 				}
 
 				for (int k = j; k < kNumBins; k++) {
 					right.Consume(bins[i][k]);
-					right.size += bins[i][k].references.size();
+					right.size += bins[i][k].numReferences;
 				}
 
 				float sah = left.ComputeSAH() + right.ComputeSAH();
@@ -1646,12 +1644,19 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 			}
 		}
 
-		for (int k = 0; k < bestBin; k++) {
-			bestLeft.CopyBin(bins[bestAxis][k]);
-		}
-
-		for (int k = bestBin; k < kNumBins; k++) {
-			bestRight.CopyBin(bins[bestAxis][k]);
+		BuilderNode left, right;
+		float offset = node.box.Min[bestAxis];
+		float range = max(node.box.Max[bestAxis] - offset, 1e-5f);
+		for (const auto& ref : node.references) {
+			float projection = (ref.centroid[bestAxis] - offset) / range;
+			int binID = ComputeBin(ref.centroid[bestAxis], offset, range);
+			
+			if (binID < bestBin) {
+				bestLeft.Insert(ref);
+			}
+			else {
+				bestRight.Insert(ref);
+			}
 		}
 	}
 	else if (node.references.size() > 1) {
@@ -1694,8 +1699,44 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 
 		}
 	}
+}
 
-	
+void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& bestSah, BuilderNode& node) {
+	return;
+	/*
+	To do spatial splits and have an easy time avoiding reference duplication within a node, we need to maintain 2 counters in each of our bins:
+	1. The min counter, and
+	2. The max counter
+	These counters are referred to as the entry and exit counters in the SBVH paper respectively.
+	The minimum counter maintains how many references begin along the projected axis in the current bin
+	The maximum counter maintains how many references end along the projected axis in the current bin
+	For all bins in [min, max], we "chop" up the references bounding box (or just use the the clipped triangle's AABB instead for quality over build speed) and extend our bins' AABB by it
+	To create binned splits using the min-max binning algorithm, the left child scoops up the min bins, while the right child scoops up the right bins
+	We can then cheaply evalute SAH using this, to find the best split between our bins
+	Note that we do not actually keep track of reference lists, since binning is only used to keep track of how many references are where and the AABBs of our bins
+	At the end, we use the best split to actually subdivide the references
+
+	For more details, I highly recomend reading section 3 of "Highly Parallel Fast KD-tree Construction for Interactive Ray Tracing of Dynamic Scenes"
+	Following along with the paper, I use the "min-max" naming convention in my code
+	*/
+
+
+
+	struct MinMaxBin {
+		Bin min;
+		Bin max;
+	};
+
+	// Like normal contruction, we consider all axes for building
+	for (uint32_t i = 0; i < 3; i++) {
+
+		// Initialize our references for our spatial splitting
+		MinMaxBin bins[kNumBins];
+		for (const auto& ref : node.references) {
+
+		}
+
+	}
 }
 
 std::vector<uint32_t> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode* root) {
@@ -1714,6 +1755,7 @@ std::vector<uint32_t> BuildSBVH(std::vector<CompactTriangle>& triangles, Builder
 
 		// Find our best object partioning canidate
 		FindBestObjectSplit(bestLeft, bestRight, bestSah, node);
+		FindBestSpatialSplit(bestLeft, bestRight, bestSah, node);
 		
 
 		// Subdivide our node if it is efficient to do so
