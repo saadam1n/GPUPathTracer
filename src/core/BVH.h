@@ -88,7 +88,8 @@ struct Split {
 
 class BoundingVolumeHierarchy {
 public:
-	void Construct(std::vector<CompactTriangle>& triangles);
+	void SweepSAH(std::vector<CompactTriangle>& triangles);
+	void BinnedSAH(std::vector<CompactTriangle>& triangles);
 private:
 	friend class Shader;
 	friend class Renderer;

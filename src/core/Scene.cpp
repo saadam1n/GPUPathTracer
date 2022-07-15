@@ -291,7 +291,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
         triangles.push_back(triangle);
     }
 
-    bvh.Construct(triangles);
+    bvh.BinnedSAH(triangles);
 
     struct LightTriangleInfo {
         float area;

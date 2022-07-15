@@ -344,7 +344,7 @@ void RenotifyThreads(std::condition_variable& WorkSignal, bool& WorkerThreadsRun
 	//std::cout << "Done renotifying\n";
 }
 
-void BoundingVolumeHierarchy::Construct(std::vector<CompactTriangle>& triangles) {
+void BoundingVolumeHierarchy::SweepSAH(std::vector<CompactTriangle>& triangles) {
 	//std::cout << "Start of BVH construction" << std::endl;
 
 	Timer ConstructionTimer;
@@ -1523,3 +1523,203 @@ inline Split FindBestSplit(const std::vector<TriangleCentroid>& Centroids, const
 }
 
 */
+
+struct TriangleReference {
+	int32_t index;
+	AABB box;
+	vec3 centroid;
+};
+
+struct ReferenceContainer {
+	AABB box;
+	std::vector<TriangleReference> references;
+
+	void Insert(const TriangleReference& reference) {
+		references.push_back(reference);
+		box.Extend(reference.box);
+	}
+};
+
+typedef ReferenceContainer Bin;
+
+struct BuilderNode : public ReferenceContainer {
+	BuilderNode* children;
+	uint32_t offset;
+
+	BuilderNode() : children(nullptr), offset(0) {}
+
+	// For lack of a better word (the nodes "consume" the bins
+	void Consume(const Bin& bin) {
+		box.Extend(bin.box);
+		references.reserve(references.size() + bin.references.size());
+		references.insert(references.end(), bin.references.begin(), bin.references.end());
+	}
+
+	float ComputeSAH() {
+		return box.SurfaceArea() * references.size();
+	}
+};
+
+constexpr uint32_t kNumBins = 8;
+void BoundingVolumeHierarchy::BinnedSAH(std::vector<CompactTriangle>& triangles) {
+	// Build the BVH over references
+	BuilderNode root;
+	for (int i = 0; i < triangles.size(); i++) {
+		TriangleReference reference;
+		reference.index = i;
+
+		reference.box.Extend(triangles[i].position0);
+		reference.box.Extend(triangles[i].position1);
+		reference.box.Extend(triangles[i].position2);
+
+		reference.centroid = reference.box.Center();
+
+		root.Insert(reference);
+	}
+
+	std::cout << "Total num tris in root: " << root.box.Max.x << '\n';
+
+	// The first node we need to process is the root
+	std::stack<BuilderNode*> unprocessedSubtrees;
+	unprocessedSubtrees.push(&root);
+
+	// Loop through each unprocessed subtree and subdivide it or make it a leaf
+	while (!unprocessedSubtrees.empty()) {
+		BuilderNode& node = *unprocessedSubtrees.top();
+		unprocessedSubtrees.pop();
+
+		// Find the best split on each axis
+		BuilderNode bestLeft, bestRight;
+		float bestSah = FLT_MAX;
+		for (uint32_t i = 0; i < 3; i++) {
+
+			// Initialize our bins
+			Bin bins[kNumBins];
+			float minimumExtent = node.box.Min[i];
+			float range = max(node.box.Max[i] - minimumExtent, 1e-5f);
+			constexpr float bias = 1.0f - 1e-6f;
+			for (const auto& ref : node.references) {
+				float projection = (ref.centroid[i] - minimumExtent) / range;
+				int binID = (int)(bias * kNumBins * projection);
+				bins[binID].Insert(ref);
+			}
+
+			// For each bin, there are k - 1 splits: [0, i) for the left and [i, kNumBins) for the right
+			for (int i = 1; i < kNumBins; i++) {
+				
+				BuilderNode left, right;
+				for (int j = 0; j < i; j++) {
+					left.Consume(bins[j]);
+				}
+
+				for (int j = i; j < kNumBins; j++) {
+					right.Consume(bins[j]);
+				}
+
+				float sah = left.ComputeSAH() + right.ComputeSAH();
+				if (sah < bestSah) {
+					bestLeft = left;
+					bestRight = right;
+					bestSah = sah;
+				}
+			}
+		}
+		
+		// Subdivide our node if it is efficient to do so
+		if(bestSah < node.ComputeSAH()) {
+			node.children = new BuilderNode[2];
+			node.children[0] = bestLeft;
+			node.children[1] = bestRight;
+
+			unprocessedSubtrees.push(&node.children[0]);
+			unprocessedSubtrees.push(&node.children[1]);
+			
+			node.references.clear();
+		}
+	}
+
+	// Turn our references back into an array of triangles
+	// Since we do not duplicate references, like in SBVHs, this is okay
+	// To handle duplicates, we would, in the case we are concerned about memory, create a new second *reference buffer* that has reference indices to triangles
+	// Our BVH points to this array instead of the original triangle array. Cache issues are not a problem since most nodes have one triangle
+	// However, we can still use standard techniques that are usually used to optimize the cache locality of vertex streams in rasterization to optimize our BVH
+	std::vector<CompactTriangle> reorder;
+	std::stack<BuilderNode*> dfs;
+	dfs.push(&root);
+	while (!dfs.empty()) {
+		BuilderNode& node = *dfs.top();
+		dfs.pop();
+
+		if (node.children == nullptr) {
+			// We are in a leaf node, so reorder the nodes
+			node.offset = reorder.size();
+			for (const auto& ref : node.references) {
+				reorder.push_back(triangles[ref.index]);
+			}
+		}
+		else {
+			dfs.push(&node.children[0]);
+			dfs.push(&node.children[1]);
+		}
+
+	}
+	//std::copy(reorder.begin(), reorder.end(), triangles.begin());
+	triangles = reorder;
+
+	// Serealize our nodes
+	std::vector<BuilderNode*> allocationRegistry;
+	std::vector<NodeSerialized> serealizedNodes;
+	std::queue<BuilderNode*> bfs;
+	bfs.push(&root);
+	while (!bfs.empty()) {
+		BuilderNode& buildOutput = *bfs.front();
+		bfs.pop();
+
+		NodeSerialized gpuReadableNode;
+
+		gpuReadableNode.BoundingBox = buildOutput.box;
+		gpuReadableNode.parent = 0;
+
+		if (buildOutput.children != nullptr) {
+			gpuReadableNode.firstChild = serealizedNodes.size() + bfs.size() + 1;
+
+			bfs.push(&buildOutput.children[0]);
+			bfs.push(&buildOutput.children[1]);
+
+			allocationRegistry.push_back(buildOutput.children);
+		}
+		else {
+			gpuReadableNode.triangleRange = -((((int)buildOutput.references.size()) & 15) | (buildOutput.offset << 4));
+		}
+
+		serealizedNodes.push_back(gpuReadableNode);
+	}
+
+	for (auto& ptr : allocationRegistry) {
+		delete[] ptr;
+	}
+
+	// Reorder nodes for better memory access on the GPU
+	for (NodeSerialized& node : serealizedNodes) {
+		struct NewLayout {
+			vec3 min;
+			int data0;
+			vec3 max;
+			int data1;
+		} temp;
+
+		temp.min = node.BoundingBox.Min;
+		temp.data0 = node.firstChild;
+		temp.max = node.BoundingBox.Max;
+		temp.data1 = node.parent;
+
+		NewLayout* ptr = (NewLayout*)&node;
+		*ptr = temp;
+	}
+
+	nodesBuf.CreateBinding(BUFFER_TARGET_ARRAY);
+	nodesBuf.UploadData(serealizedNodes, GL_STATIC_DRAW);
+
+	nodesTex.CreateBinding();
+	nodesTex.SelectBuffer(&nodesBuf, GL_RGBA32F);
+}

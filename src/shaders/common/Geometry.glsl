@@ -195,7 +195,7 @@ struct HitInfo {
     PackedCompactTriangle intersected;
 };
 
-bool IntersectTriangle(in PackedCompactTriangle pct, in Ray ray, inout HitInfo closestHit) {
+bool IntersectTriangleMT(in PackedCompactTriangle pct, in Ray ray, inout HitInfo closestHit) {
     // this is mostly a copy paste from scratchapixel's code that has been refitted to work with GLSL
     HitInfo attemptHit;
 
@@ -233,8 +233,8 @@ bool IntersectTriangleAilaLaine(in PackedCompactTriangle pct, in Ray ray, inout 
 
     vec3 position0 = vec3(pct.data[0].xyz);
 
-    vec3 edge1 = vec3(pct.data[0].w, pct.data[1].xy) - position0;
-    vec3 edge2 = vec3(pct.data[1].zw, pct.data[2].x) - position0;
+    vec3 edge1 = vec3(pct.data[0].w, pct.data[1].xy);
+    vec3 edge2 = vec3(pct.data[1].zw, pct.data[2].x);
 
     vec3 tvec = ray.origin - position0;
     vec3 pvec = cross(ray.direction, edge2);
@@ -275,6 +275,42 @@ bool IntersectTriangleAilaLaine(in PackedCompactTriangle pct, in Ray ray, inout 
 
     return false;
 }
+
+// http://graphics.stanford.edu/pub/Graphics/RTNews/html/rtnews5b.html#art3
+bool IntersectTriangleArenberg(in PackedCompactTriangle pct, in Ray ray, inout HitInfo closestHit) {
+    // Construct matrix:
+    vec3 p0 = vec3(pct.data[0].xyz);
+    vec3 p1 = vec3(pct.data[0].w, pct.data[1].xy);
+    vec3 p2 = vec3(pct.data[1].zw, pct.data[2].x);
+    vec3 n = vec3(pct.data[3].w, pct.data[4].xy);
+
+    mat3 bo = transpose(mat3(p1, p2, n));
+    mat3 bb = inverse(bo);
+
+    float denominator = dot(ray.direction, bb[2]);
+    float numerator = dot(p0 - ray.origin, bb[2]);
+
+    float t = numerator / denominator;
+    if (t < 0.0f) {
+        return false;
+    }
+
+    vec3 p = t * ray.direction + ray.origin - p0;
+
+    float a = dot(p, bb[0]);
+    float b = dot(p, bb[1]);
+
+    if (a < 0.0 || b < 0.0 || a + b > 1.0) {
+        return false;
+    }
+
+    closestHit.di = vec4(t, 1.0f - a  - b, a, b);
+    closestHit.intersected = pct;
+
+    return true;
+}
+
+#define IntersectTriangle(t, r, i) IntersectTriangleMT(t, r, i)
 
 Vertex GetInterpolatedVertex(in Ray ray, inout HitInfo intersection) {
     Vertex interpolated;

@@ -623,6 +623,7 @@ bool IfIfClosestHit(in Ray ray, inout HitInfo intersection) {
 
 	bool result = false;
 	while (true) {
+		debugColor++;
 		if (!IsLeafVal(current)) {
 			// Texture reads right after the other for best texture cache access
 			BVHNode child0 = GetNode(current);
