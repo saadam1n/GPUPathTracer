@@ -1522,6 +1522,34 @@ inline Split FindBestSplit(const std::vector<TriangleCentroid>& Centroids, const
 	return BestSplit;
 }
 
+			AABB leftBoxBuilder;
+			std::vector<AABB> leftBoxes;
+			for (uint32_t j = 0; j < node.references.size() - 1; j++) {
+				leftBoxBuilder.Extend(node.references[i].box);
+				leftBoxes.push_back(leftBoxBuilder);
+			}
+
+			AABB rightBox;
+			BuilderNode left, right;
+			for (uint32_t j = node.references.size() - 1; j >= 0; j--) {
+				AABB leftBox = leftBoxes[j - 1];
+				rightBox.Extend(node.references[j].box);
+				float sah = leftBox.SurfaceArea() * (j - 1) + rightBox.SurfaceArea() * (node.references.size() - j);
+				if (sah < bestSah) {
+					for (uint32_t k = 0; k < j; k++) {
+						left.Insert(node.references[k]);
+					}
+
+					for (uint32_t k = j; k < node.references.size(); k++) {
+						right.Insert(node.references[k]);
+					}
+
+					bestLeft = left;
+					bestRight = right;
+					bestSah = sah;
+				}
+			}
+
 */
 
 constexpr uint32_t kNumBins = 8;
@@ -1578,6 +1606,98 @@ struct BuilderNode : public ReferenceContainer {
 	}
 };
 
+void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& bestSah, BuilderNode& node) {
+	if (node.references.size() > kNumBins) {
+		uint32_t bestBin = 1, bestAxis = 0;
+		Bin bins[3][kNumBins];
+		for (uint32_t i = 0; i < 3; i++) {
+			// Initialize our bins
+			float offset = node.box.Min[i];
+			float range = max(node.box.Max[i] - offset, 1e-5f);
+			for (const auto& ref : node.references) {
+				float projection = (ref.centroid[i] - offset) / range;
+				int binID = ComputeBin(ref.centroid[i], offset, range);
+				bins[i][binID].Insert(ref);
+			}
+
+			// For each bin, there are k - 1 splits: [0, i) for the left and [i, kNumBins) for the right
+			for (int j = 1; j < kNumBins; j++) {
+
+				BuilderNode left, right;
+				for (int k = 0; k < j; k++) {
+					left.Consume(bins[i][k]);
+					left.size += bins[i][k].references.size();
+				}
+
+				for (int k = j; k < kNumBins; k++) {
+					right.Consume(bins[i][k]);
+					right.size += bins[i][k].references.size();
+				}
+
+				float sah = left.ComputeSAH() + right.ComputeSAH();
+				if (sah < bestSah) {
+					bestLeft = left;
+					bestRight = right;
+					bestSah = sah;
+					bestBin = j;
+					bestAxis = i;
+
+				}
+			}
+		}
+
+		for (int k = 0; k < bestBin; k++) {
+			bestLeft.CopyBin(bins[bestAxis][k]);
+		}
+
+		for (int k = bestBin; k < kNumBins; k++) {
+			bestRight.CopyBin(bins[bestAxis][k]);
+		}
+	}
+	else if (node.references.size() > 1) {
+		// Just do a full sweep instead
+		// TODO: optimize AABB compuation
+
+		bestLeft.references.reserve(kNumBins);
+		bestRight.references.reserve(kNumBins);
+
+		for (uint32_t i = 0; i < 3; i++) {
+			std::sort(node.references.begin(), node.references.end(), [i](const TriangleReference& lhs, const TriangleReference& rhs) {return lhs.centroid[i] < rhs.centroid[i]; });
+
+			uint32_t headLeft = 0, headRight = node.references.size();
+
+			BuilderNode left;
+			for (uint32_t j = 0; j < node.references.size() - 1; j++) {
+				// First trasfer a centroid
+				headLeft++;
+				headRight--;
+
+				left.Insert(node.references[j]);
+				AABB right;
+				for (uint32_t k = j + 1; k < node.references.size(); k++) {
+					right.Extend(node.references[k].box);
+				}
+
+				float sah = left.box.SurfaceArea() * headLeft + right.SurfaceArea() * headRight;
+
+				if (sah < bestSah) {
+					bestSah = sah;
+					bestLeft = left;
+					bestRight.box = right;
+
+					bestRight.references.clear();
+					for (uint32_t k = j + 1; k < node.references.size(); k++) {
+						bestRight.Insert(node.references[k]);
+					}
+				}
+			}
+
+		}
+	}
+
+	
+}
+
 std::vector<uint32_t> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode* root) {
 	// The first node we need to process is the root
 	std::vector<uint32_t> references;
@@ -1593,54 +1713,7 @@ std::vector<uint32_t> BuildSBVH(std::vector<CompactTriangle>& triangles, Builder
 		float bestSah = FLT_MAX;
 
 		// Find our best object partioning canidate
-		// TODO: fall back to full sweep when the number of triangles is less than the number of bins
-		{
-			uint32_t bestBin = 1, bestAxis = 0;
-			Bin bins[3][kNumBins];
-			for (uint32_t i = 0; i < 3; i++) {
-				// Initialize our bins
-				float offset = node.box.Min[i];
-				float range = max(node.box.Max[i] - offset, 1e-5f);
-				for (const auto& ref : node.references) {
-					float projection = (ref.centroid[i] - offset) / range;
-					int binID = ComputeBin(ref.centroid[i], offset, range);
-					bins[i][binID].Insert(ref);
-				}
-
-				// For each bin, there are k - 1 splits: [0, i) for the left and [i, kNumBins) for the right
-				for (int j = 1; j < kNumBins; j++) {
-
-					BuilderNode left, right;
-					for (int k = 0; k < j; k++) {
-						left.Consume(bins[i][k]);
-						left.size += bins[i][k].references.size();
-					}
-
-					for (int k = j; k < kNumBins; k++) {
-						right.Consume(bins[i][k]);
-						right.size += bins[i][k].references.size();
-					}
-
-					float sah = left.ComputeSAH() + right.ComputeSAH();
-					if (sah < bestSah) {
-						bestLeft = left;
-						bestRight = right;
-						bestSah = sah;
-						bestBin = j;
-						bestAxis = i;
-
-					}
-				}
-			}
-
-			for (int k = 0; k < bestBin; k++) {
-				bestLeft.CopyBin(bins[bestAxis][k]);
-			}
-
-			for (int k = bestBin; k < kNumBins; k++) {
-				bestRight.CopyBin(bins[bestAxis][k]);
-			}
-		}
+		FindBestObjectSplit(bestLeft, bestRight, bestSah, node);
 		
 
 		// Subdivide our node if it is efficient to do so
