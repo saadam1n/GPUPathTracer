@@ -1580,8 +1580,11 @@ void BoundingVolumeHierarchy::BinnedSAH(std::vector<CompactTriangle>& triangles)
 	std::cout << "Total num tris in root: " << root.box.Max.x << '\n';
 
 	// The first node we need to process is the root
+	std::vector<uint32_t> references;
 	std::stack<BuilderNode*> unprocessedSubtrees;
 	unprocessedSubtrees.push(&root);
+
+	int total = 0, num = 0;
 
 	// Loop through each unprocessed subtree and subdivide it or make it a leaf
 	while (!unprocessedSubtrees.empty()) {
@@ -1622,6 +1625,7 @@ void BoundingVolumeHierarchy::BinnedSAH(std::vector<CompactTriangle>& triangles)
 					bestRight = right;
 					bestSah = sah;
 				}
+
 			}
 		}
 		
@@ -1636,35 +1640,21 @@ void BoundingVolumeHierarchy::BinnedSAH(std::vector<CompactTriangle>& triangles)
 			
 			node.references.clear();
 		}
-	}
-
-	// Turn our references back into an array of triangles
-	// Since we do not duplicate references, like in SBVHs, this is okay
-	// To handle duplicates, we would, in the case we are concerned about memory, create a new second *reference buffer* that has reference indices to triangles
-	// Our BVH points to this array instead of the original triangle array. Cache issues are not a problem since most nodes have one triangle
-	// However, we can still use standard techniques that are usually used to optimize the cache locality of vertex streams in rasterization to optimize our BVH
-	std::vector<CompactTriangle> reorder;
-	std::stack<BuilderNode*> dfs;
-	dfs.push(&root);
-	while (!dfs.empty()) {
-		BuilderNode& node = *dfs.top();
-		dfs.pop();
-
-		if (node.children == nullptr) {
-			// We are in a leaf node, so reorder the nodes
-			node.offset = reorder.size();
-			for (const auto& ref : node.references) {
-				reorder.push_back(triangles[ref.index]);
-			}
-		}
 		else {
-			dfs.push(&node.children[0]);
-			dfs.push(&node.children[1]);
+			// Our traversal expects to handle duplicated references, so we must have a second reference buffer that points to locations in our triangle buffer
+			// This doesn't terrible affect caching performance, as measured in my expriments where I created a new triangle buffer to perfectly match the references to create an upper bound on caching (or at least a very close one)
+			// The difference was negligible, and I hypothesize that this is a result of most leaves having one triangle
+			// However, a possible way to further improver performance is to reorder according to spatial locality, which is a big win for coherent rays
+			node.offset = references.size();
+			for (const auto& ref : node.references) {
+				references.push_back(ref.index);
+			}
+			total++;
+			num += node.references.size();
 		}
-
 	}
-	//std::copy(reorder.begin(), reorder.end(), triangles.begin());
-	triangles = reorder;
+
+	std::cout << "Average: " << (float)num / total << '\n';
 
 	// Serealize our nodes
 	std::vector<BuilderNode*> allocationRegistry;
@@ -1722,4 +1712,10 @@ void BoundingVolumeHierarchy::BinnedSAH(std::vector<CompactTriangle>& triangles)
 
 	nodesTex.CreateBinding();
 	nodesTex.SelectBuffer(&nodesBuf, GL_RGBA32F);
+
+	referenceBuf.CreateBinding(BUFFER_TARGET_ARRAY);
+	referenceBuf.UploadData(references, GL_STATIC_DRAW);
+
+	referenceTex.CreateBinding();
+	referenceTex.SelectBuffer(&referenceBuf, GL_R32F);
 }

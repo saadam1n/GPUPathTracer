@@ -351,6 +351,7 @@ struct BVHStackItem {
 };
 
 uniform samplerBuffer nodesTex;
+uniform samplerBuffer referenceTex;
 
 BVHNode GetNode(int idx) {
 	BVHNode node;
@@ -417,7 +418,8 @@ void IntersectLeaf(in int leaf, in Ray ray, inout HitInfo intersection, inout bo
 	UnpackTriangleRange(leaf, i, j);
 
 	for (int k = i; k < j; k++) {
-		bool hit = IntersectTriangle(ReadPackedCompactTriangle(k), ray, intersection);
+		int location = fbs(texelFetch(referenceTex, k).x);
+		bool hit = IntersectTriangle(ReadPackedCompactTriangle(location), ray, intersection);
 		result = result || hit;
 	}
 }
@@ -623,7 +625,6 @@ bool IfIfClosestHit(in Ray ray, inout HitInfo intersection) {
 
 	bool result = false;
 	while (true) {
-		debugColor++;
 		if (!IsLeafVal(current)) {
 			// Texture reads right after the other for best texture cache access
 			BVHNode child0 = GetNode(current);

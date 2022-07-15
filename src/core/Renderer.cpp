@@ -484,6 +484,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     accum.BindTextureUnit(0, GL_TEXTURE_2D);
     scene.vertexTex.BindTextureUnit(1, GL_TEXTURE_BUFFER);
     scene.bvh.nodesTex.BindTextureUnit(3, GL_TEXTURE_BUFFER);
+    scene.bvh.referenceTex.BindTextureUnit(6, GL_TEXTURE_BUFFER);
     scene.lightTex.BindTextureUnit(4, GL_TEXTURE_BUFFER);
     pixelPoolTex.BindTextureUnit(5, GL_TEXTURE_BUFFER);
 
@@ -494,6 +495,7 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     iterative.LoadInteger("nodesTex", 3);
     iterative.LoadInteger("lightTex", 4);
     iterative.LoadInteger("pixelPoolTex", 5);
+    iterative.LoadInteger("referenceTex", 6);
     iterative.LoadFloat("totalLightArea", scene.totalLightArea);
     std::cout << scene.totalLightArea << "abcd\n";
     iterative.LoadShaderStorageBuffer("samplers", scene.materialsBuf);

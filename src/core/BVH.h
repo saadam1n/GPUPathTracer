@@ -98,6 +98,9 @@ private:
 	Buffer nodesBuf;
 	TextureBuffer nodesTex;
 	
+	Buffer referenceBuf;
+	TextureBuffer referenceTex;
+
 	//AABB CreateBoundingBox(const std::vector<TriangleCentroid>& Centroids, const std::vector<AABB>& TriangleBoundingBoxes);
 
 	//std::vector<TriangleCentroid> SortAxis(const std::vector<TriangleCentroid>& Centroids, uint32_t Axis);
