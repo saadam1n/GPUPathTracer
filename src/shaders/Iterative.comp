@@ -177,6 +177,7 @@ vec3 PathTrace(in ivec2 pixel) {
         HitInfo hit;
         hit.di.x = 1e20f;
         bool miss = !IfIfClosestHit(ray, hit);
+
         vertex = GetInterpolatedVertex(ray, hit);
         if(miss) {
             vertex.MatID = 0;
