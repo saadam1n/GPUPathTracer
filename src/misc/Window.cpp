@@ -47,3 +47,12 @@ void Window::SetInputCallback(GLFWcursorposfun MouseCallback) {
 bool Window::GetKey(uint32_t KeyCode) {
 	return glfwGetKey(WindowHandle, KeyCode);
 }
+
+void Window::SetVisibility(bool vis) {
+	if (vis) {
+		glfwShowWindow(WindowHandle);
+	}
+	else {
+		glfwHideWindow(WindowHandle);
+	}
+}

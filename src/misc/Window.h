@@ -18,6 +18,8 @@ public:
 
 	bool GetKey(uint32_t KeyCode);
 
+	void SetVisibility(bool vis);
+
 private:
 	GLFWwindow* WindowHandle;
 

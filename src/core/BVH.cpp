@@ -1552,7 +1552,7 @@ inline Split FindBestSplit(const std::vector<TriangleCentroid>& Centroids, const
 
 */
 
-constexpr uint32_t kNumBins = 8;
+constexpr uint32_t kNumBins = 256;
 int ComputeBin(float x, float offset, float range) {
 	constexpr float bias = 1.0f - 1e-6f;
 	return (int)(kNumBins * bias * (x - offset) / range);
@@ -1613,17 +1613,13 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 		//std::cout << "Binning\n";
 		bool betterSplitFound = false;
 		uint32_t bestBin = 1, bestAxis = 0;
-		Bin bins[3][kNumBins];
+		Bin bins[3][kNumBins]; // TODO: move to stack
 		for (uint32_t i = 0; i < 3; i++) {
 			// Initialize our bins
 			float offset = node.box.min[i];
 			float range = max(node.box.max[i] - offset, 1e-5f);
 			for (const auto& ref : node.references) {
 				int binID = ComputeBin(ref.centroid[i], offset, range);
-				if (binID < 0 || binID > 7) {
-					std::cout << "BIN " << binID << " OUT OF BOUNDS AT DEPTH " << node.depth << '\n';
-					exit(-1);
-				}
 				bins[i][binID].Insert(ref);
 			}
 
@@ -1734,7 +1730,6 @@ void DebugNode(const BuilderNode& node, const char* name) {
 
 }
 
-int numSplits = 0;
 void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& bestSah, const BuilderNode& node) {
 	// Prevent subdivision of a single triangle, since it more effective to just do a full intersection test with it anyway
 	if (node.numReferences < 2) {
@@ -1776,7 +1771,8 @@ void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& 
 	bool betterSplitFound = false;
 	uint32_t bestAxis = 0;
 	uint32_t bestBin = 1;
-	int s0 = 0, s1 = 0;
+	uint32_t nL = 0, nR = 0;
+	AABB oL, oR;
 	for (uint32_t i = 0; i < 3; i++) {
 		// Initialize our references for our spatial splitting
 		MinMaxBin bins[kNumBins];
@@ -1791,11 +1787,6 @@ void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& 
 			bins[minID].minReferences++;
 			bins[maxID].maxReferences++;
 
-			if (minID < 0 || maxID > 7) {
-				std::cout << minID << ' ' << maxID << '\n';
-				//exit(-1);
-			}
-
 			// Chop up our bin into pieces and place them in [minID, maxID]
 			for (int32_t j = minID; j <= maxID; j++) {
 				AABB chopped = ref.box;
@@ -1807,18 +1798,6 @@ void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& 
 				bins[j].box.Extend(ChopBox(ref.box, i, minPlane, maxPlane));
 			}
 		}
-
-		/*
-		std::cout << "========== ON AXIS " << i << "==========\n";
-		int c0 = 0, c1 = 0;
-		for (uint32_t j = 0; j < kNumBins; j++) {
-			std::cout << "Bin " << j << " has " << bins[j].minReferences << " min refs and " << bins[j].maxReferences << " max refs\n";
-			c0 += bins[j].minReferences;
-			c1 += bins[j].maxReferences;
-		}
-		std::cout << "The number of refs that were passed are " << node.numReferences << '\n';
-		std::cout << "The total is " << c0 << " and " << c1 << '\n';
-		*/
 
 		// Consider each spatial split
 		for (int j = 1; j < kNumBins; j++) {
@@ -1842,14 +1821,14 @@ void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& 
 
 			if (sah < bestSah) {	
 				// std::cout << "This is now the best split: " << bestSah << " is smaller than " << oldSah << " =============READ ME============\n";
-				bestLeft.box = left.box;
-				bestRight.box = right.box;
+				oL = left.box;
+				oR= right.box;
 				bestSah = sah;
-				bestBin = j;
 				bestAxis = i;
+				bestBin = j;
 				betterSplitFound = true;
-				s0 = left.numReferences;
-				s1 = right.numReferences;
+				nL = left.numReferences;
+				nR = right.numReferences;
 			}
 
 			//std::cout << "+++++++++END+++++++++\n";
@@ -1857,7 +1836,6 @@ void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& 
 	}
 
 	if (betterSplitFound) {
-		numSplits++;
 		float offset = node.box.min[bestAxis];
 		float range = max(node.box.max[bestAxis] - offset, 1e-5f);
 		float binWidth = range / kNumBins;
@@ -1874,20 +1852,37 @@ void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& 
 		for (auto& ref : node.references) {
 			// If our reference intersects the split, then split the reference
 			if (ref.box.min[bestAxis] < split && ref.box.max[bestAxis] > split) {
-				TriangleReference leftRef, rightRef;
+				float splitSah = bestSah;
 
-				leftRef.index = ref.index;
-				rightRef.index = ref.index;
+				AABB unsplitBoxLeft = oL;
+				AABB unsplitBoxRight = oR;
 
-				leftRef.box = ChopBox(ref.box, bestAxis, leftMinPlane, split);
-				rightRef.box = ChopBox(ref.box, bestAxis, split, rightMaxPlane);
+				unsplitBoxLeft.Extend(ref.box);
+				unsplitBoxRight.Extend(ref.box);
+				
+				float unsplitL = unsplitBoxLeft.SurfaceArea() * nL + oR.SurfaceArea() * (nR - 1); // place into left
+				float unsplitR = oL.SurfaceArea() * (nL - 1) + unsplitBoxRight.SurfaceArea() * nR; // Place into right
 
-				// Recalculate boxes
-				leftRef.centroid = leftRef.box.Center();
-				rightRef.centroid = rightRef.box.Center();
+				if (unsplitL < splitSah && unsplitL < unsplitR) {
+					bestLeft.Insert(ref);
+				} else if (unsplitR < splitSah && unsplitR < unsplitL) {
+					bestRight.Insert(ref);
+				}
+				else {
+					TriangleReference leftRef, rightRef;
 
-				bestLeft.Insert(leftRef);
-				bestRight.Insert(rightRef);
+					leftRef.index = ref.index;
+					rightRef.index = ref.index;
+
+					leftRef.box = ChopBox(ref.box, bestAxis, leftMinPlane, split);
+					rightRef.box = ChopBox(ref.box, bestAxis, split, rightMaxPlane);
+
+					leftRef.centroid = leftRef.box.Center();
+					rightRef.centroid = rightRef.box.Center();
+
+					bestLeft.Insert(leftRef);
+					bestRight.Insert(rightRef);
+				}
 			}
 			else {
 				// Just place it into its respective child node
@@ -1900,15 +1895,10 @@ void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& 
 				}
 			}
 		}
-
-		//std::cout << "============== SPLIT AT BIN " << bestBin << " ==============\n";
-		//DebugNode(node, "parent");
-		//DebugNode(bestLeft, "left");
-		//DebugNode(bestRight, "right");
 	}
-
 }
 
+int numRefDup = 0;
 std::vector<uint32_t> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode* root) {
 	uint32_t id = 0;
 	root->id = id++;
@@ -1917,34 +1907,34 @@ std::vector<uint32_t> BuildSBVH(std::vector<CompactTriangle>& triangles, Builder
 	std::stack<BuilderNode*> unprocessedSubtrees;
 	unprocessedSubtrees.push(root);
 
+	constexpr float alpha = 1e-5f;
+	float spatialInefficiencyThreshold = alpha * root->box.SurfaceArea();
+
 	// Loop through each unprocessed subtree and subdivide it or make it a leaf
 	while (!unprocessedSubtrees.empty()) {
 		BuilderNode& node = *unprocessedSubtrees.top();
 		unprocessedSubtrees.pop();
-
-		//std::cout << "Popping node " << node.id << ':' << node.depth << '\n';
 
 		BuilderNode bestLeft, bestRight;
 		float bestSah = FLT_MAX;
 
 		// Find our best object partioning canidate
 		FindBestObjectSplit(bestLeft, bestRight, bestSah, node);
-		//std::cout << "Recheck #1 node " << node.id << ':' << node.depth << '\n';
-		FindBestSpatialSplit(bestLeft, bestRight, bestSah, node);
-		//std::cout << "Recheck #2 node " << node.id << ':' << node.depth << '\n';
 
-		//if (node.numReferences == 1) {
-		//	std::cout << node.ComputeSAH() << " vs " << bestSah << '\n';
-		//}
-		//std::cout << "Parent Address " << &node << '\n';
+		AABB overlap;
+		overlap.min = max(bestLeft.box.min, bestRight.box.min);
+		overlap.max = min(bestLeft.box.max, bestRight.box.max);
+
+		if (overlap.SurfaceArea() > spatialInefficiencyThreshold) {
+			FindBestSpatialSplit(bestLeft, bestRight, bestSah, node);
+		}
+
 
 		// Subdivide our node if it is efficient to do so
 		if (bestSah < node.ComputeSAH()) {
 			node.children = new BuilderNode[2];
 			node.children[0] = bestLeft;
 			node.children[1] = bestRight;
-
-			//std::cout << "Builder/Parent information " << id << ':' << node.depth << '\n';
 
 			node.children[0].depth = node.depth + 1;
 			node.children[1].depth = node.depth + 1;
@@ -1955,21 +1945,12 @@ std::vector<uint32_t> BuildSBVH(std::vector<CompactTriangle>& triangles, Builder
 			unprocessedSubtrees.push(&node.children[0]);
 			unprocessedSubtrees.push(&node.children[1]);
 
-			//std::cout << "Pushing node " << node.children[0].id << ':' << node.children[0].depth << '\n';
-			//std::cout << "Pushing node " << node.children[0].id << ':' << node.children[0].depth << '\n';
-
-
-			//std::cout << "Children Address " << node.children << '\n';
-
 			node.references.clear();
 			if (node.id == -1) {
 				exit(0);
 			}
 		}
 		else {
-			//std::cout << "Ref Buf Size " << &references << '\n';
-			//std::cout << "Ref Buf Addr " << references.size() << '\n';
-
 			// Our traversal expects to handle duplicated references, so we must have a second reference buffer that points to locations in our triangle buffer
 			// This doesn't terrible affect caching performance, as measured in my expriments where I created a new triangle buffer to perfectly match the references to create an upper bound on caching (or at least a very close one)
 			// The difference was negligible, and I hypothesize that this is a result of most leaves having one triangle
@@ -1978,6 +1959,8 @@ std::vector<uint32_t> BuildSBVH(std::vector<CompactTriangle>& triangles, Builder
 			for (const auto& ref : node.references) {
 				references.push_back(ref.index);
 			}
+
+			numRefDup += node.numReferences;
 		}
 	}
 
@@ -2021,6 +2004,8 @@ void BoundingVolumeHierarchy::BinnedSAH(std::vector<CompactTriangle>& triangles)
 
 	root.depth = 0;
 	auto references = BuildSBVH(triangles, &root);
+
+	std::cout << "Reference duplication is " << (float)numRefDup / root.numReferences << "%\n";
 
 	// Serealize our nodes
 	std::vector<BuilderNode*> allocationRegistry;

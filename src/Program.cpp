@@ -59,6 +59,7 @@ int main(int argc, char** argv) {
 
 	Window Window;
 	Window.Open("OpenGL Light Transport", Width, Height, false);
+	Window.SetVisibility(false);
 
 	LastCursorPosition = glm::vec2(Width, Height) / 2.0f;
 	Window.SetInputCallback(MouseCallback);
@@ -75,6 +76,7 @@ int main(int argc, char** argv) {
 
 	Timer FrameTimer;
 
+	Window.SetVisibility(true);
 	while (!Window.ShouldClose()) {
 		FrameTimer.Begin();
 
