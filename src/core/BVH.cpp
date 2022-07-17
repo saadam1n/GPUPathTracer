@@ -1550,14 +1550,14 @@ inline Split FindBestSplit(const std::vector<TriangleCentroid>& Centroids, const
 
 */
 
-constexpr uint32_t kNumBins = 8;
+constexpr int kNumBins = 8;
 int ComputeBinID(float c, float k0, float k1) {
 	int unbounded = (int)(k1 * (c + k0));
 	return clamp(unbounded, 0, (int)kNumBins - 1);
 }
 
 struct TriangleReference {
-	int32_t index;
+	int index;
 	AABB box;
 	vec3 centroid;
 };
@@ -1565,7 +1565,7 @@ struct TriangleReference {
 struct ReferenceContainer {
 	AABB box;
 	std::vector<TriangleReference> references;
-	uint32_t numReferences;
+	int numReferences;
 
 	ReferenceContainer() : numReferences(0) {}
 
@@ -1586,7 +1586,7 @@ struct ReferenceContainer {
 
 struct Bin {
 	AABB box;
-	uint32_t numReferences;
+	int numReferences;
 	Bin() : numReferences(0) {}
 	void Insert(const TriangleReference& reference) {
 		box.Extend(reference.box);
@@ -1596,7 +1596,7 @@ struct Bin {
 
 struct BuilderNode : public ReferenceContainer {
 	BuilderNode* children;
-	uint32_t offset;
+	int offset;
 
 	BuilderNode() : children(nullptr), offset(0) {}
 
@@ -1610,8 +1610,8 @@ struct BuilderNode : public ReferenceContainer {
 	}
 
 	// Debug information
-	uint32_t id;
-	uint32_t depth;
+	int id;
+	int depth;
 };
 
 void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& bestSah, BuilderNode& node) {
@@ -1619,12 +1619,12 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 		exit(-1);
 	}
 	const float elipsion = 1e-5f;
-	if (true || node.references.size() > kNumBins) {
+	if (node.references.size() > kNumBins) {
 		//std::cout << "Binning\n";
 		bool betterSplitFound = false;
-		uint32_t bestBin = 1, bestAxis = 0;
+		int bestBin = 1, bestAxis = 0;
 		Bin bins[3][kNumBins]; // TODO: move to stack
-		for (uint32_t i = 0; i < 3; i++) {
+		for (int i = 0; i < 3; i++) {
 			// Initialize our bins
 			float minBox = node.box.min[i];
 			float maxBox = node.box.max[i];
@@ -1698,13 +1698,10 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 		
 	}
 	else if (node.references.size() > 1) {
-		// Just do a full sweep instead
-		// TODO: optimize AABB compuation
-
 		bestLeft.references.reserve(kNumBins);
 		bestRight.references.reserve(kNumBins);
 
-		for (uint32_t i = 0; i < 3; i++) {
+		for (int i = 0; i < 3; i++) {
 			std::sort(node.references.begin(), node.references.end(), [i](const TriangleReference& lhs, const TriangleReference& rhs) {return lhs.centroid[i] < rhs.centroid[i]; });
 
 			// Precompute our right AABBs
@@ -1719,10 +1716,8 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 			std::reverse(rightPrecomputedBoxes.begin(), rightPrecomputedBoxes.end());
 
 			BuilderNode left;
-			for (uint32_t j = 0; j < node.numReferences - 1; j++) {
-
+			for (int j = 0; j < node.numReferences - 1; j++) {
 				left.Insert(node.references[j]);
-
 				AABB right = rightPrecomputedBoxes[j + 1];
 
 				float sah = left.box.SurfaceArea() * left.numReferences + right.SurfaceArea() * (node.numReferences - left.numReferences);
@@ -1734,7 +1729,7 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 
 					bestRight.numReferences = 0;
 					bestRight.references.clear();
-					for (uint32_t k = j + 1; k < node.references.size(); k++) {
+					for (int k = j + 1; k < node.references.size(); k++) {
 						bestRight.Insert(node.references[k]);
 					}
 				}
@@ -1765,7 +1760,7 @@ AABB Overlap(const AABB& lhs, const AABB& rhs) {
 }
 
 // Intersection of 2 1D lines
-TriangleReference ClipReference(const TriangleReference& ref, uint32_t axis, float lower, float upper) {
+TriangleReference ClipReference(const TriangleReference& ref, int axis, float lower, float upper) {
 	TriangleReference clipped = ref;
 	clipped.box.min[axis] = max(clipped.box.min[axis], lower);
 	clipped.box.max[axis] = min(clipped.box.max[axis], upper);
@@ -1818,14 +1813,14 @@ void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& 
 
 }
 
-uint32_t numLeafReferences = 0;
-uint32_t numLeafs = 0;
-uint32_t depthSum = 0;
-std::vector<uint32_t> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode* root) {
-	uint32_t id = 0;
+int numLeafReferences = 0;
+int numLeafs = 0;
+int depthSum = 0;
+std::vector<int> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode* root) {
+	int id = 0;
 	root->id = id++;
 	// The first node we need to process is the root
-	std::vector<uint32_t> references;
+	std::vector<int> references;
 	std::stack<BuilderNode*> unprocessedSubtrees;
 	unprocessedSubtrees.push(root);
 
