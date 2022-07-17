@@ -3,6 +3,11 @@
 
 AABB::AABB(void) : min(FLT_MAX), max(-FLT_MAX) {}
 
+void AABB::Reset() {
+	AABB clear;
+	*this = clear;
+}
+
 void AABB::ExtendMax(const glm::vec3& Val) {
 	max = glm::max(max, Val);
 }
@@ -16,7 +21,7 @@ void AABB::Extend(const glm::vec3& Pos) {
 	ExtendMin(Pos);
 }
 
-float AABB::SurfaceArea(void) {
+float AABB::SurfaceArea(void) const {
 	/*
 	An AABB is really just a fancy way to say "rectangular prism" (although with axis alignment restrictions, unless if it was an OBB)
 	First let's define side lengths of a rectangular prism
@@ -56,7 +61,7 @@ float AABB::SurfaceArea(void) {
 }
 
 // Taken from madman's blog. Seriously, that guy has some really good stuff on BVHs
-float AABB::SurfaceAreaHalf(void) {
+float AABB::SurfaceAreaHalf(void) const {
 	glm::vec3 SideLengths = max - min;
 
 	return
@@ -94,7 +99,7 @@ Area =
 */
 
 // AABB test by madmann
-bool AABB::Intersect(const Ray& iray, HitInfo& hit, vec2& distances) {
+bool AABB::Intersect(const Ray& iray, HitInfo& hit, vec2& distances) const {
 	vec3 t_node_min = min * iray.direction + iray.origin;
 	vec3 t_node_max = max * iray.direction + iray.origin;
 
@@ -108,11 +113,26 @@ bool AABB::Intersect(const Ray& iray, HitInfo& hit, vec2& distances) {
 }
 
 
-bool AABB::Intersect(const Ray& iray, HitInfo& hit) {
+bool AABB::Intersect(const Ray& iray, HitInfo& hit) const {
 	vec2 junk;
 	return Intersect(iray, hit, junk);
 }
 
-vec3 AABB::Center() {
+vec3 AABB::Center() const {
 	return (min + max) * 0.5f;
+}
+
+bool AABB::operator==(const AABB& other) {
+	return (
+		min.x == other.min.x &&
+		min.y == other.min.y &&
+		min.z == other.min.z &&
+		max.x == other.max.x &&
+		max.y == other.max.y &&
+		max.z == other.max.z
+	);
+}
+
+bool AABB::operator!=(const AABB& other) {
+	return !(*this == other);
 }

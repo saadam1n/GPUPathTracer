@@ -15,14 +15,19 @@ struct AABB : public Hittable {
 	void Extend(const glm::vec3& Pos);
 	void Extend(const AABB& BBox);
 
-	vec3 Center();
+	vec3 Center() const;
 
-	float SurfaceArea(void);
-	float SurfaceAreaHalf(void);
+	float SurfaceArea(void) const;
+	float SurfaceAreaHalf(void) const;
+
+	void Reset();
 
 	glm::vec3 min;
 	glm::vec3 max;
 
-	bool Intersect(const Ray& ray, HitInfo& hit);
-	bool Intersect(const Ray& ray, HitInfo& hit, vec2& distances);
+	bool Intersect(const Ray& ray, HitInfo& hit) const;
+	bool Intersect(const Ray& ray, HitInfo& hit, vec2& distances) const;
+
+	bool operator==(const AABB& other);
+	bool operator!=(const AABB& other);
 };
