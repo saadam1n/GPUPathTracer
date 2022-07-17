@@ -84,7 +84,7 @@ So this wrapper function only takes care of creating a material instance using g
 Now that I think about it, this is sort of like a constructor
 */
 MaterialInstance CreateMatInstance(std::vector<Texture*>& textures, const std::string& folder, const vec3& albedoCol, const std::string& albedoTex, const vec3& emissive, float roughness, float metallic) {
-    std::cout << "before " << glGetError() << " for path " << albedoTex << '\n';
+    //std::cout << "before " << glGetError() << " for path " << albedoTex << '\n';
 
     MaterialInstance material;
 
@@ -109,7 +109,7 @@ MaterialInstance CreateMatInstance(std::vector<Texture*>& textures, const std::s
     material.isEmissive = (emissive.x + emissive.y + emissive.z > 1e-5f);
     material.emission = emissive; // some materials weirdly are being lights when the .mtl files say they aren't
 
-    std::cout << "after " << glGetError() << '\n';
+    //std::cout << "after " << glGetError() << '\n';
 
     textures.push_back(albedo);
     textures.push_back(matprop);
@@ -169,7 +169,7 @@ void LoadOBJ(const std::string& path, const std::string& folder, std::vector<Ver
             metallic = 0.0f;
         }
 
-        std::cout << mtl.name << " : " << mtl.emission[0] << '\n';
+        //std::cout << mtl.name << " : " << mtl.emission[0] << '\n';
 
         gpu_materials.push_back(CreateMatInstance(textures, folder, create_vec3(mtl.diffuse), mtl.diffuse_texname, create_vec3(mtl.emission), beckmann_roughness, metallic));
     }

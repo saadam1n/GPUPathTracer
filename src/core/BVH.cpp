@@ -1552,7 +1552,8 @@ inline Split FindBestSplit(const std::vector<TriangleCentroid>& Centroids, const
 
 constexpr int kNumBins = 8;
 int ComputeBinID(float c, float k0, float k1) {
-	int unbounded = (int)(k1 * (c + k0));
+	float proj = k1 * (c + k0);
+	int unbounded = (int)proj;
 	return clamp(unbounded, 0, (int)kNumBins - 1);
 }
 
@@ -1754,7 +1755,6 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 					}
 				}
 			}
-
 		}
 	}
 }
@@ -1789,8 +1789,10 @@ TriangleReference ClipReference(const TriangleReference& ref, int axis, float lo
 }
 
 void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& bestSah, const BuilderNode& node) {
-
 	/*
+	TODO: find out why I am not getting a performance boost large as advertised in Stich at al 
+	TODO: optimize construction
+
 	To do spatial splits and have an easy time avoiding reference duplication within a node, we need to maintain 2 counters in each of our bins:
 	1. The min counter, and
 	2. The max counter
@@ -1819,18 +1821,146 @@ void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& 
 	We then sweep over these bins instead over all references and find the cheapest split according to its SAH value. Once we have found it, we generete the split by inputting references into their respective bins
 	The authors of the SBVH paper refer to sweeping and binning in this regard as object partioning
 
-	The authors of the SBVH paper also observed that object partioning suffers from the same problem of non-uniformally tesselated geometry 
-	Non-uniformly tesselated geometry is when you have a few large triangles and many small triangles to process in a given split. 
+	The authors of the SBVH paper also observed that object partioning suffers from the same problem of non-uniformally tesselated geometry
+	Non-uniformly tesselated geometry is when you have a few large triangles and many small triangles to process in a given split.
 	The issue here is that the few big triangles pose an issue when it comes time to build hte AABBs, resulting in horrible SAH
 
 	A workaround that the authors proposed is to split the reference into two parts: one behind the split and one ahead of it
-	This way the big triangles will not impact our BVH construction. 
+	This way the big triangles will not impact our BVH construction.
 
-	To implement this, 
+	To implement this, we first have to initial our bins with spatially split references. We then iterate over the possible combinations of splits and choose the best one. We then subsdivide the split
 
 
 	*/
 
+	// Shevstov et al. 2007 and Stich et al. 200?
+	struct MinMaxBin {
+		AABB box; // Like regular BVH binning, we keep track of our bounds [Wald 2007]
+		int minReferences; // Referred to as "entry" in Stich et al 
+		int maxReferences; // Referred to as "exit" in Stich et al
+		MinMaxBin() : minReferences(0), maxReferences(0) {}
+	};
+
+	int nR, nL;
+	AABB bL, bR;
+	// Although we consider each axis for the split, we can speed things up by considering the longest axis only
+	for (int i = 0; i < 3; i++) {
+		// Extents of our parent node's box, which we will subdivide in the binning process
+		float minBox = node.box.min[i];
+		float maxBox = node.box.max[i];
+		if (minBox == maxBox) { // Prevent binning on a flat axis
+			continue;
+		}
+
+		// Precalculate binning information (see Wald 2007, Section 3.3)
+		float k0 = -minBox;
+		float k1 = kNumBins / (maxBox - minBox);
+		float binWidth = (maxBox - minBox) / kNumBins;
+		// Iterate through all references
+		MinMaxBin bins[kNumBins]; // TODO: use a different number of bins for spatial splits
+
+		int sMin = 0, sCen = 0, sMax = 0;
+		for (const auto& ref : node.references) {
+			// Find our min and max bins
+			int minID = ComputeBinID(ref.box.min[i], k0, k1);
+			int maxID = ComputeBinID(ref.box.max[i], k0, k1);
+			sMin += minID;
+			sCen += ComputeBinID(ref.centroid[i], k0, k1);
+			sMax += maxID;
+			// Increment to mark our reference's entry and exit
+			bins[minID].minReferences++;
+			bins[maxID].maxReferences++;
+			// For each bin in [b_min, b_max], we need to extend it by the clipped box
+			for (int j = minID; j <= maxID; j++) {
+				// Calculate how far our bins will be restricted
+				float lowerPlane = minBox + binWidth * j;
+				float upperPlane = minBox + binWidth * (j + 1);
+				// Create our clipped AABB
+				AABB clipped = ref.box;
+				clipped.min[i] = max(clipped.min[i], lowerPlane);
+				clipped.max[i] = min(clipped.max[i], upperPlane);
+				// Extend our bin
+				bins[j].box.Extend(clipped);
+			}
+		}
+
+		// Now that we have our bins, let's consider each spatial split
+		for (int j = 1; j < kNumBins; j++) {
+			BuilderNode left, right;
+
+			// Build our left node
+			for (int k = 0; k < j; k++) {
+				left.box.Extend(bins[k].box);
+				left.numReferences += bins[k].minReferences;
+			}
+
+			// Build our right node
+			for (int k = j; k < kNumBins; k++) {
+				right.box.Extend(bins[k].box);
+				right.numReferences += bins[k].maxReferences;
+			}
+
+			// Update our split if it is better
+			float sah = left.ComputeSAH() + right.ComputeSAH();
+			if (sah < bestSah) {
+				bestSah = sah;
+
+				nL = left.numReferences;
+				nR = right.numReferences;
+
+				bL = left.box;
+				bR = right.box;
+
+				bestLeft.Reset();
+				bestRight.Reset();
+
+				float split = minBox + binWidth * j;
+				//std::cout << j << '\n';
+				for (const auto& ref : node.references) {
+					// Since we binned using bin IDs, we must also subdivide using bin IDs to prevent some sort of weirdness
+					int minID = ComputeBinID(ref.box.min[i], k0, k1);
+					int maxID = ComputeBinID(ref.box.max[i], k0, k1);
+					// Determine whether we need to split the reference or not
+					if (minID < j && maxID >= j) {
+						// Our reference goes through the split and therefore needs to be split
+						// However, we can try unsplitting it instead if it is a better method (see Stich et al, Section 4.4)
+
+						AABB extendL = bL;
+						AABB extendR = bR;
+
+						extendL.Extend(ref.box);
+						extendR.Extend(ref.box);
+
+						float unsplitL = extendL.SurfaceArea() * nL + bR.SurfaceArea() * (nR - 1);
+						float unsplitR = bR.SurfaceArea() * (nL - 1) + extendR.SurfaceArea() * nR;
+
+						if (unsplitL < bestSah && unsplitL < unsplitR) {
+							bestLeft.Insert(ref);
+						}
+						else if (unsplitR < bestSah && unsplitR < unsplitL) {
+							bestRight.Insert(ref);
+						}
+						else {
+							auto leftRef = ClipReference(ref, i, -FLT_MAX, split);
+							bestLeft.Insert(leftRef);
+
+							auto rightRef = ClipReference(ref, i, split, FLT_MAX);
+							bestRight.Insert(rightRef);
+						}
+					}
+					else {
+						// Our reference does not go through the split and therefore can be inserted as is into on child only
+						if (minID < j) {
+							bestLeft.Insert(ref); // Choose the left child
+						}
+						else {
+							bestRight.Insert(ref); // Choose the right child
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 int numLeafReferences = 0;
@@ -1854,12 +1984,12 @@ std::vector<int> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode*
 		unprocessedSubtrees.pop();
 		//std::cout << node.depth << '\t';
 
-		if (node.depth > 128) {
+		if (node.depth > 48) {
 			std::cout << "Tree too deep!\n";
 			exit(-1);
 		}
 
-		if (node.depth > 50) {
+		if (node.depth > 32) {
 			DebugNode(node, "deep tree alert");
 		}
 
@@ -1874,10 +2004,8 @@ std::vector<int> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode*
 		overlap.max = min(bestLeft.box.max, bestRight.box.max);
 
 		if (overlap.SurfaceArea() > spatialInefficiencyThreshold) {
+			FindBestSpatialSplit(bestLeft, bestRight, bestSah, node);
 		}
-
-		//FindBestSpatialSplit(bestLeft, bestRight, bestSah, node);
-
 
 		//if(bestSah != FLT_MAX) 
 		//std::cout << node.depth << '\t' << bestSah / (bestLeft.ComputeSAH() + bestRight.ComputeSAH()) - 1.0 << '\n';
