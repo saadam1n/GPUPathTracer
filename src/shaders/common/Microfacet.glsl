@@ -163,7 +163,7 @@ float ProbabilityDensityDirection(inout MaterialInstance material, in SurfaceInt
     float specularPmf = 1.0f - diffusePmf;
     float pdfDiffuse = diffusePmf * ProbabilityDensityCosine(interaction);
     float pdfSpecular = specularPmf * ProbabilityDensityMicrofacet(material, interaction);
-    float pdf = pdfDiffuse / MISWeight(pdfDiffuse, pdfSpecular);
+    float pdf = (pdfDiffuse + pdfSpecular);
     return pdf;
 }
 

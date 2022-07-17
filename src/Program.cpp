@@ -22,7 +22,7 @@ uint32_t Width = 1280;
 uint32_t Height = 720;
 
 // Camera params 
-constexpr float kCameraSetting = 0.01f;
+constexpr float kCameraSetting = 1.01f;
 
 constexpr float CameraSpeed = 2000.000f * 0.5f * kCameraSetting;
 constexpr float CameraSensitivity = 0.001f;
@@ -65,9 +65,11 @@ int main(int argc, char** argv) {
 	Window.SetInputCallback(MouseCallback);
 
 	Renderer* renderer = new Renderer;
-	renderer->Initialize(&Window, "res/breakfast_room/breakfast_room.obj", "GENERATE COLOR WHITE"); // // salle_de_bain.obj //res/sky/ibl/NarrowPath_3k.hdr // Topanga_Forest_B_3k
-	camera.SetPosition(vec3(-4.90816927, 3.45465946f, 2.58675551));
-	camera.SetRotation(vec3(1.09920430, -0.0669997707, 0.0f));
+	renderer->Initialize(&Window, "res/conference/conference.obj", "GENERATE COLOR WHITE"); // // salle_de_bain.obj //res/sky/ibl/NarrowPath_3k.hdr // Topanga_Forest_B_3k
+	//camera.SetPosition(vec3(-4.90816927, 3.45465946f, 2.58675551));
+	//camera.SetRotation(vec3(1.09920430, -0.0669997707, 0.0f));
+	camera.SetPosition(vec3(-543.169373, 392.132965, -799.786865));
+	camera.SetRotation(vec3(2.11920309, -0.0949998572, 0.0f));
 	//camera.SetPosition(glm::vec3(6.0f, 2.0f, 0.0f));
 	//camera.SetRotation(glm::vec3(glm::radians(-90.0f), 0.0f, 0.0f));
 	//camera.SetPosition(glm::vec3(-0.25f, 2.79f, 6.0f));

@@ -36,6 +36,7 @@ Vertex RandomLightVertex() {
     vec2 data;
 
     // a is lower bound, b is upper bound
+    #define BINARY_SEARCH
     #ifdef BINARY_SEARCH
     // Until I get this working
     int a = 0, b = textureSize(lightTex) - 1;
@@ -105,6 +106,7 @@ Vertex RandomSunVertex(in Vertex vertex) {
     return sunVertex;
 }
 
+// TODO: rewrite MIS
 Ray GenerateLightSample(in Vertex vertex, in MaterialInstance material, in SurfaceInteraction interaction, out HitInfo lightHit, out float lightPdf, in vec3 throughput, out vec3 lightThroughput, out uint lightMatID) { 
     Vertex lightVertex;
 
@@ -130,10 +132,10 @@ Ray GenerateLightSample(in Vertex vertex, in MaterialInstance material, in Surfa
     float radius = distance(lightVertex.Position, vertex.Position); 
     vec3 lightDir = normalize(lightVertex.Position - vertex.Position); 
     SetIncomingDirection(interaction, lightDir);
-    float bouncePdf = ProbabilityDensityDirection(material, interaction) * avdot(lightVertex.Normal, -lightDir) / (radius * radius); // Seach veach 1995, eq 9
-    lightThroughput = throughput * ComputeBSDF(material, interaction) * interaction.ndi * avdot(lightVertex.Normal, -lightDir) * MISWeight(lightPdf, bouncePdf) / (lightPdf * radius * radius);
+    float bouncePdf = ProbabilityDensityDirection(material, interaction) * nndot(lightVertex.Normal, -lightDir) / (radius * radius); // Seach veach 1995, eq 9
+    lightThroughput = throughput * ComputeBSDF(material, interaction) * interaction.ndi * nndot(lightVertex.Normal, -lightDir) * MISWeight(lightPdf, bouncePdf) / (lightPdf * radius * radius);
               
-    lightRay.origin = vertex.Position + 0.001f * lightDir;
+    lightRay.origin = vertex.Position + 0.001f * vertex.Normal;
     lightRay.direction = lightDir;
 
     lightMatID = lightVertex.MatID;
@@ -178,6 +180,9 @@ vec3 PathTrace(in ivec2 pixel) {
         hit.di.x = 1e20f;
         bool miss = !IfIfClosestHit(ray, hit);
 
+        //contribution = debugColor / 1000.0f;
+        //break;
+
         vertex = GetInterpolatedVertex(ray, hit);
         if(miss) {
             vertex.MatID = 0;
@@ -197,7 +202,7 @@ vec3 PathTrace(in ivec2 pixel) {
         } else if(i != 0){
             float dist = distance(lastPosition, vertex.Position);
             bxdfPdf *= nndot(vertex.Normal, viewDir) / (dist * dist);
-            indirectDirectThroughput = throughput * MISWeight(bxdfPdf, neePdf);
+            indirectDirectThroughput = throughput;// * MISWeight(bxdfPdf, neePdf);
         }
         contribution += indirectDirectThroughput * material.emission;
 
@@ -214,10 +219,10 @@ vec3 PathTrace(in ivec2 pixel) {
             float lightPdf;
 
             Ray lightRay = GenerateLightSample(vertex, material, interaction, lightHit, lightPdf, throughput, lightThroughput, lightMatID);     
-            if(!StackTraversalAnyHit(lightRay, lightHit)) {
+            if(!IfIfAnyHit(lightRay, lightHit)) {
                 contribution += lightThroughput * materialInstance[lightMatID + 1].xyz;
             }
-
+             
         }
 
         ray.direction = normalize(GenerateImportanceSample(material, interaction, bxdfPdf));

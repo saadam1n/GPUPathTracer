@@ -37,7 +37,7 @@ struct NodeSerialized : public Hittable {
 
 	union {
 		uint32_t firstChild; // 1 bit leaf flag
-		int32_t triangleRange; // 1 bit leaf flag, 27 bits triangle array offset, 4 bits triangle subarray length (15 triangles max per leaf)
+		uint32_t triangleRange; // 1 bit leaf flag, 27 bits triangle array offset, 4 bits triangle subarray length (15 triangles max per leaf)
 	};
 
 	int32_t parent;

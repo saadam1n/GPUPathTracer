@@ -510,14 +510,6 @@ void BoundingVolumeHierarchy::SweepSAH(std::vector<CompactTriangle>& triangles) 
 	//ConstructionTimer.DebugTime();
 	ConstructionTimer.Begin();
 
-	// Now directly subsitute the triangles according to the indices
-	std::vector<CompactTriangle> reorder;
-	reorder.reserve(triangles.size());
-	for (const int32_t next : LeafContentBuffer) {
-		reorder.push_back(triangles[next]);
-	}
-	triangles = reorder;
-
 	nodesVec = ProcessedNodes;
 
 	// This is very unsafe and super bad according to some C++ programmers but we live on the edge and we want the edge of performance
@@ -543,6 +535,12 @@ void BoundingVolumeHierarchy::SweepSAH(std::vector<CompactTriangle>& triangles) 
 
 	nodesTex.CreateBinding();
 	nodesTex.SelectBuffer(&nodesBuf, GL_RGBA32F);
+
+	referenceBuf.CreateBinding(BUFFER_TARGET_ARRAY);
+	referenceBuf.UploadData(LeafContentBuffer, GL_STATIC_DRAW);
+
+	referenceTex.CreateBinding();
+	referenceTex.SelectBuffer(&referenceBuf, GL_R32F);
 
 	ConstructionTimer.End();
 	ConstructionTimer.DebugTime();
@@ -1552,7 +1550,7 @@ inline Split FindBestSplit(const std::vector<TriangleCentroid>& Centroids, const
 
 */
 
-constexpr uint32_t kNumBins = 256;
+constexpr uint32_t kNumBins = 16;
 int ComputeBin(float x, float offset, float range) {
 	constexpr float bias = 1.0f - 1e-6f;
 	return (int)(kNumBins * bias * (x - offset) / range);
@@ -1609,7 +1607,7 @@ struct BuilderNode : public ReferenceContainer {
 };
 
 void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& bestSah, BuilderNode& node) {
-	if (node.references.size() > kNumBins) {
+	if (true || node.references.size() > kNumBins) {
 		//std::cout << "Binning\n";
 		bool betterSplitFound = false;
 		uint32_t bestBin = 1, bestAxis = 0;
@@ -1621,21 +1619,31 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 			for (const auto& ref : node.references) {
 				int binID = ComputeBin(ref.centroid[i], offset, range);
 				bins[i][binID].Insert(ref);
+				if (binID < 0 || binID >= kNumBins) {
+					exit(-1);
+				}
 			}
 
 			// For each bin, there are k - 1 splits: [0, i) for the left and [i, kNumBins) for the right
+			BuilderNode left;
+
+			// Precompute our right AABBs
+			AABB rightBoxBuilder;
+			std::vector<AABB> rightPrecomputedBoxes;
+			rightPrecomputedBoxes.reserve(kNumBins);
+			for (int j = kNumBins - 1; j >= 1; j--) {
+				rightBoxBuilder.Extend(bins[i][j].box);
+				rightPrecomputedBoxes.push_back(rightBoxBuilder);
+			}
+
 			for (int j = 1; j < kNumBins; j++) {
 
-				BuilderNode left, right;
-				for (int k = 0; k < j; k++) {
-					left.Consume(bins[i][k]);
-					left.numReferences += bins[i][k].numReferences;
-				}
+				left.Consume(bins[i][j - 1]);
+				left.numReferences += bins[i][j - 1].numReferences;
 
-				for (int k = j; k < kNumBins; k++) {
-					right.Consume(bins[i][k]);
-					right.numReferences += bins[i][k].numReferences;
-				}
+				BuilderNode right;
+				right.box = rightPrecomputedBoxes[kNumBins - j - 1];
+				right.numReferences = node.numReferences - left.numReferences;
 
 				float sah = left.ComputeSAH() + right.ComputeSAH();
 				if (sah < bestSah) {
@@ -1898,7 +1906,9 @@ void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& 
 	}
 }
 
-int numRefDup = 0;
+uint32_t numLeafReferences = 0;
+uint32_t numLeafs = 0;
+uint32_t depthSum = 0;
 std::vector<uint32_t> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode* root) {
 	uint32_t id = 0;
 	root->id = id++;
@@ -1926,7 +1936,7 @@ std::vector<uint32_t> BuildSBVH(std::vector<CompactTriangle>& triangles, Builder
 		overlap.max = min(bestLeft.box.max, bestRight.box.max);
 
 		if (overlap.SurfaceArea() > spatialInefficiencyThreshold) {
-			FindBestSpatialSplit(bestLeft, bestRight, bestSah, node);
+			//FindBestSpatialSplit(bestLeft, bestRight, bestSah, node);
 		}
 
 
@@ -1960,31 +1970,14 @@ std::vector<uint32_t> BuildSBVH(std::vector<CompactTriangle>& triangles, Builder
 				references.push_back(ref.index);
 			}
 
-			numRefDup += node.numReferences;
+			numLeafReferences += node.numReferences;
+			numLeafs++;
+			depthSum += node.depth;
 		}
 	}
 
 	return references;
 }
-
-/*
-			// Spatial partioning
-			{
-				// Initialize our bins again, but use spatial partioning.
-				// To do this, we must maintain two types of bins: entry and exit bins
-				// Entry bins are where triangles begin, and exit bins are where they end
-				//
-				Bin bins[kNumBins];
-				float offset = node.box.Min[i];
-				float range = max(node.box.Max[i] - offset, 1e-5f);
-				for (const auto& ref : node.references) {
-					float projection = (ref.centroid[i] - offset) / range;
-					int binID = ComputeBin(ref.centroid[i], offset, range);
-					bins[binID].Insert(ref);
-				}
-
-
-			}*/
 
 void BoundingVolumeHierarchy::BinnedSAH(std::vector<CompactTriangle>& triangles) {
 	// Build the BVH over references
@@ -2005,7 +1998,30 @@ void BoundingVolumeHierarchy::BinnedSAH(std::vector<CompactTriangle>& triangles)
 	root.depth = 0;
 	auto references = BuildSBVH(triangles, &root);
 
-	std::cout << "Reference duplication is " << (float)numRefDup / root.numReferences << "%\n";
+	std::cout << "Reference duplication is " << (float)numLeafReferences / root.numReferences << "%\n";
+	std::cout << "Average refs per leaf is " << (float)numLeafReferences / numLeafs << " refs\n";
+	std::cout << "Average depth of leaf is " << (float)depthSum / numLeafs << '\n';
+
+	/*
+	Recorded stats using SBVH on breakfast room scene:
+		Reference duplication is 1.07023%
+		Average refs per leaf is 1.03309 refs
+		Average depth of leaf is 21.591
+		Average FPS is 14-ish
+	SBVH without fix to deep trees:
+		Reference duplication is 1.09782%
+		Average refs per leaf is 1.03572 refs
+		Average depth of leaf is 21.6914
+		Average FPS is 14-ish (no change from deep tree fix)
+	Only binned BVH as in Wald 2007
+		Reference duplication is 1%
+		Average refs per leaf is 1.02927 refs
+		Average depth of leaf is 20.5308
+		Average FPS is 17, for some odd reason higher than SBVH
+
+	deep-tree, conf room: 45 FPS
+	bin const, conf room:
+	*/
 
 	// Serealize our nodes
 	std::vector<BuilderNode*> allocationRegistry;

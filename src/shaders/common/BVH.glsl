@@ -625,7 +625,7 @@ bool IfIfClosestHit(in Ray ray, inout HitInfo intersection) {
 
 	bool result = false;
 	while (true) {
-		//debugColor++;
+		debugColor++;
 		if (!IsLeafVal(current)) {
 			// Texture reads right after the other for best texture cache access
 			BVHNode child0 = GetNode(current);
@@ -679,6 +679,57 @@ bool IfIfClosestHit(in Ray ray, inout HitInfo intersection) {
 	}
 
 	return result;
+}
+
+bool IfIfAnyHit(in Ray ray, inout HitInfo intersection) {
+	Ray iray;
+	iray.direction = 1.0f / ray.direction;
+	iray.origin = -ray.origin * iray.direction;
+
+	int current = FirstChildOf(GetNode(0));
+
+	int stack[BVH_STACK_SIZE];
+	int next = 0;
+
+	bool result = false;
+	while (true) {
+		if (!IsLeafVal(current)) {
+			// Texture reads right after the other for best texture cache access
+			BVHNode child0 = GetNode(current);
+			BVHNode child1 = GetNode(current + 1);
+
+			// Process each node indiviaully 
+			int subtree0 = FirstChildOf(child0);
+			bool hit0;
+			float distance0 = IntersectNodeFast(child0, iray, intersection, hit0);
+
+			int subtree1 = FirstChildOf(child1);
+			bool hit1;
+			float distance1 = IntersectNodeFast(child1, iray, intersection, hit1);
+
+			if (hit0 && hit1) {
+				// Sort by distance, GPUs seem to like swapping the order
+				current = subtree0;
+				ififPush(subtree1);
+			}
+			else if (hit0 ^^ hit1) { // We do not need to use a xor here, but I think xor is faster since it is just like adding
+				current = (hit0 ? subtree0 : subtree1);
+			}
+			else {
+				ififPop();
+			}
+		}
+		if (IsLeafVal(current)) {
+			IntersectLeaf(current, ray, intersection, result);
+			if (result) {
+				return true;
+			}
+
+			ififPop();
+		}
+	}
+
+	return false;
 }
 
 const uint sentinelBit = (1 << 31);
