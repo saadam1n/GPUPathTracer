@@ -1623,7 +1623,7 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 		//std::cout << "Binning\n";
 		bool betterSplitFound = false;
 		int bestBin = 1, bestAxis = 0;
-		Bin bins[3][kNumBins]; // TODO: move to stack
+		std::vector<Bin[kNumBins]> bins(3);
 		for (int i = 0; i < 3; i++) {
 			// Initialize our bins
 			float minBox = node.box.min[i];
