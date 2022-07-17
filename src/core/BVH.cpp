@@ -2007,11 +2007,6 @@ std::vector<int> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode*
 			FindBestSpatialSplit(bestLeft, bestRight, bestSah, node);
 		}
 
-		//if(bestSah != FLT_MAX) 
-		//std::cout << node.depth << '\t' << bestSah / (bestLeft.ComputeSAH() + bestRight.ComputeSAH()) - 1.0 << '\n';
-		//std::cout << bestLeft.box.SurfaceArea() << " vs1 " << node.box.SurfaceArea() << '\n';
-		//std::cout << bestLeft.numReferences << " vs2 " << node.numReferences << '\n';
-		//std::cout << bestLeft.box.SurfaceArea() * bestLeft.numReferences << " vs3 " << node.box.SurfaceArea() * node.numReferences << '\n';
 		// Subdivide our node if it is efficient to do so
 		if (bestSah < node.ComputeSAH()) {
 			node.children = new BuilderNode[2];
@@ -2113,8 +2108,15 @@ void BoundingVolumeHierarchy::BuildBinnedSpatial(std::vector<CompactTriangle>& t
 		if (buildOutput.children != nullptr) {
 			gpuReadableNode.firstChild = serealizedNodes.size() + bfs.size() + 1;
 
-			bfs.push(&buildOutput.children[0]);
-			bfs.push(&buildOutput.children[1]);
+			// Push box with largest surface area first
+			if (buildOutput.children[0].box.SurfaceArea() < buildOutput.children[1].box.SurfaceArea()) {
+				bfs.push(&buildOutput.children[1]);
+				bfs.push(&buildOutput.children[0]);
+			}
+			else {
+				bfs.push(&buildOutput.children[0]);
+				bfs.push(&buildOutput.children[1]);
+			}
 
 			allocationRegistry.push_back(buildOutput.children);
 		}
