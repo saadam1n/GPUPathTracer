@@ -1615,38 +1615,38 @@ struct BuilderNode : public ReferenceContainer {
 };
 
 void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& bestSah, BuilderNode& node) {
-	if (node.box.SurfaceArea() == 0.0f) {
-		exit(-1);
-	}
-	const float elipsion = 1e-5f;
+	// Check if it is more optimal to do sweeping or binning
 	if (node.references.size() > kNumBins) {
-		//std::cout << "Binning\n";
+
 		bool betterSplitFound = false;
 		int bestBin = 1, bestAxis = 0;
 		std::vector<Bin[kNumBins]> bins(3);
+
+		// Consider each axis
 		for (int i = 0; i < 3; i++) {
-			// Initialize our bins
+
+			// Extents of our parent node's box, which we will subdivide in the binning process
 			float minBox = node.box.min[i];
 			float maxBox = node.box.max[i];
-			if (minBox == maxBox) {
+			if (minBox == maxBox) { // Prevent binning on a flat axis
 				continue;
 			}
+
+			// Precalculate binning information (see Wald 2007, Section 3.3)
 			float k0 = -minBox;
 			float k1 = kNumBins / (maxBox - minBox);
+
+			// Initialize our bins
 			for (const auto& ref : node.references) {
+				// Find the correct bin and insert the reference
 				int binID = ComputeBinID(ref.centroid[i], k0, k1);
-				if (binID < 0 || binID >= kNumBins) {
-					std::cout << "Bin out of bounds: " << binID << '\n';
-					exit(-1);
-				}
 				bins[i][binID].Insert(ref);
 
 			}
 
-			// For each bin, there are k - 1 splits: [0, i) for the left and [i, kNumBins) for the right
-			BuilderNode left;
+			// For each bin, there are k - 1 splits: [0, i) for the left and [i, kNumBins) for the right. Precompuation and iterative extension allows us to have O(n) complexity where n is number of bins
 
-			// Precompute our right AABBs
+			// Precompute our right AABBs 
 			AABB rightBoxBuilder;
 			std::vector<AABB> rightPrecomputedBoxes;
 			rightPrecomputedBoxes.reserve(kNumBins);
@@ -1655,15 +1655,19 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 				rightPrecomputedBoxes.push_back(rightBoxBuilder);
 			}
 
+			// Loop through all the splits
+			BuilderNode left;
 			for (int j = 1; j < kNumBins; j++) {
-
+				// Iteratively extend the left node
 				left.Consume(bins[i][j - 1]);
 				left.numReferences += bins[i][j - 1].numReferences;
 
+				// Grab our right node from our precomputed information
 				BuilderNode right;
 				right.box = rightPrecomputedBoxes[kNumBins - j - 1];
 				right.numReferences = node.numReferences - left.numReferences;
 
+				// Update our best split if necessary
 				float sah = left.ComputeSAH() + right.ComputeSAH();
 				if (sah < bestSah) {
 					bestLeft = left;
@@ -1676,17 +1680,22 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 			}
 		}
 
+		// If we found a split that improves SAH, then we will actually subdivide using it
 		if (betterSplitFound) {
+			// First, clear any junk information from a worse split
 			bestLeft.Reset();
 			bestRight.Reset();
 
+			// Precompute world-to-bin space mapping variables
 			float minBox = node.box.min[bestAxis];
 			float maxBox = node.box.max[bestAxis];
 			float k0 = -minBox;
 			float k1 = kNumBins / (maxBox - minBox);
-			for (const auto& ref : node.references) {
-				int binID = ComputeBinID(ref.centroid[bestAxis], k0, k1);
 
+			// Loop through all references
+			for (const auto& ref : node.references) {
+				int binID = ComputeBinID(ref.centroid[bestAxis], k0, k1); // Find which bin our reference is in
+				// Insert into appropriate child
 				if (binID < bestBin) {
 					bestLeft.Insert(ref);
 				}
@@ -1698,10 +1707,19 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 		
 	}
 	else if (node.references.size() > 1) {
-		bestLeft.references.reserve(kNumBins);
-		bestRight.references.reserve(kNumBins);
+		// Give that we have a few references, we should sweep instead
 
+		// Clear any junk from beforehand
+		bestLeft.Reset();
+		bestRight.Reset();
+
+		// Reserve the maximum amount of memory we will be using
+		bestLeft.references.reserve(kNumBins - 1);
+		bestRight.references.reserve(kNumBins - 1);
+
+		// Consider each axis
 		for (int i = 0; i < 3; i++) {
+			// Sort each reference according to its centroid on the axis
 			std::sort(node.references.begin(), node.references.end(), [i](const TriangleReference& lhs, const TriangleReference& rhs) {return lhs.centroid[i] < rhs.centroid[i]; });
 
 			// Precompute our right AABBs
@@ -1712,21 +1730,23 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 				rightBoxBuilder.Extend(iter->box);
 				rightPrecomputedBoxes.push_back(rightBoxBuilder);
 			}
-
 			std::reverse(rightPrecomputedBoxes.begin(), rightPrecomputedBoxes.end());
 
+			// Loop through all splits
 			BuilderNode left;
 			for (int j = 0; j < node.numReferences - 1; j++) {
+				// Determine what our nodes look like in this split
 				left.Insert(node.references[j]);
 				AABB right = rightPrecomputedBoxes[j + 1];
 
+				// If we have a better SAH, then subdivide the node
 				float sah = left.box.SurfaceArea() * left.numReferences + right.SurfaceArea() * (node.numReferences - left.numReferences);
-
 				if (sah < bestSah) {
 					bestSah = sah;
 					bestLeft = left;
 					bestRight.box = right;
 
+					// TODO: avoid resubdivision of splits (since we many now subdivide and may later find a better split, so we did useless work now)
 					bestRight.numReferences = 0;
 					bestRight.references.clear();
 					for (int k = j + 1; k < node.references.size(); k++) {
