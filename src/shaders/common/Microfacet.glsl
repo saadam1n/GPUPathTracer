@@ -113,8 +113,9 @@ float GeometricShadowingSmith(inout MaterialInstance material, inout SurfaceInte
     return GeometricShadowingSchlick(material, interaction.ndi) * GeometricShadowingSchlick(material, interaction.ndo);
 }
 
+// TODO: find better nan fix
 float VisibilityGGX(inout MaterialInstance material, inout float ndo) {
-    return 1.0f / (ndo + sqrt(material.roughness2 * (1.0f - material.roughness2) * ndo * ndo));
+    return 1.0f / max(ndo + sqrt(material.roughness2 * (1.0f - material.roughness2) * ndo * ndo), 1e-5f);
 }
 
 float VisibilitySmith(inout MaterialInstance material, inout SurfaceInteraction interaction) {
@@ -172,7 +173,7 @@ float ProbabilityDensityDirection(inout MaterialInstance material, in SurfaceInt
     return pdf;
 }
 
-vec3 GenerateImportanceSample(inout MaterialInstance material, inout SurfaceInteraction interaction, out float pdf) {
+vec3 GenerateImportanceSample(inout MaterialInstance material, inout SurfaceInteraction interaction, out float pdfSample, out float pdfMIS) {
     float diffusePmf = CalcDiffusePmf(material, interaction);
     float specularPmf = 1.0f - diffusePmf;
     // Choose between specular and diffuse based on PDF
@@ -181,14 +182,16 @@ vec3 GenerateImportanceSample(inout MaterialInstance material, inout SurfaceInte
         SetIncomingDirection(interaction, interaction.tbn * ImportanceSampleCosine());
         float pdfDiffuse = diffusePmf * ProbabilityDensityCosine(interaction);
         float pdfSpecular = specularPmf * ProbabilityDensityMicrofacet(material, interaction);
-        pdf = pdfDiffuse / MISWeight(pdfDiffuse, pdfSpecular);
+        pdfSample = pdfDiffuse;
+        pdfMIS = pdfSpecular;
     }
     else {
         // Use specular PDF
         SetMicrofacetDirection(interaction, interaction.tbn * ImportanceSampleMicrofacet(material));
         float pdfDiffuse = diffusePmf * ProbabilityDensityCosine(interaction);
         float pdfSpecular = specularPmf * ProbabilityDensityMicrofacet(material, interaction);
-        pdf = specularPmf * ProbabilityDensityMicrofacet(material, interaction) / MISWeight(pdfSpecular, pdfDiffuse);
+        pdfSample = pdfSpecular;
+        pdfMIS = pdfDiffuse;
     }
     return interaction.incoming;
 }

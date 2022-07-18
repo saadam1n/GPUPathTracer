@@ -58,6 +58,9 @@ Vertex RandomLightVertex() {
     #endif
 
     CompactTriangle triangle = ReadCompactTriangle(fbs(data.y));
+    // Recompute world space points
+    triangle.position1 += triangle.position0;
+    triangle.position2 += triangle.position0;
 
     vec2 r = rand2();
 
@@ -131,8 +134,8 @@ Ray GenerateLightSample(in Vertex vertex, in MaterialInstance material, in Surfa
     float radius = distance(lightVertex.Position, vertex.Position); 
     vec3 lightDir = normalize(lightVertex.Position - vertex.Position); 
     SetIncomingDirection(interaction, lightDir);
-    float bouncePdf = ProbabilityDensityDirection(material, interaction) * nndot(lightVertex.Normal, -lightDir) / (radius * radius); // Seach veach 1995, eq 9
-    lightThroughput = throughput * ComputeBSDF(material, interaction) * interaction.ndi * nndot(lightVertex.Normal, -lightDir) / (lightPdf * radius * radius);
+    float bouncePdf = ProbabilityDensityDirection(material, interaction) * avdot(lightVertex.Normal, -lightDir) / (radius * radius); // Seach veach 1995, eq 9
+    lightThroughput = throughput * ComputeBSDF(material, interaction) * interaction.ndi * avdot(lightVertex.Normal, -lightDir) * MISWeight(lightPdf, bouncePdf) / (lightPdf * radius * radius);
               
     lightRay.origin = vertex.Position + 0.001f * vertex.Normal;
     lightRay.direction = lightDir;
@@ -164,7 +167,7 @@ vec3 PathTrace(in ivec2 pixel) {
     vec3 contribution = vec3(0.0);
 
     Vertex vertex;
-    float bxdfPdf = 1.0;
+    float bxdfPdf0 = 1.0, bxdfPdf1 = 1.0f;
     float neePdf = 0.5f / totalLightArea;
 
     // TODO: clean up variable names
@@ -172,7 +175,7 @@ vec3 PathTrace(in ivec2 pixel) {
     vec3 lastPosition = ray.origin;
 
     // Set max bounce length to an inordinately high number so we (basically) get unbiased results while terminating the few odd rays that run for a lot of bounces without end
-    const int kMaxBounces = 1024;
+    const int kMaxBounces = 64;
     for(int i = 0; i < kMaxBounces; i++) {
         // Intersect the scene
         HitInfo hit;
@@ -180,6 +183,7 @@ vec3 PathTrace(in ivec2 pixel) {
         bool miss = !IfIfClosestHit(ray, hit);
 
         vertex = GetInterpolatedVertex(ray, hit);
+        vertex.Position = vertex.Position + 0.003f * vertex.Normal;
         if(miss) {
             vertex.MatID = 0;
         } 
@@ -197,19 +201,35 @@ vec3 PathTrace(in ivec2 pixel) {
             indirectDirectThroughput = throughput;
         } else if(i != 0){
             float dist = distance(lastPosition, vertex.Position);
-            bxdfPdf *= nndot(vertex.Normal, viewDir) / (dist * dist);
-            indirectDirectThroughput =  throughput;// * MISWeight(bxdfPdf, neePdf);
+            float oldMis = MISWeight(bxdfPdf0, bxdfPdf1);
+            bxdfPdf0 *= 0.5f * avdot(vertex.Normal, viewDir) / (dist * dist);
+            bxdfPdf1 *= 0.5f * avdot(vertex.Normal, viewDir) / (dist * dist);
+            indirectDirectThroughput = (throughput / oldMis) * bxdfPdf0 / (bxdfPdf0 + bxdfPdf1 + neePdf);
         }
         contribution += indirectDirectThroughput * material.emission;
+
+        if(i == 0) {
+            contribution += indirectDirectThroughput * material.emission;
+        }
 
         if(miss) {
             break; 
         }
 
-        ray.direction = GenerateImportanceSample(material, interaction, bxdfPdf);
+        HitInfo lightHit;
+        vec3 lightThroughput;
+        uint lightMatID;
+        float lightPdf;
+
+        Ray lightRay = GenerateLightSample(vertex, material, interaction, lightHit, lightPdf, throughput, lightThroughput, lightMatID);     
+        if(!IfIfAnyHit(lightRay, lightHit)) {
+            contribution += lightThroughput * materialInstance[lightMatID + 1].xyz;
+        }
+
+        ray.direction = GenerateImportanceSample(material, interaction, bxdfPdf0, bxdfPdf1);
 
         // Russian roulette
-        throughput *= ComputeBSDF(material, interaction) * interaction.ndi / bxdfPdf; // We multiply the PDF by 0.5 since we had a 50/50 percent chance of choosing it
+        throughput *= ComputeBSDF(material, interaction) * interaction.ndi * MISWeight(bxdfPdf0, bxdfPdf1) / bxdfPdf0; // We multiply the PDF by 0.5 since we had a 50/50 percent chance of choosing it
         float continuation = min(max(throughput.x, max(throughput.y, throughput.z)), 1.0f);
         if(rand() > continuation) {
             break;
@@ -218,7 +238,7 @@ vec3 PathTrace(in ivec2 pixel) {
 
         viewDir = -ray.direction;
         lastPosition = vertex.Position;
-        ray.origin = vertex.Position + 0.001f * vertex.Normal; // We cannot use the more accurate ray.direction for the bias direction because in some cases the GGX normal vector might reflect into itself
+        ray.origin = vertex.Position; 
     }
 
     freeRNG();

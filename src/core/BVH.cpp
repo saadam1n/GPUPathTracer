@@ -1971,6 +1971,22 @@ void FindBestSplitCanidate(BuilderNode& bestLeft, BuilderNode& bestRight, float&
 	}
 }
 
+/*
+Results were averaged over 20 seconds of rendering of the "conference scene"
+
+Object + spatial splits (low references per leaf):
+Reference duplication is 1.13291%
+Average refs per leaf is 1.02534 refs
+Average depth of leaf is 20.327
+Average FPS was 22.4694
+
+Spatial splits only (high references per leaf):
+Reference duplication is 6.71768%
+Average refs per leaf is 3.14575 refs
+Average depth of leaf is 24.5607
+Average FPS was 22.0281
+*/
+
 int numLeafReferences = 0;
 int numLeafs = 0;
 int depthSum = 0;
