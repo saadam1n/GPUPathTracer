@@ -18,7 +18,7 @@ using namespace glm;
 constexpr float kExposure = 1.68f;
 
 // REFERENCE CPU RENDERER PARAMS
-constexpr uint32_t KNumRefSamples = 2 * 32768;// 8 * 1024;// 32768;
+constexpr uint32_t KNumRefSamples = 1;// 2 * 32768;// 8 * 1024;// 32768;
 constexpr uint32_t kNumWorkers = 6; // 6 worker threads, 1 windows thread, 1 thread as breathing room
 const vec3 sunDir = normalize(vec3(2.0f, 40.0f + 29.0f, 12.0f));
 constexpr float sunAngle = glm::radians(5.0f);
@@ -586,7 +586,7 @@ void Renderer::SaveScreenshot(const std::string& filename) {
 
 
 #define BVH_STACK_SIZE 27
-bool TraverseBVH(Ray ray, HitInfo& intersection, const std::vector<CompactTriangle>& triangles, const std::vector<NodeSerialized>& nodes) {
+bool TraverseBVH(Ray ray, HitInfo& intersection, const std::vector<CompactTriangle>& triangles, const std::vector<NodeSerialized>& nodes, const std::vector<int32_t>& references) {
     Ray iray;
 
     iray.direction = 1.0f / ray.direction;
@@ -612,12 +612,12 @@ bool TraverseBVH(Ray ray, HitInfo& intersection, const std::vector<CompactTriang
         bool hit1 = child1.BoundingBox.Intersect(iray, intersection, distance1);
 
         if (hit0 && child0.triangleRange < 0) {
-            result |= child0.Intersect(ray, intersection, triangles);
+            result |= child0.Intersect(ray, intersection, triangles, references);
             hit0 = false;
         }
 
         if (hit1 && child1.triangleRange < 0) {
-            result |= child1.Intersect(ray, intersection, triangles);
+            result |= child1.Intersect(ray, intersection, triangles, references);
             hit1 = false;
         }
 
@@ -875,7 +875,7 @@ vec3 ComputeTonemapUncharted2(vec3 color) {
 
 void PathTraceImage(
     uint8_t* image, uint32_t x, uint32_t y, const uint32_t w, const uint32_t h, const Camera& camera,
-    const std::vector<CompactTriangle>& triangles, const std::vector<NodeSerialized>& nodes,
+    const std::vector<CompactTriangle>& triangles,  const std::vector<NodeSerialized>& nodes, const std::vector<int32_t>& references,
     const std::vector<MaterialInstance>& materials, const std::vector<Texture*>& textures, uvec4 state
 ) {
     vec3 pixel = vec3(0.0);
@@ -888,7 +888,7 @@ void PathTraceImage(
         while(true) {
             HitInfo closest;
 
-            TraverseBVH(ray, closest, triangles, nodes);
+            TraverseBVH(ray, closest, triangles, nodes, references);
             closest.intersection.matId /= 2; // Not needed for the CPU
 
             if (materials[closest.intersection.matId].isEmissive) {
@@ -983,7 +983,7 @@ void Renderer::RenderReference(const Camera& camera) {
         workers.emplace_back(
             [](
             uint32_t& nextTask, std::mutex& taskMutex, uint8_t* image, const std::vector<ivec2>& pixelTasks, uint32_t w, uint32_t h, const Camera& camera,
-                const std::vector<CompactTriangle>& triangles, const std::vector<NodeSerialized>& nodes,
+                const std::vector<CompactTriangle>& triangles, const std::vector<NodeSerialized>& nodes, const std::vector<int32_t>& references,
                 const std::vector<MaterialInstance>& materials, const std::vector<Texture*>& textures,
                 std::default_random_engine& generator, std::uniform_int_distribution<uint32_t>& distribution
             ) {
@@ -1000,10 +1000,10 @@ void Renderer::RenderReference(const Camera& camera) {
                     if (currentTask >= pixelTasks.size())
                         return;
 
-                    PathTraceImage(image, pixelTasks[currentTask].x, pixelTasks[currentTask].y, w, h, camera, triangles, nodes, materials, textures, state);
+                    PathTraceImage(image, pixelTasks[currentTask].x, pixelTasks[currentTask].y, w, h, camera, triangles, nodes, references, materials, textures, state);
                 }
             },
-            std::ref(nextTask), std::ref(taskMutex), image, std::ref(pixelTasks), viewportWidth, viewportHeight, std::ref(camera), std::ref(scene.triangleVec), std::ref(scene.bvh.nodesVec), std::ref(scene.materialVec), std::ref(scene.textures), std::ref(generator), std::ref(distribution)
+            std::ref(nextTask), std::ref(taskMutex), image, std::ref(pixelTasks), viewportWidth, viewportHeight, std::ref(camera), std::ref(scene.triangleVec), std::ref(scene.bvh.nodesVec), std::ref(scene.bvh.referenceVec), std::ref(scene.materialVec), std::ref(scene.textures), std::ref(generator), std::ref(distribution)
         );
     }
 

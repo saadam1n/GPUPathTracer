@@ -313,11 +313,6 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
             info.area = sqrtf(s * (s - a) * (s - b) * (s - c));
             info.index = i;
 
-            //std::cout << "emitter: " << i << '\n';
-            //std::cout << "material " << materials[triangle.material / 2].emission.x << '\n';
-
-            //std::cout << "IDX: " << Vertices[triplet[0]].position.x << '\n';
-
             emitters.push_back(info);
         }
     }
@@ -333,6 +328,7 @@ void Scene::LoadScene(const std::string& path, TextureCubemap* environment) {
         totalLightArea += cv.area;
         cv.area = totalLightArea;
     }
+    std::cout << "Total emitter area: " << totalLightArea << '\n';
 
     // Precompute MT information; it is always posssible to get the actual positions backa gain using the first vertex
     for (auto& tri : triangles) {

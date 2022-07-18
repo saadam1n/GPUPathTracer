@@ -568,13 +568,19 @@ NodeType NodeSerialized::GetType(void) {
 	return triangleRange < 0 ? NodeType::LEAF : NodeType::NODE;
 }
 
-bool NodeSerialized::Intersect(const Ray& ray, HitInfo& hit, const std::vector<CompactTriangle>& triangles) {
-	int i = triangleRange;
-	int j = i - triangleRange;
+void UnpackTriangleRange(int range, int& i, int& j) {
+	range = -range;
+	i = range >> 4;
+	j = i + (range & 15);
+}
+
+bool NodeSerialized::Intersect(const Ray& ray, HitInfo& hit, const std::vector<CompactTriangle>& triangles, const std::vector<int32_t>& references) {
+	int i, j;
+	UnpackTriangleRange(triangleRange, i, j);
 
 	bool result = false;
 	for (int k = i; k < j; k++) {
-		auto triangle = triangles[k];
+		auto triangle = triangles[references[k]];
 		result |= triangle.Intersect(ray, hit);
 	}
 
@@ -2129,25 +2135,26 @@ void BoundingVolumeHierarchy::BuildBinnedSpatial(std::vector<CompactTriangle>& t
 	serealizedNodes = BlockingOptimizedCache(serealizedNodes);
 
 	// Reorder nodes for better memory access on the GPU
+	struct NewLayout {
+		vec3 min;
+		int data0;
+		vec3 max;
+		int data1;
+	};
+	std::vector<NewLayout> nodeMemory;
 	for (NodeSerialized& node : serealizedNodes) {
-		struct NewLayout {
-			vec3 min;
-			int data0;
-			vec3 max;
-			int data1;
-		} temp;
+		NewLayout temp;
 
 		temp.min = node.BoundingBox.min;
 		temp.data0 = node.firstChild;
 		temp.max = node.BoundingBox.max;
 		temp.data1 = node.secondChild;
 
-		NewLayout* ptr = (NewLayout*)&node;
-		*ptr = temp;
+		nodeMemory.push_back(temp);
 	}
 
 	nodesBuf.CreateBinding(BUFFER_TARGET_ARRAY);
-	nodesBuf.UploadData(serealizedNodes, GL_STATIC_DRAW);
+	nodesBuf.UploadData(nodeMemory, GL_STATIC_DRAW);
 
 	nodesTex.CreateBinding();
 	nodesTex.SelectBuffer(&nodesBuf, GL_RGBA32F);
@@ -2157,6 +2164,9 @@ void BoundingVolumeHierarchy::BuildBinnedSpatial(std::vector<CompactTriangle>& t
 
 	referenceTex.CreateBinding();
 	referenceTex.SelectBuffer(&referenceBuf, GL_R32F);
+
+	nodesVec = serealizedNodes;
+	referenceVec = references;
 }
 
 /*

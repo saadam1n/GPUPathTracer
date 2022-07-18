@@ -16,8 +16,9 @@ bool Triangle::Intersect(const Ray& ray, HitInfo& closestHit) {
     // this is mostly a copy paste from scratchapixel's code that has been refitted to work with GLSL
     HitInfo attemptHit;
 
-    vec3 v01 = Vertices[1].position - Vertices[0].position;
-    vec3 v02 = Vertices[2].position - Vertices[0].position;
+    // Assume stuff is precalculated
+    vec3 v01 = Vertices[1].position;
+    vec3 v02 = Vertices[2].position;
 
     vec3 p = cross(ray.direction, v02);
 

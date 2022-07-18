@@ -42,7 +42,7 @@ struct NodeSerialized : public Hittable {
 
 	int32_t secondChild; // al 32 bits are used to reference the second child
 
-	bool Intersect(const Ray& ray, HitInfo& hit, const std::vector<CompactTriangle>& triangles);
+	bool Intersect(const Ray& ray, HitInfo& hit, const std::vector<CompactTriangle>& triangles, const std::vector<int32_t>& references);
 };
 
 // BVH triangle
@@ -95,6 +95,8 @@ private:
 	friend class Renderer;
 
 	std::vector<NodeSerialized> nodesVec;
+	std::vector<int32_t> referenceVec;
+
 	Buffer nodesBuf;
 	TextureBuffer nodesTex;
 	
