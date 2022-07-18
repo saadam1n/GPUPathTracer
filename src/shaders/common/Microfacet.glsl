@@ -157,9 +157,14 @@ float ProbabilityDensityDirection(inout MaterialInstance material, in SurfaceInt
     return diffusePmf * ProbabilityDensityCosine(interaction) + (1.0f - diffusePmf) * ProbabilityDensityMicrofacet(material, interaction);
 }
 
-float ProbabilityDensityDirection(inout MaterialInstance material, in SurfaceInteraction interaction) {
-    interaction.ndi = 1.0f;
+float CalcDiffusePmf(in MaterialInstance material, in SurfaceInteraction interaction) {
+    interaction.ndi = 0.707f; // cos(45 deg) 
     float diffusePmf = clamp(AverageLuminance(DiffuseEnergyConservation(material, interaction)), 0.0f, 0.6f);
+    return diffusePmf;
+}
+
+float ProbabilityDensityDirection(inout MaterialInstance material, in SurfaceInteraction interaction) {
+    float diffusePmf = CalcDiffusePmf(material, interaction);
     float specularPmf = 1.0f - diffusePmf;
     float pdfDiffuse = diffusePmf * ProbabilityDensityCosine(interaction);
     float pdfSpecular = specularPmf * ProbabilityDensityMicrofacet(material, interaction);
@@ -168,8 +173,7 @@ float ProbabilityDensityDirection(inout MaterialInstance material, in SurfaceInt
 }
 
 vec3 GenerateImportanceSample(inout MaterialInstance material, inout SurfaceInteraction interaction, out float pdf) {
-    interaction.ndi = 0.707f; // cos(45 deg) 
-    float diffusePmf = clamp(AverageLuminance(DiffuseEnergyConservation(material, interaction)), 0.0f, 0.6f);
+    float diffusePmf = CalcDiffusePmf(material, interaction);
     float specularPmf = 1.0f - diffusePmf;
     // Choose between specular and diffuse based on PDF
     if (rand() < diffusePmf) {

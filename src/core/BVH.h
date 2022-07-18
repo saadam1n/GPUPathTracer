@@ -36,11 +36,11 @@ struct NodeSerialized : public Hittable {
 	AABB BoundingBox;
 
 	union {
-		uint32_t firstChild; // 1 bit leaf flag
-		uint32_t triangleRange; // 1 bit leaf flag, 27 bits triangle array offset, 4 bits triangle subarray length (15 triangles max per leaf)
+		int32_t firstChild; // 1 bit leaf flag
+		int32_t triangleRange; // 1 bit leaf flag, 27 bits triangle array offset, 4 bits triangle subarray length (15 triangles max per leaf)
 	};
 
-	int32_t parent;
+	int32_t secondChild; // al 32 bits are used to reference the second child
 
 	bool Intersect(const Ray& ray, HitInfo& hit, const std::vector<CompactTriangle>& triangles);
 };
@@ -67,7 +67,7 @@ struct NodeUnserialized {
 	NodeType Type;
 	int32_t Index;
 
-	uint32_t SplitAxis;
+	int32_t SplitAxis;
 
 	float ComputeSAH(void);
 };
@@ -75,7 +75,7 @@ struct NodeUnserialized {
 struct Split {
 	Split(void);
 	// Axis of the split. 0-X, 1-Y, 2-Z
-	uint32_t Axis;
+	int32_t Axis;
 	// List of centroids. 0 is behind of the split, 1 is infornt of it
 	std::vector<TriangleCentroid> Centroids[2];
 	// Boxes formed by the split

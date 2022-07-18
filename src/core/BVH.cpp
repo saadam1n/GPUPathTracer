@@ -456,32 +456,10 @@ void BoundingVolumeHierarchy::BuildFullSweep(std::vector<CompactTriangle>& trian
 		NodeSerialized SerializedNode;
 
 		SerializedNode.BoundingBox = CurrentNode->BoundingBox;
-		SerializedNode.parent = 0;
 
 		if (CurrentNode->Type == NodeType::NODE) {
 			SerializedNode.firstChild = ProcessedNodes.size() + IndexConnectionQueue.size() + 1;
 
-			vec3 seperation = (CurrentNode->Children[1]->BoundingBox.Center() - CurrentNode->Children[0]->BoundingBox.Center());
-			vec3 magnitude = abs(seperation);
-
-			int axis;
-			if (magnitude.x > magnitude.y&& magnitude.x > magnitude.z) {
-				axis = 0;
-			}
-			else if (magnitude.y > magnitude.x&& magnitude.y > magnitude.z) {
-				axis = 1;
-			}
-			else {
-				axis = 2;
-			}
-
-			// Assuming that the first node is closer to positive, the other one closer to the negative (normal traversal seems to prefer it)
-			if (seperation[axis] < 0) {
-				std::swap(CurrentNode->Children[0], CurrentNode->Children[1]);
-			}
-
-			// axis takes up at most 2 bits
-			SerializedNode.parent |= (axis << 30);
 
 			IndexConnectionQueue.push(CurrentNode->Children[0]);
 			IndexConnectionQueue.push(CurrentNode->Children[1]);
@@ -493,10 +471,6 @@ void BoundingVolumeHierarchy::BuildFullSweep(std::vector<CompactTriangle>& trian
 			if ((range >> 4) != CurrentNode->Leaf.Offset || (range & 15) != CurrentNode->Leaf.Size) {
 				exit(-1);
 			}
-		}
-
-		if (CurrentNode->parent) {
-			SerializedNode.parent |= CurrentNode->parent->Index;
 		}
 
 		ProcessedNodes.push_back(SerializedNode);
@@ -524,7 +498,6 @@ void BoundingVolumeHierarchy::BuildFullSweep(std::vector<CompactTriangle>& trian
 		temp.min = node.BoundingBox.min;
 		temp.data0 = node.firstChild;
 		temp.max = node.BoundingBox.max;
-		temp.data1 = node.parent;
 
 		NewLayout* ptr = (NewLayout*)&node;
 		*ptr = temp;
@@ -1621,10 +1594,9 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 
 		bool betterSplitFound = false;
 		int bestBin = 1, bestAxis = 0;
-		std::vector<Bin[kNumBins]> bins(3);
-
 		// Consider each axis
 		for (int i = 0; i < 3; i++) {
+			Bin bins[kNumBins];
 
 			// Extents of our parent node's box, which we will subdivide in the binning process
 			float minBox = node.box.min[i];
@@ -1641,7 +1613,7 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 			for (const auto& ref : node.references) {
 				// Find the correct bin and insert the reference
 				int binID = ComputeBinID(ref.centroid[i], k0, k1);
-				bins[i][binID].Insert(ref);
+				bins[binID].Insert(ref);
 
 			}
 
@@ -1652,7 +1624,7 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 			std::vector<AABB> rightPrecomputedBoxes;
 			rightPrecomputedBoxes.reserve(kNumBins);
 			for (int j = kNumBins - 1; j >= 1; j--) {
-				rightBoxBuilder.Extend(bins[i][j].box);
+				rightBoxBuilder.Extend(bins[j].box);
 				rightPrecomputedBoxes.push_back(rightBoxBuilder);
 			}
 
@@ -1660,8 +1632,8 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 			BuilderNode left;
 			for (int j = 1; j < kNumBins; j++) {
 				// Iteratively extend the left node
-				left.Consume(bins[i][j - 1]);
-				left.numReferences += bins[i][j - 1].numReferences;
+				left.Consume(bins[j - 1]);
+				left.numReferences += bins[j - 1].numReferences;
 
 				// Grab our right node from our precomputed information
 				BuilderNode right;
@@ -1829,8 +1801,6 @@ void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& 
 	This way the big triangles will not impact our BVH construction.
 
 	To implement this, we first have to initial our bins with spatially split references. We then iterate over the possible combinations of splits and choose the best one. We then subsdivide the split
-
-
 	*/
 
 	// Shevstov et al. 2007 and Stich et al. 200?
@@ -1843,8 +1813,12 @@ void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& 
 
 	int nR, nL;
 	AABB bL, bR;
+	bool betterSplitFound = false;
+	int bestBin = 0, bestAxis = 0;
 	// Although we consider each axis for the split, we can speed things up by considering the longest axis only
 	for (int i = 0; i < 3; i++) {
+		MinMaxBin bins[kNumBins]; // TODO: use a different number of bins for spatial splits
+
 		// Extents of our parent node's box, which we will subdivide in the binning process
 		float minBox = node.box.min[i];
 		float maxBox = node.box.max[i];
@@ -1857,16 +1831,10 @@ void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& 
 		float k1 = kNumBins / (maxBox - minBox);
 		float binWidth = (maxBox - minBox) / kNumBins;
 		// Iterate through all references
-		MinMaxBin bins[kNumBins]; // TODO: use a different number of bins for spatial splits
-
-		int sMin = 0, sCen = 0, sMax = 0;
 		for (const auto& ref : node.references) {
 			// Find our min and max bins
 			int minID = ComputeBinID(ref.box.min[i], k0, k1);
 			int maxID = ComputeBinID(ref.box.max[i], k0, k1);
-			sMin += minID;
-			sCen += ComputeBinID(ref.centroid[i], k0, k1);
-			sMax += maxID;
 			// Increment to mark our reference's entry and exit
 			bins[minID].minReferences++;
 			bins[maxID].maxReferences++;
@@ -1885,20 +1853,28 @@ void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& 
 		}
 
 		// Now that we have our bins, let's consider each spatial split
+		AABB rightBoxBuilder;
+		int rightRefCounter = 0;
+
+		std::vector<std::pair<AABB, int>> rightPrecomputedNodes;
+		rightPrecomputedNodes.reserve(kNumBins - 1);
+		for (int j = kNumBins - 1; j >= 1; j--) {
+			rightBoxBuilder.Extend(bins[j].box);
+			rightRefCounter += bins[j].maxReferences;
+			rightPrecomputedNodes.emplace_back(rightBoxBuilder, rightRefCounter);
+		}
+
+		BuilderNode left;
 		for (int j = 1; j < kNumBins; j++) {
-			BuilderNode left, right;
-
 			// Build our left node
-			for (int k = 0; k < j; k++) {
-				left.box.Extend(bins[k].box);
-				left.numReferences += bins[k].minReferences;
-			}
+			left.box.Extend(bins[j - 1].box);
+			left.numReferences += bins[j - 1].minReferences;
 
-			// Build our right node
-			for (int k = j; k < kNumBins; k++) {
-				right.box.Extend(bins[k].box);
-				right.numReferences += bins[k].maxReferences;
-			}
+			// Fetch our right node
+			auto rightInfo = rightPrecomputedNodes[kNumBins - j - 1];
+			BuilderNode right;
+			right.box = rightInfo.first;
+			right.numReferences = rightInfo.second;
 
 			// Update our split if it is better
 			float sah = left.ComputeSAH() + right.ComputeSAH();
@@ -1911,55 +1887,81 @@ void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& 
 				bL = left.box;
 				bR = right.box;
 
-				bestLeft.Reset();
-				bestRight.Reset();
+				betterSplitFound = true;
+				bestAxis = i;
+				bestBin = j;
+			}
+		}
+	}
 
-				float split = minBox + binWidth * j;
-				//std::cout << j << '\n';
-				for (const auto& ref : node.references) {
-					// Since we binned using bin IDs, we must also subdivide using bin IDs to prevent some sort of weirdness
-					int minID = ComputeBinID(ref.box.min[i], k0, k1);
-					int maxID = ComputeBinID(ref.box.max[i], k0, k1);
-					// Determine whether we need to split the reference or not
-					if (minID < j && maxID >= j) {
-						// Our reference goes through the split and therefore needs to be split
-						// However, we can try unsplitting it instead if it is a better method (see Stich et al, Section 4.4)
+	if (betterSplitFound) {
+		bestLeft.Reset();
+		bestRight.Reset();
 
-						AABB extendL = bL;
-						AABB extendR = bR;
+		float minBox = node.box.min[bestAxis];
+		float maxBox = node.box.max[bestAxis];
+		float k0 = -minBox;
+		float k1 = kNumBins / (maxBox - minBox);
+		float binWidth = (maxBox - minBox) / kNumBins;
 
-						extendL.Extend(ref.box);
-						extendR.Extend(ref.box);
+		float split = minBox + binWidth * bestBin;
+		for (const auto& ref : node.references) {
+			// Since we binned using bin IDs, we must also subdivide using bin IDs to prevent some sort of weirdness
+			int minID = ComputeBinID(ref.box.min[bestAxis], k0, k1);
+			int maxID = ComputeBinID(ref.box.max[bestAxis], k0, k1);
+			// Determine whether we need to split the reference or not
+			if (minID < bestBin && maxID >= bestBin) {
+				// Our reference goes through the split and therefore needs to be split
+				// However, we can try unsplitting it instead if it is a better method (see Stich et al, Section 4.4)
 
-						float unsplitL = extendL.SurfaceArea() * nL + bR.SurfaceArea() * (nR - 1);
-						float unsplitR = bR.SurfaceArea() * (nL - 1) + extendR.SurfaceArea() * nR;
+				AABB extendL = bL;
+				AABB extendR = bR;
 
-						if (unsplitL < bestSah && unsplitL < unsplitR) {
-							bestLeft.Insert(ref);
-						}
-						else if (unsplitR < bestSah && unsplitR < unsplitL) {
-							bestRight.Insert(ref);
-						}
-						else {
-							auto leftRef = ClipReference(ref, i, -FLT_MAX, split);
-							bestLeft.Insert(leftRef);
+				extendL.Extend(ref.box);
+				extendR.Extend(ref.box);
 
-							auto rightRef = ClipReference(ref, i, split, FLT_MAX);
-							bestRight.Insert(rightRef);
-						}
-					}
-					else {
-						// Our reference does not go through the split and therefore can be inserted as is into on child only
-						if (minID < j) {
-							bestLeft.Insert(ref); // Choose the left child
-						}
-						else {
-							bestRight.Insert(ref); // Choose the right child
-						}
-					}
+				float unsplitL = extendL.SurfaceArea() * nL + bR.SurfaceArea() * (nR - 1);
+				float unsplitR = bR.SurfaceArea() * (nL - 1) + extendR.SurfaceArea() * nR;
+
+				if (unsplitL < bestSah && unsplitL < unsplitR) {
+					bestLeft.Insert(ref);
+				}
+				else if (unsplitR < bestSah && unsplitR < unsplitL) {
+					bestRight.Insert(ref);
+				}
+				else {
+					auto leftRef = ClipReference(ref, bestAxis, -FLT_MAX, split);
+					bestLeft.Insert(leftRef);
+
+					auto rightRef = ClipReference(ref, bestAxis, split, FLT_MAX);
+					bestRight.Insert(rightRef);
+				}
+			}
+			else {
+				// Our reference does not go through the split and therefore can be inserted as is into on child only
+				if (minID < bestBin) {
+					bestLeft.Insert(ref); // Choose the left child
+				}
+				else {
+					bestRight.Insert(ref); // Choose the right child
 				}
 			}
 		}
+	}
+
+	
+}
+
+void FindBestSplitCanidate(BuilderNode& bestLeft, BuilderNode& bestRight, float& bestSah, BuilderNode& node, float spatialInefficiencyThreshold) {
+	// Find our best object partioning canidate
+	FindBestObjectSplit(bestLeft, bestRight, bestSah, node);
+
+	AABB overlap;
+	overlap.min = max(bestLeft.box.min, bestRight.box.min);
+	overlap.max = min(bestLeft.box.max, bestRight.box.max);
+
+	if (overlap.SurfaceArea() > spatialInefficiencyThreshold) {
+		FindBestSpatialSplit(bestLeft, bestRight, bestSah, node);
 	}
 }
 
@@ -1990,22 +1992,13 @@ std::vector<int> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode*
 		}
 
 		if (node.depth > 32) {
-			DebugNode(node, "deep tree alert");
+			//DebugNode(node, "deep tree alert");
 		}
 
 		BuilderNode bestLeft, bestRight;
 		float bestSah = FLT_MAX;
 
-		// Find our best object partioning canidate
-		FindBestObjectSplit(bestLeft, bestRight, bestSah, node);
-
-		AABB overlap;
-		overlap.min = max(bestLeft.box.min, bestRight.box.min);
-		overlap.max = min(bestLeft.box.max, bestRight.box.max);
-
-		if (overlap.SurfaceArea() > spatialInefficiencyThreshold) {
-			FindBestSpatialSplit(bestLeft, bestRight, bestSah, node);
-		}
+		FindBestSplitCanidate(bestLeft, bestRight, bestSah, node, spatialInefficiencyThreshold);
 
 		// Subdivide our node if it is efficient to do so
 		if (bestSah < node.ComputeSAH()) {
@@ -2045,6 +2038,8 @@ std::vector<int> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode*
 
 	return references;
 }
+
+std::vector<NodeSerialized> BlockingOptimizedCache(const std::vector<NodeSerialized>& unoptimized);
 
 void BoundingVolumeHierarchy::BuildBinnedSpatial(std::vector<CompactTriangle>& triangles) {
 	// Build the BVH over references
@@ -2103,7 +2098,6 @@ void BoundingVolumeHierarchy::BuildBinnedSpatial(std::vector<CompactTriangle>& t
 		NodeSerialized gpuReadableNode;
 
 		gpuReadableNode.BoundingBox = buildOutput.box;
-		gpuReadableNode.parent = 0;
 
 		if (buildOutput.children != nullptr) {
 			gpuReadableNode.firstChild = serealizedNodes.size() + bfs.size() + 1;
@@ -2131,6 +2125,9 @@ void BoundingVolumeHierarchy::BuildBinnedSpatial(std::vector<CompactTriangle>& t
 		delete[] ptr;
 	}
 
+	// Over a minute, 50.9627 without vs 51.3006 with: marginally boosts FPS
+	serealizedNodes = BlockingOptimizedCache(serealizedNodes);
+
 	// Reorder nodes for better memory access on the GPU
 	for (NodeSerialized& node : serealizedNodes) {
 		struct NewLayout {
@@ -2143,7 +2140,7 @@ void BoundingVolumeHierarchy::BuildBinnedSpatial(std::vector<CompactTriangle>& t
 		temp.min = node.BoundingBox.min;
 		temp.data0 = node.firstChild;
 		temp.max = node.BoundingBox.max;
-		temp.data1 = node.parent;
+		temp.data1 = node.secondChild;
 
 		NewLayout* ptr = (NewLayout*)&node;
 		*ptr = temp;
@@ -2162,3 +2159,96 @@ void BoundingVolumeHierarchy::BuildBinnedSpatial(std::vector<CompactTriangle>& t
 	referenceTex.SelectBuffer(&referenceBuf, GL_R32F);
 }
 
+/*
+
+Ideas to improve caching, by my own messy thoughts:
+
+We know from [Yoon et al 2006] that there are two observations we make about memory access:
+1. If a parent node is access, we can sure its children nodes are likely to be accessed too
+2. If a node is accessed, nodes spatially close to it are also likely to be accessed
+
+In a good traversal algorithm, we wish to traverse the bare minimum number of nodes. Hence, most ray tracers cull children nodes when continuing traversal.
+This often makes the second observation not as significant as the first one, so I will mainly focus on the first one
+
+In any ray-BVH traversal algorithm, if we access one child, we access the other, and it is a no-brainer to keep the two nodes toghter in memory [Aila 2009], which not only reduces parent node size, but also improves caching
+The question now is how can we organize children nodes so that they are as cache effective as possible? 
+
+The first thing to note is that, ideally, the subtrees for a pair of children nodes is a contigous peice of memory. We do not want to jump in between blocks of memory
+In the current queue system I have, this is problematic. Suppose the first 2 child nodes of the root are pushed to the queue. Then, the two children will be processed, and their 4 subtrees will be pushed. 
+2 of these subtrees will be of the first child, and then the other 2 will be of the second child. This creates an issue, because if they are processed in that order, we get an interleaving issue.
+This is because the nodes of the first half of the tree will be processed, and then the second half will be processed, and it goes back to this order, interleaving the tree
+
+I'm not sure how this will work for caching across all GPU threads, but considering a single thread, this is pretty terrible, since for each time we want to go down in the hieracrchy, we have to take a step the size of a power of 2 (approximately)
+I propose a layout to combat this issue, based on the idea of grouping subtrees into one contigous block of memory:
+
+sub tree 0 | sub tree 1
+
+This way, if a ray needs to access the first subtree, it can slide onto the next child directly
+An issue with this though is that if we want to go to subtree 1, we have to make a very big jump that will almost certainly be outside the cache. 
+However, the jumps causes by interleaving might have already been outside the cache lines, so it might not be an issue. If it is, then in the future some huereistic might used to balance between interleaving and blocking
+
+The implementation to get this layout will already take an interleaved tree. We use a stack structure to make the first tree structuree always gets processed first
+
+PAPERS TO READ REGARDING CACHING AND MEMORY:
+1. "Cache-Efficient Layouts of Bounding Volume Hierarchies"
+2. "Bandwidth-Efficient BVH Layout for Incremental Hardware Traversal"
+3. "Fast Insertion-Based Optimization of Bounding Volume Hierarchies" (and its parallel version "Parallel Reinsertion for Bounding Volume Hierarchy Optimization"
+4. "Efficient Incoherent Ray Traversal on GPUs Through Compressed Wide BVHs"
+
+*/
+
+struct ChildPairInformation {
+	NodeSerialized left;
+	NodeSerialized right;
+	int parentIndex;
+};
+
+std::vector<NodeSerialized> BlockingOptimizedCache(const std::vector<NodeSerialized>& unoptimized) {
+	const auto& root = unoptimized.front();
+	if (root.firstChild < 0) {
+		return unoptimized;
+	}
+
+	std::vector<NodeSerialized> optimized;
+	optimized.reserve(unoptimized.size());
+	optimized.push_back(root);
+
+	ChildPairInformation rootChildrenInfo;
+	rootChildrenInfo.left = unoptimized[root.firstChild];
+	rootChildrenInfo.right = unoptimized[root.firstChild + 1];
+	rootChildrenInfo.parentIndex = 0;
+
+	std::stack<ChildPairInformation> dfsOrderer;
+	dfsOrderer.push(rootChildrenInfo);
+	while (!dfsOrderer.empty()) {
+		auto children = dfsOrderer.top();
+		dfsOrderer.pop();
+
+		// First build our parent pointer
+		optimized[children.parentIndex].firstChild = optimized.size();
+
+		int leftIndex = optimized.size();
+		int rightIndex = optimized.size() + 1;
+
+		if (children.left.firstChild >= 0) {
+			ChildPairInformation leftChildren;
+			leftChildren.left = unoptimized[children.left.firstChild];
+			leftChildren.right = unoptimized[children.left.firstChild + 1];
+			leftChildren.parentIndex = leftIndex;
+			dfsOrderer.push(leftChildren);
+		}
+
+		if (children.right.firstChild >= 0) {
+			ChildPairInformation rightChildren;
+			rightChildren.left = unoptimized[children.right.firstChild];
+			rightChildren.right = unoptimized[children.right.firstChild + 1];
+			rightChildren.parentIndex = rightIndex;
+			dfsOrderer.push(rightChildren);
+		}
+
+		optimized.push_back(children.left);
+		optimized.push_back(children.right);
+	}
+
+	return optimized;
+}

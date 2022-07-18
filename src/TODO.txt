@@ -1,3 +1,15 @@
+TODO:
+
+I will focus mainly on ray casting stuff since that is (relatively) a low-hanging fruit compared to advanced light transport algorithms. 
+I wanted to implement the stackless traversal algorithm by Binder and Keller 2016 but that was completey destroyed in performance by Ylitie et al 2017 and I don't want to waste my time doing useless stuff
+Maybe one day I'll get around to it, but now's not the time
+Implementing wide-BVH seems like a scary amount of work, and I will not know if my CPU side isn't working or my GPU side isn't either, but Ylitie et al 2017 is my ultimate goal
+
+However, everything gets more performant using better binary tree construction, so I will complete Bittner et al 2013, and then move onto wide BVH
+
+
+
+
 Revised TODO:
 - Area sunlight sampling: DONE
 - LD sampling: in progress
