@@ -246,10 +246,30 @@ vec3 PathTrace(in ivec2 pixel) {
     return contribution;
 }
 
+int Compact1By1(int x) {
+    x &= 0x55555555;
+    x = (x ^ (x >> 1)) & 0x33333333;
+    x = (x ^ (x >> 2)) & 0x0f0f0f0f;
+    x = (x ^ (x >> 4)) & 0x00ff00ff;
+    x = (x ^ (x >> 8)) & 0x0000ffff;
+    return x;
+}
+
+ivec2 RayIndexToMorton(int idx) { // 22.6449
+    int i = idx % 64;
+    ivec2 morton = ivec2(Compact1By1(i), Compact1By1(i >> 1));
+
+    int j = idx / 64;
+    int x = j % (width / 8);
+    int y = j / (width / 8);
+
+    return morton + 8 * ivec2(x, y);
+}
+
 // Persistent threads, by Alia et al 2009
 
 // Use texture for random ordering of pixels, such as morton order
-uniform isamplerBuffer pixelPoolTex;
+// uniform isamplerBuffer pixelPoolTex;
 
 // GLSL has issues with volatile memeory, so we need to use memoryBarrierShared() instead
 shared uint nextRay[gl_WorkGroupSize.y];
@@ -257,7 +277,7 @@ shared uint rayCount[gl_WorkGroupSize.y];
 
 const uint batchPortion = gl_WorkGroupSize.x;
 const uint batchSize = 3 * batchPortion; // make sure that this is a multiple of gl_WorkGroupSize.x
-const uint globalRayCount = textureSize(pixelPoolTex);
+const uint globalRayCount = width * height;
 
 layout(std430) buffer globalNextRayBuf {
     uint globalNextRay;
@@ -288,7 +308,7 @@ void main() {
             rayCount[threadIdx.y] -= batchPortion;
             memoryBarrierShared();
         }
-        ivec2 pixel = texelFetch(pixelPoolTex, int(rayIndex)).xy;
+        ivec2 pixel = RayIndexToMorton(int(rayIndex));// texelFetch(pixelPoolTex, int(rayIndex)).xy;
         vec3 color = PathTrace(pixel);
         imageStore(accum, pixel, vec4(imageLoad(accum, pixel).xyz + color, 1.0));
     }

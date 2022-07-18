@@ -51,7 +51,10 @@ void MouseCallback(GLFWwindow* Window, double X, double Y) {
 	needResetSamples = true;
 }
 
+extern void HilbertCurve(std::vector<ivec2>& output, ivec2 i, int m, ivec2 offset);
+
 int main(int argc, char** argv) {
+
 #if _WIN32
 	SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED); // prevent our program from sleeping on windows for long renders
 #endif

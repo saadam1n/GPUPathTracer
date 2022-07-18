@@ -333,6 +333,118 @@ int32_t Compact1By1(int32_t x) {
     return x;
 }
 
+/* 
+Breinholt and Schierz 1998 
+
+Implementation idea: we can recursively subdivide the square into 4 independent parts, and evaluate each seperately
+Note that the order in which the squares are evaluated matters!!!
+
+The simplygy this process, let us simplyfy the i1 and i2 to up, down, left and right (according to the direction of the perpendicualer edge from the center):
+
+Up    = 0, 0
+Down  = 1, 1
+Right = 0, 1
+Left  = 1, 0
+
+For up we need to first evalute:
+    right
+    up
+    up
+    left
+For down we need to first evaluate:
+    right
+    down
+    down
+    left
+For right, we need to evaluate
+    up
+    right
+    right
+    down
+For left, we need to evaluate
+    up 
+    left
+    left
+    down
+
+Also apply the correct offset
+    
+*/
+void HilbertCurve(std::vector<ivec2>& output, ivec2 i, int m, ivec2 offset) {
+    if (m == 2) {
+        // Output our square depending on orientation
+        ivec2 square[4];
+        if (i.x == 0 && i.y == 0) {
+            // Start in lower left corner, end in lower right corner (shaped like ^)
+            square[0] = ivec2(0, 0);
+            square[1] = ivec2(0, 1);
+            square[2] = ivec2(1, 1);
+            square[3] = ivec2(1, 0);
+        }
+        else if (i.x == 0 && i.y == 1) {
+            // Start in lower left corner, end in upper right corner (shaped like >)
+            square[0] = ivec2(0, 0);
+            square[1] = ivec2(1, 0);
+            square[2] = ivec2(1, 1);
+            square[3] = ivec2(0, 1);
+        }
+        else if (i.x == 1 && i.y == 0) {
+            // Start in upper right corner, end in lower right corner (chaped like <)
+            square[0] = ivec2(1, 1);
+            square[1] = ivec2(0, 1);
+            square[2] = ivec2(0, 0);
+            square[3] = ivec2(1, 0);
+        }
+        else if(i.x == 1 && i.y == 1) {
+            // Start in upper right corner, end in upper left corner (shaped like U)
+            square[0] = ivec2(1, 1);
+            square[1] = ivec2(1, 0);
+            square[2] = ivec2(0, 0);
+            square[3] = ivec2(0, 1);
+        }
+
+        output.push_back(square[0] + offset);
+        output.push_back(square[1] + offset);
+        output.push_back(square[2] + offset);
+        output.push_back(square[3] + offset);
+    }
+    else {
+        int a = m / 2;
+        constexpr ivec2 up(0, 0);
+        constexpr ivec2 down(1, 1);
+        constexpr ivec2 right(0, 1);
+        constexpr ivec2 left(1, 0);
+        if (i.x == 0 && i.y == 0) {
+            // Up
+            HilbertCurve(output, right, a, offset + ivec2(0, 0));
+            HilbertCurve(output, up, a, offset + ivec2(0, a));
+            HilbertCurve(output, up, a, offset + ivec2(a, a));
+            HilbertCurve(output, left, a, offset + ivec2(a, 0));
+        }
+        else if (i.x == 0 && i.y == 1) {
+            // Right
+            HilbertCurve(output, up, a, offset + ivec2(0, 0));
+            HilbertCurve(output, right, a, offset + ivec2(a, 0));
+            HilbertCurve(output, right, a, offset + ivec2(a, a));
+            HilbertCurve(output, down, a, offset + ivec2(0, a));
+        }
+        else if (i.x == 1 && i.y == 0) {
+            // Left
+            HilbertCurve(output, down, a, offset + ivec2(a, a));
+            HilbertCurve(output, left, a, offset + ivec2(0, a));
+            HilbertCurve(output, left, a, offset + ivec2(0, 0));
+            HilbertCurve(output, up, a, offset + ivec2(a, 0));
+        }
+        else if (i.x == 1 && i.y == 1) {
+            // Down
+            HilbertCurve(output, right, a, offset + ivec2(0, a));
+            HilbertCurve(output, down, a, offset + ivec2(0, 0));
+            HilbertCurve(output, down, a, offset + ivec2(a, 0));
+            HilbertCurve(output, left, a, offset + ivec2(a, a));
+        }
+    }
+}
+
 void Renderer::Initialize(Window* Window, const char* scenePath, const std::string& env_path) {
     bindedWindow = Window;
     viewportWidth = bindedWindow->Width;
@@ -453,20 +565,28 @@ void Renderer::Initialize(Window* Window, const char* scenePath, const std::stri
     globalNextRayBuf.CreateBinding(BUFFER_TARGET_SHADER_STORAGE);
     globalNextRayBuf.UploadData(sizeof(int), nullptr, GL_DYNAMIC_DRAW);
 
-    std::vector<ivec2> mortonOrderPixels;
+    std::vector<ivec2> cacheEfficientPixelOrder;
     // Gen blocks of 8x8 morton order blocks
     for (uint32_t y = 0; y < viewportHeight / 8; y++) {
         uint32_t y_offset = y * 8;
         for (uint32_t x = 0; x < viewportWidth / 8; x++) {
             uint32_t x_offset = x * 8;
+#ifdef MORTON_ORDER
             for (uint32_t i = 0; i < 64; i++) {
-                mortonOrderPixels.emplace_back(Compact1By1(i) + x_offset, Compact1By1(i >> 1) + y_offset);
+                // Average FPS was 22.601
+                cacheEfficientPixelOrder.emplace_back(Compact1By1(i) + x_offset, Compact1By1(i >> 1) + y_offset);
             }
+#else
+            // Average FPS was 22.597
+            std::vector<ivec2> hilbert;
+            HilbertCurve(hilbert, ivec2(0, 0), 8, ivec2(x_offset, y_offset));
+            cacheEfficientPixelOrder.insert(cacheEfficientPixelOrder.end(), hilbert.begin(), hilbert.end());
+#endif
         }
     }
 
     pixelPoolBuf.CreateBinding(BUFFER_TARGET_ARRAY);
-    pixelPoolBuf.UploadData(mortonOrderPixels, GL_STATIC_DRAW);
+    pixelPoolBuf.UploadData(cacheEfficientPixelOrder, GL_STATIC_DRAW);
 
     pixelPoolTex.CreateBinding();
     pixelPoolTex.SelectBuffer(&pixelPoolBuf, GL_RG32I);

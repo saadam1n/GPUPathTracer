@@ -1575,10 +1575,12 @@ struct Bin {
 };
 
 struct BuilderNode : public ReferenceContainer {
-	BuilderNode* children;
+	// Use two pointers as that that makes it easier to delete nodes in tree optimization
+	BuilderNode* child0;
+	BuilderNode* child1;
 	int offset;
 
-	BuilderNode() : children(nullptr), offset(0) {}
+	BuilderNode() : child0(nullptr), child1(nullptr), offset(0) {}
 
 	// For lack of a better word (the nodes "consume" the bins
 	void Consume(const Bin& bin) {
@@ -1664,6 +1666,9 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 			// First, clear any junk information from a worse split
 			bestLeft.Reset();
 			bestRight.Reset();
+
+			bestLeft.references.reserve(node.numReferences);
+			bestRight.references.reserve(node.numReferences);
 
 			// Precompute world-to-bin space mapping variables
 			float minBox = node.box.min[bestAxis];
@@ -1904,6 +1909,9 @@ void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& 
 		bestLeft.Reset();
 		bestRight.Reset();
 
+		bestLeft.references.reserve(2 * node.numReferences);
+		bestRight.references.reserve(2 * node.numReferences);
+
 		float minBox = node.box.min[bestAxis];
 		float maxBox = node.box.max[bestAxis];
 		float k0 = -minBox;
@@ -1954,8 +1962,6 @@ void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& 
 			}
 		}
 	}
-
-	
 }
 
 void FindBestSplitCanidate(BuilderNode& bestLeft, BuilderNode& bestRight, float& bestSah, BuilderNode& node, float spatialInefficiencyThreshold) {
@@ -1987,10 +1993,41 @@ Average depth of leaf is 24.5607
 Average FPS was 22.0281
 */
 
+template<typename T, int capacity = 8192>
+struct MemoryPool {
+	// The compiler (at least MSVC++) is smart enough to not destroy this every time we need to reallocate the node array, so dangling pointers is not an issue
+	std::vector<T> pool;
+
+	MemoryPool() {
+		pool.reserve(capacity);
+	}
+
+	T* FetchNext() {
+		pool.emplace_back();
+		return &pool.back();
+	}
+
+	bool Full() {
+		return (pool.size() == capacity);
+	}
+};
+
+template<typename T>
+struct MemoryChunkAllocator {
+	std::vector<MemoryPool<T>> pools;
+
+	T* FetchNext() {
+		if (pools.empty() || pools.back().Full()) {
+			pools.emplace_back();
+		}
+		return pools.back().FetchNext();
+	}
+};
+
 int numLeafReferences = 0;
 int numLeafs = 0;
 int depthSum = 0;
-std::vector<int> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode* root) {
+std::vector<int> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode* root, MemoryChunkAllocator<BuilderNode>& alloc) {
 	int id = 0;
 	root->id = id++;
 	// The first node we need to process is the root
@@ -2024,23 +2061,23 @@ std::vector<int> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode*
 
 		// Subdivide our node if it is efficient to do so
 		if (bestSah < node.ComputeSAH()) {
-			node.children = new BuilderNode[2];
-			node.children[0] = bestLeft;
-			node.children[1] = bestRight;
+			// Allocate a new pool if necessary
 
-			node.children[0].depth = node.depth + 1;
-			node.children[1].depth = node.depth + 1;
+			node.child0 = alloc.FetchNext();
+			node.child1 = alloc.FetchNext();
+			*node.child0 = bestLeft;
+			*node.child1 = bestRight;
 
-			node.children[0].id = id++;
-			node.children[1].id = id++;
+			node.child0->depth = node.depth + 1;
+			node.child1->depth = node.depth + 1;
 
-			unprocessedSubtrees.push(&node.children[0]);
-			unprocessedSubtrees.push(&node.children[1]);
+			node.child0->id = id++;
+			node.child1->id = id++;
 
-			node.references.clear();
-			if (node.id == -1) {
-				exit(0);
-			}
+			unprocessedSubtrees.push(node.child0);
+			unprocessedSubtrees.push(node.child1);
+
+			node.references.clear(); // TODO: move this to an unused reference array pool
 		}
 		else {
 			// Our traversal expects to handle duplicated references, so we must have a second reference buffer that points to locations in our triangle buffer
@@ -2079,36 +2116,15 @@ void BoundingVolumeHierarchy::BuildBinnedSpatial(std::vector<CompactTriangle>& t
 		root.Insert(reference);
 	}
 
+	MemoryChunkAllocator<BuilderNode> nodeAllocator;
 	root.depth = 0;
-	auto references = BuildSBVH(triangles, &root);
+	auto references = BuildSBVH(triangles, &root, nodeAllocator);
 
 	std::cout << "Reference duplication is " << (float)numLeafReferences / root.numReferences << "%\n";
 	std::cout << "Average refs per leaf is " << (float)numLeafReferences / numLeafs << " refs\n";
 	std::cout << "Average depth of leaf is " << (float)depthSum / numLeafs << '\n';
 
-	/*
-	Recorded stats using SBVH on breakfast room scene:
-		Reference duplication is 1.07023%
-		Average refs per leaf is 1.03309 refs
-		Average depth of leaf is 21.591
-		Average FPS is 14-ish
-	SBVH without fix to deep trees:
-		Reference duplication is 1.09782%
-		Average refs per leaf is 1.03572 refs
-		Average depth of leaf is 21.6914
-		Average FPS is 14-ish (no change from deep tree fix)
-	Only binned BVH as in Wald 2007
-		Reference duplication is 1%
-		Average refs per leaf is 1.02927 refs
-		Average depth of leaf is 20.5308
-		Average FPS is 17, for some odd reason higher than SBVH
-
-	deep-tree, conf room: 45 FPS
-	bin const, conf room:
-	*/
-
 	// Serealize our nodes
-	std::vector<BuilderNode*> allocationRegistry;
 	std::vector<NodeSerialized> serealizedNodes;
 	std::queue<BuilderNode*> bfs;
 	bfs.push(&root);
@@ -2121,30 +2137,24 @@ void BoundingVolumeHierarchy::BuildBinnedSpatial(std::vector<CompactTriangle>& t
 
 		gpuReadableNode.BoundingBox = buildOutput.box;
 
-		if (buildOutput.children != nullptr) {
+		if (buildOutput.child0 != nullptr) {
 			gpuReadableNode.firstChild = serealizedNodes.size() + bfs.size() + 1;
 
 			// Push box with largest surface area first
-			if (buildOutput.children[0].box.SurfaceArea() < buildOutput.children[1].box.SurfaceArea()) {
-				bfs.push(&buildOutput.children[1]);
-				bfs.push(&buildOutput.children[0]);
+			if (buildOutput.child0->box.SurfaceArea() < buildOutput.child1->box.SurfaceArea()) {
+				bfs.push(buildOutput.child1);
+				bfs.push(buildOutput.child0);
 			}
 			else {
-				bfs.push(&buildOutput.children[0]);
-				bfs.push(&buildOutput.children[1]);
+				bfs.push(buildOutput.child0);
+				bfs.push(buildOutput.child1);
 			}
-
-			allocationRegistry.push_back(buildOutput.children);
 		}
 		else {
 			gpuReadableNode.triangleRange = -((buildOutput.numReferences & 15) | (buildOutput.offset << 4));
 		}
 
 		serealizedNodes.push_back(gpuReadableNode);
-	}
-
-	for (auto& ptr : allocationRegistry) {
-		delete[] ptr;
 	}
 
 	// Over a minute, 50.9627 without vs 51.3006 with: marginally boosts FPS
