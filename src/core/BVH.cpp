@@ -1577,16 +1577,29 @@ struct Bin {
 // 7 - 23.9154
 // 0 - 23.3788
 
-constexpr float costTraversal = 00.0f;
-constexpr float contIntersection = 1.0f;
+/*
+These values are highly dependent from GPU to GPU and espiecally traversal algorithm to traversal algorithm
+Generally, we have the weight between leaf and AABB intersection
+Generally, leaf intersection is regarded as high cost than AABB, but eventually, at some hierarchy level, this may no longer hold true
+
+Usually, there are two types of issues when we have large leaves:
+1. A lot of junk intersection tests that could have been ignored via more finely subdividing the node. This is garunteed to occur if we do not used a wide BVH to quickly ignore many of these tests
+2. If we have a high variance in number of triangles per leaf, we have an extremely high branching factor, so intersecting one triangle is, on average, higher. We can alleivate this issue though if we generate leaves while aware of the varince 
+
+Generally, if-if traversal has been highly optimized to avoid branching, so traversal cost is not an issue, but intersection is. Therefore, traversal cost should ideally be set to zero or a value relatively small to the intersection costs
+
+*/
+constexpr float costTraversal = 0.0f;    // With faster traversal algorithms, this should be a smaller valuer
+constexpr float contIntersection = 1.0f; // With faster ray-triangle intersection algorithms, this should be smaller
 
 struct BuilderNode : public ReferenceContainer {
 	// Use two pointers as that that makes it easier to delete nodes in tree optimization
 	BuilderNode* child0;
 	BuilderNode* child1;
+	BuilderNode* parent;
 	int offset;
 
-	BuilderNode() : child0(nullptr), child1(nullptr), offset(0) {}
+	BuilderNode() : child0(nullptr), child1(nullptr), parent(nullptr), offset(0) {}
 
 	// For lack of a better word (the nodes "consume" the bins
 	void Consume(const Bin& bin) {
@@ -1970,10 +1983,32 @@ void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& 
 	}
 }
 
-void FindBestSplitCanidate(BuilderNode& bestLeft, BuilderNode& bestRight, float& bestSah, BuilderNode& node, float spatialInefficiencyThreshold) {
-	if (node.numReferences == 0) {
-		exit(-1);
+void FindBestMedianSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& bestSah, BuilderNode& node) {
+	int half = node.numReferences / 2;
+	for (int i = 0; i < 3; i++) {
+		std::sort(node.references.begin(), node.references.end(), [i](const TriangleReference& lhs, const TriangleReference& rhs) {return lhs.centroid[i] < rhs.centroid[i]; });
+		
+		BuilderNode left, right;
+
+		for (int j = 0; j < half; j++) {
+			left.Insert(node.references[j]);
+		}
+
+		for (int j = half; j < node.numReferences; j++) {
+			right.Insert(node.references[j]);
+		}
+
+		float sah = costTraversal + left.ComputeSAH() + right.ComputeSAH();
+		if (sah < bestSah) {
+			bestSah = sah;
+			bestLeft = left;
+			bestRight = right;
+		}
+
 	}
+}
+
+void FindBestSplitCanidate(BuilderNode& bestLeft, BuilderNode& bestRight, float& bestSah, BuilderNode& node, float spatialInefficiencyThreshold) {
 	// Find our best object partioning canidate
 	FindBestObjectSplit(bestLeft, bestRight, bestSah, node);
 
@@ -2033,11 +2068,45 @@ struct MemoryChunkAllocator {
 	}
 };
 
+int id = 0;
+void PushChildren(BuilderNode& node, const BuilderNode& left, const BuilderNode& right, std::stack<BuilderNode*>& unprocessedSubtrees, MemoryChunkAllocator<BuilderNode>& alloc) {
+	node.child0 = alloc.FetchNext();
+	node.child1 = alloc.FetchNext();
+	*node.child0 = left;
+	*node.child1 = right;
+
+	node.child0->depth = node.depth + 1;
+	node.child1->depth = node.depth + 1;
+
+	node.child0->id = id++;
+	node.child1->id = id++;
+
+	unprocessedSubtrees.push(node.child0);
+	unprocessedSubtrees.push(node.child1);
+
+	node.references.clear(); // TODO: move this to an unused reference array pool
+}
+
 int numLeafReferences = 0;
 int numLeafs = 0;
 int depthSum = 0;
+
+void ConvertIntoLeaf(BuilderNode& node, std::vector<int32_t>& references) {
+	// Our traversal expects to handle duplicated references, so we must have a second reference buffer that points to locations in our triangle buffer
+	// This doesn't terrible affect caching performance, as measured in my expriments where I created a new triangle buffer to perfectly match the references to create an upper bound on caching (or at least a very close one)
+	// The difference was negligible, and I hypothesize that this is a result of most leaves having one triangle
+	// However, a possible way to further improver performance is to reorder according to spatial locality, which is a big win for coherent rays
+	node.offset = references.size();
+	for (const auto& ref : node.references) {
+		references.push_back(ref.index);
+	}
+
+	numLeafReferences += node.numReferences;
+	numLeafs++;
+	depthSum += node.depth;
+}
+
 std::vector<int> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode* root, MemoryChunkAllocator<BuilderNode>& alloc) {
-	int id = 0;
 	root->id = id++;
 	// The first node we need to process is the root
 	std::vector<int> references;
@@ -2049,7 +2118,6 @@ std::vector<int> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode*
 
 	// Loop through each unprocessed subtree and subdivide it or make it a leaf
 	while (!unprocessedSubtrees.empty()) {
-
 		BuilderNode& node = *unprocessedSubtrees.top();
 		unprocessedSubtrees.pop();
 		//std::cout << node.depth << '\t';
@@ -2060,7 +2128,7 @@ std::vector<int> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode*
 		}
 
 		if (node.depth > 32) {
-			//DebugNode(node, "deep tree alert");
+			DebugNode(node, "deep tree alert");
 		}
 
 		BuilderNode bestLeft, bestRight;
@@ -2069,38 +2137,34 @@ std::vector<int> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode*
 		FindBestSplitCanidate(bestLeft, bestRight, bestSah, node, spatialInefficiencyThreshold);
 
 		// Subdivide our node if it is efficient to do so
-		if (node.numReferences > 16 || bestSah < node.ComputeSAH()) {
-			// Allocate a new pool if necessary
-
-			node.child0 = alloc.FetchNext();
-			node.child1 = alloc.FetchNext();
-			*node.child0 = bestLeft;
-			*node.child1 = bestRight;
-
-			node.child0->depth = node.depth + 1;
-			node.child1->depth = node.depth + 1;
-
-			node.child0->id = id++;
-			node.child1->id = id++;
-
-			unprocessedSubtrees.push(node.child0);
-			unprocessedSubtrees.push(node.child1);
-
-			node.references.clear(); // TODO: move this to an unused reference array pool
+		if (bestSah < node.ComputeSAH()) {
+			PushChildren(node, bestLeft, bestRight, unprocessedSubtrees, alloc);
+		}
+		else if(node.numReferences < 16) {
+			ConvertIntoLeaf(node, references);
 		}
 		else {
-			// Our traversal expects to handle duplicated references, so we must have a second reference buffer that points to locations in our triangle buffer
-			// This doesn't terrible affect caching performance, as measured in my expriments where I created a new triangle buffer to perfectly match the references to create an upper bound on caching (or at least a very close one)
-			// The difference was negligible, and I hypothesize that this is a result of most leaves having one triangle
-			// However, a possible way to further improver performance is to reorder according to spatial locality, which is a big win for coherent rays
-			node.offset = references.size();
-			for (const auto& ref : node.references) {
-				references.push_back(ref.index);
-			}
+			// Median object subdivide
 
-			numLeafReferences += node.numReferences;
-			numLeafs++;
-			depthSum += node.depth;
+			std::stack<BuilderNode*> leafDivider;
+			leafDivider.push(&node);
+
+			while (!leafDivider.empty()) {
+			
+				BuilderNode& possibleLeaf = *leafDivider.top();
+				leafDivider.pop();
+
+				if (possibleLeaf.numReferences < 16) {
+					ConvertIntoLeaf(possibleLeaf, references);
+					continue;
+				}
+
+				BuilderNode leafLeft, leafRight;
+				float leafSah = FLT_MAX;
+				FindBestMedianSplit(leafLeft, leafRight, leafSah, possibleLeaf);
+
+				PushChildren(possibleLeaf, leafLeft, leafRight, leafDivider, alloc);
+			}
 		}
 	}
 
@@ -2132,6 +2196,7 @@ void BoundingVolumeHierarchy::BuildBinnedSpatial(std::vector<CompactTriangle>& t
 	std::cout << "Reference duplication is " << (float)numLeafReferences / root.numReferences << "%\n";
 	std::cout << "Average refs per leaf is " << (float)numLeafReferences / numLeafs << " refs\n";
 	std::cout << "Average depth of leaf is " << (float)depthSum / numLeafs << '\n';
+	std::cout << "Number of nodes: " << id << '\n';
 
 	// Serealize our nodes
 	std::vector<NodeSerialized> serealizedNodes;
