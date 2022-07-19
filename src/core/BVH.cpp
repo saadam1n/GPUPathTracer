@@ -1574,6 +1574,12 @@ struct Bin {
 	}
 };
 
+// 7 - 23.9154
+// 0 - 23.3788
+
+constexpr float costTraversal = 00.0f;
+constexpr float contIntersection = 1.0f;
+
 struct BuilderNode : public ReferenceContainer {
 	// Use two pointers as that that makes it easier to delete nodes in tree optimization
 	BuilderNode* child0;
@@ -1588,7 +1594,7 @@ struct BuilderNode : public ReferenceContainer {
 	}
 
 	float ComputeSAH() const {
-		return box.SurfaceArea() * numReferences;
+		return contIntersection * box.SurfaceArea() * numReferences;
 	}
 
 	// Debug information
@@ -1649,7 +1655,7 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 				right.numReferences = node.numReferences - left.numReferences;
 
 				// Update our best split if necessary
-				float sah = left.ComputeSAH() + right.ComputeSAH();
+				float sah = costTraversal + left.ComputeSAH() + right.ComputeSAH();
 				if (sah < bestSah) {
 					bestLeft = left;
 					bestRight = right;
@@ -1724,7 +1730,7 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 				AABB right = rightPrecomputedBoxes[j + 1];
 
 				// If we have a better SAH, then subdivide the node
-				float sah = left.box.SurfaceArea() * left.numReferences + right.SurfaceArea() * (node.numReferences - left.numReferences);
+				float sah = costTraversal + left.box.SurfaceArea() * left.numReferences + right.SurfaceArea() * (node.numReferences - left.numReferences);
 				if (sah < bestSah) {
 					bestSah = sah;
 					bestLeft = left;
@@ -1888,7 +1894,7 @@ void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& 
 			right.numReferences = rightInfo.second;
 
 			// Update our split if it is better
-			float sah = left.ComputeSAH() + right.ComputeSAH();
+			float sah = costTraversal + left.ComputeSAH() + right.ComputeSAH();
 			if (sah < bestSah) {
 				bestSah = sah;
 
@@ -1965,6 +1971,9 @@ void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& 
 }
 
 void FindBestSplitCanidate(BuilderNode& bestLeft, BuilderNode& bestRight, float& bestSah, BuilderNode& node, float spatialInefficiencyThreshold) {
+	if (node.numReferences == 0) {
+		exit(-1);
+	}
 	// Find our best object partioning canidate
 	FindBestObjectSplit(bestLeft, bestRight, bestSah, node);
 
@@ -2060,7 +2069,7 @@ std::vector<int> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode*
 		FindBestSplitCanidate(bestLeft, bestRight, bestSah, node, spatialInefficiencyThreshold);
 
 		// Subdivide our node if it is efficient to do so
-		if (bestSah < node.ComputeSAH()) {
+		if (node.numReferences > 16 || bestSah < node.ComputeSAH()) {
 			// Allocate a new pool if necessary
 
 			node.child0 = alloc.FetchNext();

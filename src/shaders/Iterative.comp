@@ -276,7 +276,7 @@ shared uint nextRay[gl_WorkGroupSize.y];
 shared uint rayCount[gl_WorkGroupSize.y];
 
 const uint batchPortion = gl_WorkGroupSize.x;
-const uint batchSize = 3 * batchPortion; // make sure that this is a multiple of gl_WorkGroupSize.x
+const uint batchSize = 1 * batchPortion; // make sure that this is a multiple of gl_WorkGroupSize.x. Aila and Laine 2009 used 3 as the multiplier
 const uint globalRayCount = width * height;
 
 layout(std430) buffer globalNextRayBuf {
@@ -290,23 +290,22 @@ void main() {
 
     // Initialize all to zero
     if(threadIdx.x == 0) {
-        rayCount[threadIdx.y] = 0;
+        rayCount[threadIdx.y] = batchPortion;
     }
 
     while(true) {
-        if(rayCount[threadIdx.y] == 0 && threadIdx.x == 0) {
-            nextRay[threadIdx.y] = atomicAdd(globalNextRay, batchSize);
-            rayCount[threadIdx.y] = batchSize;
+        if(threadIdx.x == 0) {
+            nextRay[threadIdx.y] += batchPortion;
+            rayCount[threadIdx.y] -= batchPortion;
+            if(rayCount[threadIdx.y] == 0) {
+                nextRay[threadIdx.y] = atomicAdd(globalNextRay, batchSize);
+                rayCount[threadIdx.y] = batchSize;
+            }
             memoryBarrierShared();
         }
         uint rayIndex = nextRay[threadIdx.y] + threadIdx.x;
         if(rayIndex >= globalRayCount) {
             break;
-        }
-        if(threadIdx.x == 0) {
-            nextRay[threadIdx.y] += batchPortion;
-            rayCount[threadIdx.y] -= batchPortion;
-            memoryBarrierShared();
         }
         ivec2 pixel = RayIndexToMorton(int(rayIndex));// texelFetch(pixelPoolTex, int(rayIndex)).xy;
         vec3 color = PathTrace(pixel);
