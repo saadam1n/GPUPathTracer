@@ -146,11 +146,11 @@ Ray GenerateLightSample(in Vertex vertex, in MaterialInstance material, in Surfa
     return lightRay;
 }
 
-vec3 PathTrace(in ivec2 pixel) {
+void InitRay(in ivec2 pixel, out Ray ray, out vec3 throughput, out vec3 contribution, out float bxdfPdf0, out float bxdfPdf1, out float neePdf, out vec3 lastPosition) {
     uint idx = pixel.y * width + pixel.x;
+    initRNG(idx);
 
 	// Generate our ray
-	Ray ray;
 
     vec2 interpolation = (pixel + rand2()) / vec2(width, height);
 
@@ -163,16 +163,26 @@ vec3 PathTrace(in ivec2 pixel) {
     ray.origin    = position + offset;
     ray.direction = normalize(lower_left + interpolation.s * horizontal + interpolation.t * vertical - offset);
 
-    vec3 throughput = vec3(1.0);
-    vec3 contribution = vec3(0.0);
+    throughput = vec3(1.0);
+    contribution = vec3(0.0);
 
-    Vertex vertex;
-    float bxdfPdf0 = 1.0, bxdfPdf1 = 1.0f;
-    float neePdf = 0.5f / totalLightArea;
+    bxdfPdf0 = 1.0;
+    bxdfPdf1 = 1.0f;
+    neePdf = 0.5f / totalLightArea;
 
     // TODO: clean up variable names
     viewDir = -ray.direction;
-    vec3 lastPosition = ray.origin;
+    lastPosition = ray.origin;
+}
+
+vec3 PathTrace(in ivec2 pixel) {
+    Vertex vertex;
+
+    Ray ray;
+    float bxdfPdf0, bxdfPdf1, neePdf;
+    vec3 lastPosition, throughput, contribution;
+
+    InitRay(pixel, ray, throughput, contribution, bxdfPdf0, bxdfPdf1, neePdf, lastPosition);
 
     // Set max bounce length to an inordinately high number so we (basically) get unbiased results while terminating the few odd rays that run for a lot of bounces without end
     const int kMaxBounces = 64;
@@ -241,6 +251,8 @@ vec3 PathTrace(in ivec2 pixel) {
         ray.origin = vertex.Position; 
     }
 
+    freeRNG();
+
     return contribution;
 }
 
@@ -282,7 +294,6 @@ layout(std430) buffer globalNextRayBuf {
 };
 
 void main() {  
-    initRNG(gl_GlobalInvocationID.x);
     threadIdx =  gl_LocalInvocationID.xy;
 
     // Initialize all to zero
@@ -308,8 +319,6 @@ void main() {
         vec3 color = PathTrace(pixel);
         imageStore(accum, pixel, vec4(imageLoad(accum, pixel).xyz + color, 1.0));
     }
-
-    freeRNG();
 
 }
 
