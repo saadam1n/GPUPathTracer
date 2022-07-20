@@ -22,7 +22,7 @@ uint32_t Width = 1280;
 uint32_t Height = 720;
 
 // Camera params 
-constexpr float kCameraSetting = 0.61f;
+constexpr float kCameraSetting = 0.01f;
 
 constexpr float CameraSpeed = 2000.000f * 0.5f * kCameraSetting;
 constexpr float CameraSensitivity = 0.001f;
@@ -52,6 +52,40 @@ void MouseCallback(GLFWwindow* Window, double X, double Y) {
 }
 
 extern void HilbertCurve(std::vector<ivec2>& output, ivec2 i, int m, ivec2 offset);
+
+/*
+
+// THe stack represents the nodes from first to the current node, and the int is the distance
+pair<stack<int>, int> currPath
+stack<pair<stack<int>, int>> postponedPaths
+
+currPath.push(first_node, 0)
+
+while true
+	if currPath.stack has any nodes twice within its stack
+		distance = -1
+		break
+	if currPath.stack.top() == the node we want to get to 
+		distance = max(distance, currPath.distance)
+		pop()
+		continue
+	else
+		for each node we can reach from currPath.stack().top
+			pair<stack<int>, int> possiblePath = currPath
+			possiblePath.stack.push(the node we can reach)
+			possiblePath.stack.push(possiblePath.distance + distance to reach that node)
+			postponedPaths.push(possiblePath)
+		currPath = postponedPaths.pop()
+
+
+func pop() {
+	if postponedPaths is not empty
+		currPath = postponedPaths.pop()
+	else
+		break
+}
+
+*/
 
 int main(int argc, char** argv) {
 

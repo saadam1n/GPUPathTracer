@@ -153,15 +153,11 @@ vec3 ImportanceSampleCosine() {
     return vec3(radius * vec2(sin(phi), cos(phi)), z);
 }
 
-// TODO: update this so NEE doesn't break
-float ProbabilityDensityDirection(inout MaterialInstance material, in SurfaceInteraction interaction, float diffusePmf) {
-    return diffusePmf * ProbabilityDensityCosine(interaction) + (1.0f - diffusePmf) * ProbabilityDensityMicrofacet(material, interaction);
-}
-
 float CalcDiffusePmf(in MaterialInstance material, in SurfaceInteraction interaction) {
-    interaction.ndi = 0.707f; // cos(45 deg) 
-    float diffusePmf = clamp(AverageLuminance(DiffuseEnergyConservation(material, interaction)), 0.0f, 0.6f);
-    return diffusePmf;
+    interaction.ndi = 0.5f;
+    float diffEnergy = clamp(AverageLuminance(DiffuseEnergyConservation(material, interaction)), 0.0f, 1.0f);
+    float diffusePmf = mix(0.2f * diffEnergy, diffEnergy, material.roughness);
+    return diffEnergy;
 }
 
 float ProbabilityDensityDirection(inout MaterialInstance material, in SurfaceInteraction interaction) {

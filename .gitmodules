@@ -19,6 +19,3 @@
 [submodule "extern/tinyobjloader"]
 	path = extern/tinyobjloader
 	url = https://github.com/tinyobjloader/tinyobjloader
-[submodule "thirdparty/glew"]
-	path = thirdparty/glew
-	url = https://github.com/Perlmint/glew-cmake

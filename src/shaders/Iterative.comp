@@ -1,10 +1,11 @@
 #version 430
 
 vec3 debugColor = vec3(0.0f);
+uvec2 threadIdx;
 
 #extension GL_ARB_bindless_texture : enable
 
-layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 #include "common/Geometry.glsl"
 #include "common/BVH.glsl"
@@ -147,7 +148,6 @@ Ray GenerateLightSample(in Vertex vertex, in MaterialInstance material, in Surfa
 
 vec3 PathTrace(in ivec2 pixel) {
     uint idx = pixel.y * width + pixel.x;
-    initRNG(idx);
 
 	// Generate our ray
 	Ray ray;
@@ -241,8 +241,6 @@ vec3 PathTrace(in ivec2 pixel) {
         ray.origin = vertex.Position; 
     }
 
-    freeRNG();
-
     return contribution;
 }
 
@@ -284,9 +282,8 @@ layout(std430) buffer globalNextRayBuf {
 };
 
 void main() {  
-#define PRESISTENT_THREADS
-#ifdef PRESISTENT_THREADS
-    uvec2 threadIdx =  gl_LocalInvocationID.xy;
+    initRNG(gl_GlobalInvocationID.x);
+    threadIdx =  gl_LocalInvocationID.xy;
 
     // Initialize all to zero
     if(threadIdx.x == 0) {
@@ -311,11 +308,9 @@ void main() {
         vec3 color = PathTrace(pixel);
         imageStore(accum, pixel, vec4(imageLoad(accum, pixel).xyz + color, 1.0));
     }
-#else
-    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
-    vec3 color = PathTrace(pixel);
-    imageStore(accum, pixel, vec4(imageLoad(accum, pixel).xyz + color, 1.0));
-#endif
+
+    freeRNG();
+
 }
 
 /*

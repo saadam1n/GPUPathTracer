@@ -515,7 +515,10 @@ bool StackTraversalClosestHit(in Ray ray, inout HitInfo intersection) {
 	return result;
 }
 
+
 bool StackTraversalAnyHit(in Ray ray, inout HitInfo intersection) {
+
+
 	Ray iray;
 	iray.direction = 1.0f / ray.direction;
 	iray.origin = -ray.origin * iray.direction;
@@ -528,6 +531,8 @@ bool StackTraversalAnyHit(in Ray ray, inout HitInfo intersection) {
 	int currentNode = fbs(root.data[0].w);
 	int stack[BVH_STACK_SIZE];
 	int index = -1;
+
+	int postponedLeaf;
 
 	while (true) {
 		BVHNode child0 = GetNode(currentNode);
@@ -579,6 +584,9 @@ bool StackTraversalAnyHit(in Ray ray, inout HitInfo intersection) {
 
 #define POSTPONEMENT_BUFFER_SIZE 16
 
+//22.4007
+//#define SPECULATIVE_TRAVERSAL
+shared bool flush[gl_WorkGroupSize.y];
 bool IfIfClosestHit(in Ray ray, inout HitInfo intersection) {
 	/*
 	Alia and Laine's original model
@@ -609,6 +617,8 @@ bool IfIfClosestHit(in Ray ray, inout HitInfo intersection) {
 	In both cases we use the integer in checking if it a leaf or not
 	*/
 
+	flush[threadIdx.y] = false;
+
 	Ray iray;
 	iray.direction = 1.0f / ray.direction;
 	iray.origin = -ray.origin * iray.direction;
@@ -618,14 +628,20 @@ bool IfIfClosestHit(in Ray ray, inout HitInfo intersection) {
 	int stack[BVH_STACK_SIZE];
 	int next = 0;
 
-#ifdef CRAPPY_SPECULATIVE
-	int postponedLeaves[POSTPONEMENT_BUFFER_SIZE];
-	int nextPostponement = 0;
-#endif
+	/*
+	Speculative traversal ideas:
+
+	If the leaf buffer is full, we must set a flag in flush to tell every thread that it is time to flush
+
+	If it is time to flush, we intersect with the postponement leaf buffer (if it is empty, we set it to the current leaf)
+
+	In accordance with Aila and Laine 2009, the buffer size is just 1
+	*/
+	int postponedLeaf = -1; 
+	bool postponementBufferFull = false;
 
 	bool result = false;
 	while (true) {
-		debugColor++;
 		if (!IsLeafVal(current)) {
 			// Texture reads right after the other for best texture cache access
 			BVHNode child0 = GetNode(current);
@@ -659,24 +675,45 @@ bool IfIfClosestHit(in Ray ray, inout HitInfo intersection) {
 			}
 		}
 		if (IsLeafVal(current)) {
-#ifdef CRAPPY_SPECULATIVE
-			if (nextPostponement == POSTPONEMENT_BUFFER_SIZE) {
-				// Postponement buffer is full, iterate through it and the current one
-				IntersectLeaf(current, ray, intersection, result);
-				while (nextPostponement > 0) {
-					IntersectLeaf(postponedLeaves[--nextPostponement], ray, intersection, result);
-				}
+#ifdef SPECULATIVE_TRAVERSAL
+			bool pushAfter = false;
+			// After this flow control branch, it is garunteed that our postponement buffer will be full
+			if (!postponementBufferFull) {
+				// Push to the buffer if we can
+				postponedLeaf = current;
+				postponementBufferFull = true;
 			}
 			else {
-				// We have space in the postponement buffer. Push our leaf to it
-				postponedLeaves[nextPostponement++] = current;
+				// Intiate a flush
+				flush[threadIdx.y] = true;
+				pushAfter = true;
+			}
+
+			memoryBarrierShared();
+
+			if (flush[threadIdx.y]) {
+				flush[threadIdx.y] = false;
+				IntersectLeaf(postponedLeaf, ray, intersection, result);
+				postponementBufferFull = false;
+			}
+
+			if (pushAfter) {
+				postponedLeaf = current;
+				postponementBufferFull = true;
 			}
 #else
 			IntersectLeaf(current, ray, intersection, result);
 #endif
-			ififPop();
+
+			ififPop(); // macro that intersects the postponed leaf if the buffer is full and the traversal is ending
 		}
 	}
+
+#ifdef SPECULATIVE_TRAVERSAL
+	if (postponementBufferFull) {
+		IntersectLeaf(postponedLeaf, ray, intersection, result);
+	}
+#endif
 
 	return result;
 }
@@ -690,6 +727,9 @@ bool IfIfAnyHit(in Ray ray, inout HitInfo intersection) {
 
 	int stack[BVH_STACK_SIZE];
 	int next = 0;
+
+	int postponedLeaf = -1;
+	bool postponementBufferFull = false;
 
 	bool result = false;
 	while (true) {
@@ -720,16 +760,49 @@ bool IfIfAnyHit(in Ray ray, inout HitInfo intersection) {
 			}
 		}
 		if (IsLeafVal(current)) {
+#ifdef SPECULATIVE_TRAVERSAL
+			bool pushAfter = false;
+			// After this flow control branch, it is garunteed that our postponement buffer will be full
+			if (!postponementBufferFull) {
+				// Push to the buffer if we can
+				postponedLeaf = current;
+				postponementBufferFull = true;
+			}
+			else {
+				// Intiate a flush
+				flush[threadIdx.y] = true;
+				pushAfter = true;
+			}
+
+			memoryBarrierShared();
+
+			if (flush[threadIdx.y]) {
+				flush[threadIdx.y] = false;
+				IntersectLeaf(postponedLeaf, ray, intersection, result);
+				postponementBufferFull = false;
+			}
+
+			if (pushAfter) {
+				postponedLeaf = current;
+				postponementBufferFull = true;
+			}
+#else
 			IntersectLeaf(current, ray, intersection, result);
+#endif
 			if (result) {
 				return true;
 			}
-
 			ififPop();
 		}
 	}
 
-	return false;
+#ifdef SPECULATIVE_TRAVERSAL
+	if (postponementBufferFull) {
+		IntersectLeaf(postponedLeaf, ray, intersection, result);
+	}
+#endif
+
+	return result;
 }
 
 const uint sentinelBit = (1 << 31);

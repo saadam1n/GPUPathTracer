@@ -657,7 +657,7 @@ void Renderer::RenderFrame(const Camera& camera)  {
     iterative.CreateBinding();
     iterative.LoadCamera(camera, viewportWidth, viewportHeight);
     iterative.LoadInteger("stratumIdx", numSamples % kNumStrata);
-    glDispatchCompute(viewportWidth / 8, viewportHeight / 8, 1);
+    glDispatchCompute(2048, 1, 1); // My expriments reveal that the number of thread you launch DOES affect perforamnce, contrary to what Aila and Laine 2009 say. This value is handpicked for a GTX 980 
     glMemoryBarrier(MEMORY_BARRIER_RT);
     numSamples++;
 
