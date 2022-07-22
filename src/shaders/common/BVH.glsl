@@ -614,6 +614,7 @@ bool StackTraversalAnyHit(in Ray ray, inout HitInfo intersection) {
 #define IsLeaf(node) IsLeafVal(fbs(node.data[0].w))
 #define ififPop() if (next == 0) {break;} current = stack[--next];
 #define ififPush(far) stack[next++] = far;
+#define RootFirstChild() 1 // the first child is always right after the root
 
 #define POSTPONEMENT_BUFFER_SIZE 16
 
@@ -656,7 +657,7 @@ bool IfIfClosestHit(in Ray ray, inout HitInfo intersection) {
 	iray.direction = 1.0f / ray.direction;
 	iray.origin = -ray.origin * iray.direction;
 
-	int current = FirstChildOf(GetNode(0));
+	int current = RootFirstChild();
 
 	int stack[BVH_STACK_SIZE];
 	int next = 0;
@@ -756,7 +757,7 @@ bool IfIfAnyHit(in Ray ray, inout HitInfo intersection) {
 	iray.direction = 1.0f / ray.direction;
 	iray.origin = -ray.origin * iray.direction;
 
-	int current = FirstChildOf(GetNode(0));
+	int current = RootFirstChild();
 
 	int stack[BVH_STACK_SIZE];
 	int next = 0;
