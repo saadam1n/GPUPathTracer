@@ -1589,8 +1589,8 @@ Usually, there are two types of issues when we have large leaves:
 Generally, if-if traversal has been highly optimized to avoid branching, so traversal cost is not an issue, but intersection is. Therefore, traversal cost should ideally be set to zero or a value relatively small to the intersection costs
 
 */
-constexpr float costTraversal = 0.0f;    // With faster traversal algorithms, this should be a smaller valuer
-constexpr float contIntersection = 1.0f; // With faster ray-triangle intersection algorithms, this should be smaller
+constexpr float costTraversal = 1.23f;    // With faster traversal algorithms, this should be a smaller valuer
+constexpr float costIntersection = 5.33f; // With faster ray-triangle intersection algorithms, this should be smaller
 
 struct BuilderNode : public ReferenceContainer {
 	// Use two pointers as that that makes it easier to delete nodes in tree optimization
@@ -1607,7 +1607,7 @@ struct BuilderNode : public ReferenceContainer {
 	}
 
 	float ComputeSAH() const {
-		return contIntersection * box.SurfaceArea() * numReferences;
+		return costIntersection * box.SurfaceArea() * numReferences;
 	}
 
 	// Debug information
@@ -1668,7 +1668,7 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 				right.numReferences = node.numReferences - left.numReferences;
 
 				// Update our best split if necessary
-				float sah = costTraversal + left.ComputeSAH() + right.ComputeSAH();
+				float sah = left.ComputeSAH() + right.ComputeSAH();
 				if (sah < bestSah) {
 					bestLeft = left;
 					bestRight = right;
@@ -1743,7 +1743,7 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 				AABB right = rightPrecomputedBoxes[j + 1];
 
 				// If we have a better SAH, then subdivide the node
-				float sah = costTraversal + left.box.SurfaceArea() * left.numReferences + right.SurfaceArea() * (node.numReferences - left.numReferences);
+				float sah = left.box.SurfaceArea() * left.numReferences + right.SurfaceArea() * (node.numReferences - left.numReferences);
 				if (sah < bestSah) {
 					bestSah = sah;
 					bestLeft = left;
@@ -1907,7 +1907,7 @@ void FindBestSpatialSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& 
 			right.numReferences = rightInfo.second;
 
 			// Update our split if it is better
-			float sah = costTraversal + left.ComputeSAH() + right.ComputeSAH();
+			float sah = left.ComputeSAH() + right.ComputeSAH();
 			if (sah < bestSah) {
 				bestSah = sah;
 
@@ -1998,7 +1998,7 @@ void FindBestMedianSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 			right.Insert(node.references[j]);
 		}
 
-		float sah = costTraversal + left.ComputeSAH() + right.ComputeSAH();
+		float sah = left.ComputeSAH() + right.ComputeSAH();
 		if (sah < bestSah) {
 			bestSah = sah;
 			bestLeft = left;
@@ -2081,29 +2081,38 @@ void PushChildren(BuilderNode& node, const BuilderNode& left, const BuilderNode&
 	node.child0->id = id++;
 	node.child1->id = id++;
 
+	node.child1->parent = &node;
+	node.child1->parent = &node;
+
 	unprocessedSubtrees.push(node.child0);
 	unprocessedSubtrees.push(node.child1);
 
 	node.references.clear(); // TODO: move this to an unused reference array pool
+	node.references.shrink_to_fit();
 }
 
 int numLeafReferences = 0;
 int numLeafs = 0;
 int depthSum = 0;
-
 void ConvertIntoLeaf(BuilderNode& node, std::vector<int32_t>& references) {
 	// Our traversal expects to handle duplicated references, so we must have a second reference buffer that points to locations in our triangle buffer
 	// This doesn't terrible affect caching performance, as measured in my expriments where I created a new triangle buffer to perfectly match the references to create an upper bound on caching (or at least a very close one)
 	// The difference was negligible, and I hypothesize that this is a result of most leaves having one triangle
 	// However, a possible way to further improver performance is to reorder according to spatial locality, which is a big win for coherent rays
 	node.offset = references.size();
+
 	for (const auto& ref : node.references) {
 		references.push_back(ref.index);
 	}
-
+	references.back() = -references.back(); // set end of array marker
 	numLeafReferences += node.numReferences;
 	numLeafs++;
 	depthSum += node.depth;
+}
+
+void AdjustSAH(const BuilderNode& parent, float& sah) {
+	float sa = parent.box.SurfaceArea();
+	sah = costTraversal + sah / sa;
 }
 
 std::vector<int> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode* root, MemoryChunkAllocator<BuilderNode>& alloc) {
@@ -2135,9 +2144,10 @@ std::vector<int> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode*
 		float bestSah = FLT_MAX;
 
 		FindBestSplitCanidate(bestLeft, bestRight, bestSah, node, spatialInefficiencyThreshold);
+		AdjustSAH(node, bestSah);
 
 		// Subdivide our node if it is efficient to do so
-		if (bestSah < node.ComputeSAH()) {
+		if (bestSah < costIntersection * node.numReferences) {
 			PushChildren(node, bestLeft, bestRight, unprocessedSubtrees, alloc);
 		}
 		else if(node.numReferences < 16) {
@@ -2172,6 +2182,30 @@ std::vector<int> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode*
 }
 
 std::vector<NodeSerialized> BlockingOptimizedCache(const std::vector<NodeSerialized>& unoptimized);
+void ReinsertionOptimize(BuilderNode& root, MemoryChunkAllocator<BuilderNode>& alloc);
+
+float CalculateCost(const BuilderNode& root) {
+	float cost = 0.0f;
+
+	std::stack<const BuilderNode*> dfs;
+	dfs.push(&root);
+
+	while (!dfs.empty()) {
+		const BuilderNode& node = *dfs.top();
+		dfs.pop();
+
+		if (node.child0) {
+			cost += costTraversal * node.box.SurfaceArea();
+			dfs.push(node.child0);
+			dfs.push(node.child1);
+		}
+		else {
+			cost += costIntersection * node.box.SurfaceArea() * node.numReferences;
+		}
+	}
+
+	return cost / root.box.SurfaceArea();
+}
 
 void BoundingVolumeHierarchy::BuildBinnedSpatial(std::vector<CompactTriangle>& triangles) {
 	// Build the BVH over references
@@ -2189,14 +2223,16 @@ void BoundingVolumeHierarchy::BuildBinnedSpatial(std::vector<CompactTriangle>& t
 		root.Insert(reference);
 	}
 
-	MemoryChunkAllocator<BuilderNode> nodeAllocator;
+	MemoryChunkAllocator<BuilderNode> alloc;
 	root.depth = 0;
-	auto references = BuildSBVH(triangles, &root, nodeAllocator);
+	auto references = BuildSBVH(triangles, &root, alloc);
+	ReinsertionOptimize(root, alloc);
 
 	std::cout << "Reference duplication is " << (float)numLeafReferences / root.numReferences << "%\n";
 	std::cout << "Average refs per leaf is " << (float)numLeafReferences / numLeafs << " refs\n";
 	std::cout << "Average depth of leaf is " << (float)depthSum / numLeafs << '\n';
 	std::cout << "Number of nodes: " << id << '\n';
+	std::cout << "Overall tree cost: " << CalculateCost(root) << '\n';
 
 	// Serealize our nodes
 	std::vector<NodeSerialized> serealizedNodes;
@@ -2225,14 +2261,14 @@ void BoundingVolumeHierarchy::BuildBinnedSpatial(std::vector<CompactTriangle>& t
 			}
 		}
 		else {
-			gpuReadableNode.triangleRange = -((buildOutput.numReferences & 15) | (buildOutput.offset << 4));
+			gpuReadableNode.triangleRange = -buildOutput.offset;
 		}
 
 		serealizedNodes.push_back(gpuReadableNode);
 	}
 
 	// Over a minute, 50.9627 without vs 51.3006 with: marginally boosts FPS
-	serealizedNodes = BlockingOptimizedCache(serealizedNodes);
+	//serealizedNodes = BlockingOptimizedCache(serealizedNodes);
 
 	// Reorder nodes for better memory access on the GPU
 	struct NewLayout {
@@ -2267,6 +2303,18 @@ void BoundingVolumeHierarchy::BuildBinnedSpatial(std::vector<CompactTriangle>& t
 
 	nodesVec = serealizedNodes;
 	referenceVec = references;
+}
+
+/*
+Implementation of "Fast Insertion-Based Optimization of Bounding Volume Hierarchies" by Bittner et al.
+
+The idea of the authors is to find a node that is inefficiently split, and then try to place it somewhere else in the BVH
+*/
+
+#include <queue>
+
+void ReinsertionOptimize(BuilderNode& root, MemoryChunkAllocator<BuilderNode>& alloc) {
+
 }
 
 /*
@@ -2340,7 +2388,7 @@ std::vector<NodeSerialized> BlockingOptimizedCache(const std::vector<NodeSeriali
 		int leftIndex = optimized.size();
 		int rightIndex = optimized.size() + 1;
 
-		if (children.left.firstChild >= 0) {
+		if (children.left.firstChild > 0) {
 			ChildPairInformation leftChildren;
 			leftChildren.left = unoptimized[children.left.firstChild];
 			leftChildren.right = unoptimized[children.left.firstChild + 1];
@@ -2348,7 +2396,7 @@ std::vector<NodeSerialized> BlockingOptimizedCache(const std::vector<NodeSeriali
 			dfsOrderer.push(leftChildren);
 		}
 
-		if (children.right.firstChild >= 0) {
+		if (children.right.firstChild > 0) {
 			ChildPairInformation rightChildren;
 			rightChildren.left = unoptimized[children.right.firstChild];
 			rightChildren.right = unoptimized[children.right.firstChild + 1];

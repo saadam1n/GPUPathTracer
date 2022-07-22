@@ -413,8 +413,40 @@ void UnpackTriangleRange(in int range, out int i, out int j) {
 	j = i + (range & 15);
 }
 
+/*
+Idea in the QBVH paper:
+the last index should be negative, this way we can reference any index under 2^31 and get away with infinite triangles per leaf (disregarding performance of course)
+*/
 void IntersectLeaf(in int leaf, in Ray ray, inout HitInfo intersection, inout bool result) {
-	int i, j;
+	int i = -leaf;
+	bool iterating = true;
+	while (iterating) {
+		int index = fbs(texelFetch(referenceTex, i++).x);
+		if (index < 0) {
+			index = -index;
+			iterating = false;
+		}
+
+		bool hit = IntersectTriangle(ReadPackedCompactTriangle(index), ray, intersection);
+		result = result || hit;
+	}
+}
+
+/*
+	int i = -leaf;
+	bool iterating = true;
+	while (iterating) {
+		int index = fbs(texelFetch(referenceTex, i++).x);
+		if (index < 0) {
+			index = -index;
+			iterating = false;
+		}
+
+		bool hit = IntersectTriangle(ReadPackedCompactTriangle(index), ray, intersection);
+		result = result || hit;
+	}
+
+		int i, j;
 	UnpackTriangleRange(leaf, i, j);
 
 	for (int k = i; k < j; k++) {
@@ -422,13 +454,14 @@ void IntersectLeaf(in int leaf, in Ray ray, inout HitInfo intersection, inout bo
 		bool hit = IntersectTriangle(ReadPackedCompactTriangle(location), ray, intersection);
 		result = result || hit;
 	}
-}
+*/
 
 void IntersectLeaf(in BVHNode leaf, in Ray ray, inout HitInfo intersection, inout bool result) {
 	IntersectLeaf(fbs(leaf.data[0].w), ray, intersection, result);
 }
 
 bool IntersectLeafAny(in BVHNode leaf, in Ray ray, inout HitInfo intersection) {
+	return false;
 	int i, j;
 	UnpackTriangleRange(fbs(leaf.data[0].w), i, j);
 
@@ -577,7 +610,7 @@ bool StackTraversalAnyHit(in Ray ray, inout HitInfo intersection) {
 }
 
 #define FirstChildOf(node) fbs(node.data[0].w)
-#define IsLeafVal(x) (x < 0)
+#define IsLeafVal(x) (x <= 0) // The root is always node zero so we do not have to worry about that
 #define IsLeaf(node) IsLeafVal(fbs(node.data[0].w))
 #define ififPop() if (next == 0) {break;} current = stack[--next];
 #define ififPush(far) stack[next++] = far;
