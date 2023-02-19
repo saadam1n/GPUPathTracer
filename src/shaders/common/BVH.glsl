@@ -418,6 +418,10 @@ Idea in the QBVH paper:
 the last index should be negative, this way we can reference any index under 2^31 and get away with infinite triangles per leaf (disregarding performance of course)
 */
 void IntersectLeaf(in int leaf, in Ray ray, inout HitInfo intersection, inout bool result) {
+	/*
+	Interestingly, this outperforms the any-hit intersection by a lot (26 fps by 28 fps)
+	I hypthesize that this is a result of less coherent memory access and execution, as the any-hit function immediately returns when a hit is found
+	*/
 	int i = -leaf;
 	bool iterating = true;
 	while (iterating) {
@@ -460,18 +464,26 @@ void IntersectLeaf(in BVHNode leaf, in Ray ray, inout HitInfo intersection, inou
 	IntersectLeaf(fbs(leaf.data[0].w), ray, intersection, result);
 }
 
-bool IntersectLeafAny(in BVHNode leaf, in Ray ray, inout HitInfo intersection) {
-	return false;
-	int i, j;
-	UnpackTriangleRange(fbs(leaf.data[0].w), i, j);
+bool IntersectLeafAny(in int leaf, in Ray ray, inout HitInfo intersection) {
+	int i = -leaf;
+	bool iterating = true;
+	while (iterating) {
+		int index = fbs(texelFetch(referenceTex, i++).x);
+		if (index < 0) {
+			index = -index;
+			iterating = false;
+		}
 
-	for (int k = i; k < j; k++) {
-		if (IntersectTriangle(ReadPackedCompactTriangle(k), ray, intersection)) {
+		if (IntersectTriangle(ReadPackedCompactTriangle(index), ray, intersection)) {
 			return true;
 		}
 	}
 
 	return false;
+}
+
+bool IntersectLeafAny(in BVHNode leaf, in Ray ray, inout HitInfo intersection) {
+	return IntersectLeafAny(fbs(leaf.data[0].w), ray, intersection);
 }
 
 #define BVH_STACK_SIZE 27
@@ -550,8 +562,6 @@ bool StackTraversalClosestHit(in Ray ray, inout HitInfo intersection) {
 
 
 bool StackTraversalAnyHit(in Ray ray, inout HitInfo intersection) {
-
-
 	Ray iray;
 	iray.direction = 1.0f / ray.direction;
 	iray.origin = -ray.origin * iray.direction;
@@ -616,11 +626,11 @@ bool StackTraversalAnyHit(in Ray ray, inout HitInfo intersection) {
 #define ififPush(far) stack[next++] = far;
 #define RootFirstChild() 1 // the first child is always right after the root
 
-#define POSTPONEMENT_BUFFER_SIZE 16
-
 //22.4007
 //#define SPECULATIVE_TRAVERSAL
+#ifdef SPECULATIVE_TRAVERSAL
 shared bool flush[gl_WorkGroupSize.y];
+#endif
 bool IfIfClosestHit(in Ray ray, inout HitInfo intersection) {
 	/*
 	Alia and Laine's original model
@@ -651,7 +661,9 @@ bool IfIfClosestHit(in Ray ray, inout HitInfo intersection) {
 	In both cases we use the integer in checking if it a leaf or not
 	*/
 
+#ifdef SPECULATIVE_TRAVERSAL
 	flush[threadIdx.y] = false;
+#endif
 
 	Ray iray;
 	iray.direction = 1.0f / ray.direction;
@@ -662,6 +674,7 @@ bool IfIfClosestHit(in Ray ray, inout HitInfo intersection) {
 	int stack[BVH_STACK_SIZE];
 	int next = 0;
 
+#ifdef SPECULATIVE_TRAVERSAL
 	/*
 	Speculative traversal ideas:
 
@@ -673,6 +686,7 @@ bool IfIfClosestHit(in Ray ray, inout HitInfo intersection) {
 	*/
 	int postponedLeaf = -1; 
 	bool postponementBufferFull = false;
+#endif
 
 	bool result = false;
 	while (true) {

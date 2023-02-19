@@ -1594,12 +1594,13 @@ constexpr float costIntersection = 5.33f; // With faster ray-triangle intersecti
 
 struct BuilderNode : public ReferenceContainer {
 	// Use two pointers as that that makes it easier to delete nodes in tree optimization
-	BuilderNode* child0;
-	BuilderNode* child1;
+	BuilderNode* children[2];
 	BuilderNode* parent;
+	BuilderNode* sibling;
+	int index;
 	int offset;
 
-	BuilderNode() : child0(nullptr), child1(nullptr), parent(nullptr), offset(0) {}
+	BuilderNode() : children{ nullptr, nullptr }, parent(nullptr), index(-1), offset(0) {}
 
 	// For lack of a better word (the nodes "consume" the bins
 	void Consume(const Bin& bin) {
@@ -1763,7 +1764,6 @@ void FindBestObjectSplit(BuilderNode& bestLeft, BuilderNode& bestRight, float& b
 
 void DebugNode(const BuilderNode& input, const char* name) {
 	auto node = input;
-	node.box.max -= node.box.min;
 	std::cout << "Node information for " << name << ":\n";
 	std::cout << "Depth:\t" << node.depth << '\n';
 	std::cout << "ID:\t" << node.id << '\n';
@@ -2059,8 +2059,12 @@ struct MemoryPool {
 template<typename T>
 struct MemoryChunkAllocator {
 	std::vector<MemoryPool<T>> pools;
+	int count;
+
+	MemoryChunkAllocator() : count(0) {}
 
 	T* FetchNext() {
+		count++;
 		if (pools.empty() || pools.back().Full()) {
 			pools.emplace_back();
 		}
@@ -2070,22 +2074,28 @@ struct MemoryChunkAllocator {
 
 int id = 0;
 void PushChildren(BuilderNode& node, const BuilderNode& left, const BuilderNode& right, std::stack<BuilderNode*>& unprocessedSubtrees, MemoryChunkAllocator<BuilderNode>& alloc) {
-	node.child0 = alloc.FetchNext();
-	node.child1 = alloc.FetchNext();
-	*node.child0 = left;
-	*node.child1 = right;
+	node.children[0] = alloc.FetchNext();
+	node.children[1] = alloc.FetchNext();
+	*node.children[0] = left;
+	*node.children[1] = right;
 
-	node.child0->depth = node.depth + 1;
-	node.child1->depth = node.depth + 1;
+	node.children[0]->depth = node.depth + 1;
+	node.children[1]->depth = node.depth + 1;
 
-	node.child0->id = id++;
-	node.child1->id = id++;
+	node.children[0]->id = id++;
+	node.children[1]->id = id++;
 
-	node.child1->parent = &node;
-	node.child1->parent = &node;
+	node.children[0]->index = 0;
+	node.children[1]->index = 1;
 
-	unprocessedSubtrees.push(node.child0);
-	unprocessedSubtrees.push(node.child1);
+	node.children[0]->sibling = node.children[1];
+	node.children[1]->sibling = node.children[0];
+
+	node.children[0]->parent = &node;
+	node.children[1]->parent = &node;
+
+	unprocessedSubtrees.push(node.children[0]);
+	unprocessedSubtrees.push(node.children[1]);
 
 	node.references.clear(); // TODO: move this to an unused reference array pool
 	node.references.shrink_to_fit();
@@ -2150,31 +2160,8 @@ std::vector<int> BuildSBVH(std::vector<CompactTriangle>& triangles, BuilderNode*
 		if (bestSah < costIntersection * node.numReferences) {
 			PushChildren(node, bestLeft, bestRight, unprocessedSubtrees, alloc);
 		}
-		else if(node.numReferences < 16) {
-			ConvertIntoLeaf(node, references);
-		}
 		else {
-			// Median object subdivide
-
-			std::stack<BuilderNode*> leafDivider;
-			leafDivider.push(&node);
-
-			while (!leafDivider.empty()) {
-			
-				BuilderNode& possibleLeaf = *leafDivider.top();
-				leafDivider.pop();
-
-				if (possibleLeaf.numReferences < 16) {
-					ConvertIntoLeaf(possibleLeaf, references);
-					continue;
-				}
-
-				BuilderNode leafLeft, leafRight;
-				float leafSah = FLT_MAX;
-				FindBestMedianSplit(leafLeft, leafRight, leafSah, possibleLeaf);
-
-				PushChildren(possibleLeaf, leafLeft, leafRight, leafDivider, alloc);
-			}
+			ConvertIntoLeaf(node, references);
 		}
 	}
 
@@ -2194,10 +2181,10 @@ float CalculateCost(const BuilderNode& root) {
 		const BuilderNode& node = *dfs.top();
 		dfs.pop();
 
-		if (node.child0) {
+		if (node.children[0]) {
 			cost += costTraversal * node.box.SurfaceArea();
-			dfs.push(node.child0);
-			dfs.push(node.child1);
+			dfs.push(node.children[0]);
+			dfs.push(node.children[1]);
 		}
 		else {
 			cost += costIntersection * node.box.SurfaceArea() * node.numReferences;
@@ -2226,7 +2213,7 @@ void BoundingVolumeHierarchy::BuildBinnedSpatial(std::vector<CompactTriangle>& t
 	MemoryChunkAllocator<BuilderNode> alloc;
 	root.depth = 0;
 	auto references = BuildSBVH(triangles, &root, alloc);
-	ReinsertionOptimize(root, alloc);
+	//ReinsertionOptimize(root, alloc);
 
 	std::cout << "Reference duplication is " << (float)numLeafReferences / root.numReferences << "%\n";
 	std::cout << "Average refs per leaf is " << (float)numLeafReferences / numLeafs << " refs\n";
@@ -2247,17 +2234,17 @@ void BoundingVolumeHierarchy::BuildBinnedSpatial(std::vector<CompactTriangle>& t
 
 		gpuReadableNode.BoundingBox = buildOutput.box;
 
-		if (buildOutput.child0 != nullptr) {
+		if (buildOutput.children[0] != nullptr) {
 			gpuReadableNode.firstChild = serealizedNodes.size() + bfs.size() + 1;
 
 			// Push box with largest surface area first
-			if (buildOutput.child0->box.SurfaceArea() < buildOutput.child1->box.SurfaceArea()) {
-				bfs.push(buildOutput.child1);
-				bfs.push(buildOutput.child0);
+			if (buildOutput.children[0]->box.SurfaceArea() < buildOutput.children[1]->box.SurfaceArea()) {
+				bfs.push(buildOutput.children[1]);
+				bfs.push(buildOutput.children[0]);
 			}
 			else {
-				bfs.push(buildOutput.child0);
-				bfs.push(buildOutput.child1);
+				bfs.push(buildOutput.children[0]);
+				bfs.push(buildOutput.children[1]);
 			}
 		}
 		else {
@@ -2268,7 +2255,7 @@ void BoundingVolumeHierarchy::BuildBinnedSpatial(std::vector<CompactTriangle>& t
 	}
 
 	// Over a minute, 50.9627 without vs 51.3006 with: marginally boosts FPS
-	//serealizedNodes = BlockingOptimizedCache(serealizedNodes);
+	serealizedNodes = BlockingOptimizedCache(serealizedNodes);
 
 	// Reorder nodes for better memory access on the GPU
 	struct NewLayout {
@@ -2314,7 +2301,99 @@ The idea of the authors is to find a node that is inefficiently split, and then 
 #include <queue>
 
 void ReinsertionOptimize(BuilderNode& root, MemoryChunkAllocator<BuilderNode>& alloc) {
+	root.parent = &root;
+	auto sortFunc = [](const BuilderNode* lhs, const BuilderNode* rhs) { return (lhs->box.SurfaceArea() < rhs->box.SurfaceArea()); };
+	constexpr int passT = 10;
+	float previousCost = FLT_MAX;
 
+	int i = 0;
+	while (true) {
+
+		std::vector<BuilderNode*> inefficientNodes;
+		for (auto& pool : alloc.pools) {
+			for (auto& node : pool.pool) {
+				inefficientNodes.push_back(&node);
+			}
+		}
+
+		std::sort(inefficientNodes.rbegin(), inefficientNodes.rend(), sortFunc);
+
+		int numNodes = 0;
+		for (auto ptr : inefficientNodes) {
+			if (ptr->parent != ptr) { // Nodes with the parent pointer set to themselves are no longer part of the tree due to the reinsertion process, or they are the root
+				numNodes++;
+			}
+		}
+
+		constexpr float k = 0.01f;
+		int numSelected = (int)ceil(k * numNodes);
+
+		std::vector<BuilderNode*> selected;
+		for (auto ptr : inefficientNodes) {
+			/*
+			1. Our node is not deleted
+			2. Our node has children
+			3. Our node is not the children of the root
+			*/
+			if (ptr->parent != ptr && ptr->children[0] && ptr->parent != &root) {
+				// Remove the nodes from the tree
+				
+				// First keep our children in a buffer of nodes to be worked on
+				selected.push_back(ptr->children[0]);
+				selected.push_back(ptr->children[1]);
+
+				// Remove the children
+				ptr->children[0]->parent = ptr->children[0];
+				ptr->children[1]->parent = ptr->children[1];
+
+				// Then update the links of the tree. Since we remove the current node and its parent, the sibling must now be connected to the grandparent
+				ptr->parent->parent->children[ptr->parent->index] = ptr->sibling;
+				ptr->sibling->sibling = ptr->parent->parent->children[1 - ptr->parent->index];
+
+				// Finally remove the current and parent node
+				ptr->parent->parent = ptr->parent;
+				ptr->parent = ptr;
+
+				// Now we need to traverse up the tree and tightly enclods our nodes
+				AABB upward;
+				ptr = ptr->sibling;
+				while (ptr->parent != ptr) { // until we have reached the root or the top of the subtree
+					upward.Extend(ptr->box);
+					upward.Extend(ptr->sibling->box);
+					ptr->parent->box = upward;
+					ptr = ptr->parent;
+				}
+
+				if (selected.size() > numSelected) {
+					break;
+				}
+			}
+		}
+		
+		// Sort the selected node array to do stuff fast
+		std::sort(selected.rbegin(), selected.rend(), sortFunc);
+
+		// Now we get to reinsert the nodes
+		for (auto node : selected) {
+
+
+
+		}
+
+		//exit(-1);
+
+		// Terminate criteria: if the tree quality does not improve after passT passes, terminate optimization
+		float cost = CalculateCost(root);
+		i++;
+		if (i % passT) {
+			if (previousCost < cost) {
+				break;
+			}
+			else {
+				previousCost = cost;
+			}
+		}
+	}
 }
 
 /*
